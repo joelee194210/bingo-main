@@ -5,6 +5,7 @@ import {
   CreditCard,
   Gamepad2,
   CheckCircle,
+  Network,
   Menu,
   X,
   Users,
@@ -32,6 +33,7 @@ const navItems = [
   { to: '/events', icon: CalendarDays, label: 'Eventos', permission: 'events:read' },
   { to: '/cards', icon: CreditCard, label: 'Cartones', permission: 'cards:read' },
   { to: '/games', icon: Gamepad2, label: 'Juegos', permission: 'games:read' },
+  { to: '/inventory', icon: Network, label: 'Inventario', permission: 'inventory:read' },
   { to: '/cards/validate', icon: CheckCircle, label: 'Validar', permission: 'cards:read' },
   { to: '/users', icon: Users, label: 'Usuarios', permission: 'users:read' },
 ];

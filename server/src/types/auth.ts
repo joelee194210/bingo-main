@@ -69,6 +69,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'cards:read', 'cards:create', 'cards:sell', 'cards:export',
     'games:read', 'games:create', 'games:play', 'games:finish',
     'reports:read', 'reports:export',
+    'inventory:read', 'inventory:manage', 'inventory:assign', 'inventory:sell',
     'dashboard:read',
   ],
   moderator: [
@@ -76,12 +77,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'cards:read', 'cards:sell',
     'games:read', 'games:create', 'games:play', 'games:finish',
     'reports:read',
+    'inventory:read', 'inventory:assign', 'inventory:sell',
     'dashboard:read',
   ],
   seller: [
     'events:read',
     'cards:read', 'cards:sell',
     'games:read',
+    'inventory:read', 'inventory:sell',
     'dashboard:read',
   ],
   viewer: [
@@ -89,6 +92,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'cards:read',
     'games:read',
     'reports:read',
+    'inventory:read',
     'dashboard:read',
   ],
 };

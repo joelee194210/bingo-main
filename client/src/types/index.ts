@@ -177,3 +177,91 @@ export interface FinishGameResult {
   gameState: GameState;
   report: GameReport | null;
 }
+
+// =====================================================
+// INVENTARIO
+// =====================================================
+
+export interface InventoryLevel {
+  id: number;
+  event_id: number;
+  level: number;
+  name: string;
+}
+
+export interface InventoryNode {
+  id: number;
+  event_id: number;
+  parent_id: number | null;
+  level: number;
+  name: string;
+  code: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  is_active: number;
+  total_assigned: number;
+  total_distributed: number;
+  total_sold: number;
+  total_returned: number;
+  level_name?: string;
+  children?: InventoryNode[];
+  available_in_hand?: number;
+  created_at: string;
+}
+
+export interface InventorySummary {
+  total_assigned: number;
+  distributed_to_children: number;
+  sold: number;
+  returned: number;
+  available_in_hand: number;
+}
+
+export interface ConsolidatedSummary extends InventorySummary {
+  descendants: { id: number; name: string; level: number; level_name: string; summary: InventorySummary }[];
+}
+
+export interface CardSelection {
+  type: 'series_range' | 'card_range' | 'card_ids';
+  from_series?: string;
+  to_series?: string;
+  from_card?: number;
+  to_card?: number;
+  card_ids?: number[];
+}
+
+export interface BatchResult {
+  batch_id: string;
+  cards_affected: number;
+  movement_type: string;
+}
+
+export interface MovementRecord {
+  id: number;
+  card_number: number;
+  serial: string;
+  card_code: string;
+  movement_type: string;
+  from_node_name: string | null;
+  to_node_name: string | null;
+  performed_by_name: string;
+  batch_id: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface EventInventoryOverview {
+  levels: InventoryLevel[];
+  tree: InventoryNode[];
+  total_event_cards: number;
+  cards_in_inventory: number;
+  cards_unassigned: number;
+}
+
+export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
+  initial_load: 'Carga Inicial',
+  assign_down: 'Asignacion',
+  return_up: 'Devolucion',
+  mark_sold: 'Venta',
+  unmark_sold: 'Reversion Venta',
+};

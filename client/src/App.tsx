@@ -11,6 +11,8 @@ import GameList from './components/Game/GameList';
 import GamePlay from './components/Game/GamePlay';
 import CardValidator from './components/Cards/CardValidator';
 import Users from './pages/Users';
+import InventoryPage from './components/Inventory/InventoryPage';
+import MovementHistory from './components/Inventory/MovementHistory';
 
 function App() {
   return (
@@ -68,6 +70,24 @@ function App() {
           element={
             <ProtectedRoute permission="users:read">
               <Users />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Inventario */}
+        <Route
+          path="inventory"
+          element={
+            <ProtectedRoute permission="inventory:read">
+              <InventoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="inventory/movements/:eventId"
+          element={
+            <ProtectedRoute permission="inventory:read">
+              <MovementHistory />
             </ProtectedRoute>
           }
         />

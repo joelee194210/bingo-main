@@ -12,6 +12,14 @@ import type {
   GameReport,
   GameWinner,
   FinishGameResult,
+  InventoryLevel,
+  InventoryNode,
+  InventorySummary,
+  ConsolidatedSummary,
+  CardSelection,
+  BatchResult,
+  MovementRecord,
+  EventInventoryOverview,
 } from '../types';
 
 const api = axios.create({
@@ -142,5 +150,54 @@ export const getRecentWinners = (limit?: number) =>
 // Export
 export const downloadCardsCSV = (eventId: number) =>
   api.get(`/export/csv/${eventId}`, { responseType: 'blob' }).then(r => r.data);
+
+// =====================================================
+// INVENTARIO
+// =====================================================
+
+export const getInventoryLevels = (eventId: number) =>
+  api.get<ApiResponse<InventoryLevel[]>>(`/inventory/events/${eventId}/levels`).then(r => r.data);
+
+export const setInventoryLevels = (eventId: number, levels: { level: number; name: string }[]) =>
+  api.post<ApiResponse<InventoryLevel[]>>(`/inventory/events/${eventId}/levels`, { levels }).then(r => r.data);
+
+export const getInventoryNodes = (eventId: number, tree = false) =>
+  api.get<ApiResponse<InventoryNode[]>>(`/inventory/events/${eventId}/nodes`, { params: { tree } }).then(r => r.data);
+
+export const getInventoryNode = (nodeId: number) =>
+  api.get<ApiResponse<InventoryNode>>(`/inventory/nodes/${nodeId}`).then(r => r.data);
+
+export const createInventoryNode = (eventId: number, data: { parent_id?: number; name: string; code?: string; contact_name?: string; contact_phone?: string }) =>
+  api.post<ApiResponse<InventoryNode>>(`/inventory/events/${eventId}/nodes`, data).then(r => r.data);
+
+export const updateInventoryNode = (nodeId: number, data: Partial<InventoryNode>) =>
+  api.put<ApiResponse<InventoryNode>>(`/inventory/nodes/${nodeId}`, data).then(r => r.data);
+
+export const loadCardsToNode = (nodeId: number, selection: CardSelection) =>
+  api.post<ApiResponse<BatchResult>>(`/inventory/nodes/${nodeId}/load`, { selection }).then(r => r.data);
+
+export const assignCardsToChild = (nodeId: number, target_node_id: number, selection: CardSelection, notes?: string) =>
+  api.post<ApiResponse<BatchResult>>(`/inventory/nodes/${nodeId}/assign`, { target_node_id, selection, notes }).then(r => r.data);
+
+export const returnCardsToParent = (nodeId: number, selection: CardSelection, notes?: string) =>
+  api.post<ApiResponse<BatchResult>>(`/inventory/nodes/${nodeId}/return`, { selection, notes }).then(r => r.data);
+
+export const sellCardsAtNode = (nodeId: number, selection: CardSelection, buyer_name?: string, buyer_phone?: string) =>
+  api.post<ApiResponse<BatchResult>>(`/inventory/nodes/${nodeId}/sell`, { selection, buyer_name, buyer_phone }).then(r => r.data);
+
+export const getNodeCards = (nodeId: number, params?: { status?: string; page?: number; limit?: number }) =>
+  api.get<ApiResponse<BingoCard[]>>(`/inventory/nodes/${nodeId}/cards`, { params }).then(r => r.data);
+
+export const getNodeSummary = (nodeId: number) =>
+  api.get<ApiResponse<InventorySummary>>(`/inventory/nodes/${nodeId}/summary`).then(r => r.data);
+
+export const getNodeConsolidated = (nodeId: number) =>
+  api.get<ApiResponse<ConsolidatedSummary>>(`/inventory/nodes/${nodeId}/consolidated`).then(r => r.data);
+
+export const getEventInventoryOverview = (eventId: number) =>
+  api.get<ApiResponse<EventInventoryOverview>>(`/inventory/events/${eventId}/overview`).then(r => r.data);
+
+export const getInventoryMovements = (eventId: number, params?: { node_id?: number; movement_type?: string; page?: number; limit?: number }) =>
+  api.get<ApiResponse<MovementRecord[]>>(`/inventory/events/${eventId}/movements`, { params }).then(r => r.data);
 
 export default api;

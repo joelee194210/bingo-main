@@ -259,3 +259,88 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
     ('generation_batch_size', '10000'),
     ('max_cards_per_event', '1000000'),
     ('default_game_type', 'blackout');
+
+-- =====================================================
+-- SISTEMA DE INVENTARIO JERÁRQUICO (hasta 5 niveles)
+-- =====================================================
+
+-- Definición de niveles de la jerarquía por evento
+CREATE TABLE IF NOT EXISTS inventory_levels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL,
+    level INTEGER NOT NULL CHECK(level BETWEEN 1 AND 5),
+    name TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    UNIQUE(event_id, level)
+);
+
+CREATE INDEX IF NOT EXISTS idx_inv_levels_event ON inventory_levels(event_id);
+
+-- Nodos del árbol de distribución
+CREATE TABLE IF NOT EXISTS inventory_nodes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL,
+    parent_id INTEGER,
+    level INTEGER NOT NULL CHECK(level BETWEEN 1 AND 5),
+    name TEXT NOT NULL,
+    code TEXT,
+    contact_name TEXT,
+    contact_phone TEXT,
+    is_active INTEGER DEFAULT 1,
+    total_assigned INTEGER DEFAULT 0,
+    total_distributed INTEGER DEFAULT 0,
+    total_sold INTEGER DEFAULT 0,
+    total_returned INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id) REFERENCES inventory_nodes(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_inv_nodes_event ON inventory_nodes(event_id);
+CREATE INDEX IF NOT EXISTS idx_inv_nodes_parent ON inventory_nodes(parent_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inv_nodes_event_code ON inventory_nodes(event_id, code) WHERE code IS NOT NULL;
+
+-- Asignación actual de cada cartón a un nodo
+CREATE TABLE IF NOT EXISTS inventory_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id INTEGER NOT NULL,
+    node_id INTEGER NOT NULL,
+    event_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'assigned' CHECK(status IN ('assigned', 'sold', 'returned')),
+    assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
+    FOREIGN KEY (node_id) REFERENCES inventory_nodes(id) ON DELETE RESTRICT,
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inv_assign_card_active ON inventory_assignments(card_id) WHERE status = 'assigned';
+CREATE INDEX IF NOT EXISTS idx_inv_assign_node ON inventory_assignments(node_id, status);
+CREATE INDEX IF NOT EXISTS idx_inv_assign_event ON inventory_assignments(event_id);
+
+-- Historial de movimientos (auditoría completa)
+CREATE TABLE IF NOT EXISTS inventory_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL,
+    card_id INTEGER NOT NULL,
+    movement_type TEXT NOT NULL CHECK(movement_type IN ('initial_load', 'assign_down', 'return_up', 'mark_sold', 'unmark_sold')),
+    from_node_id INTEGER,
+    to_node_id INTEGER,
+    performed_by INTEGER NOT NULL,
+    batch_id TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
+    FOREIGN KEY (from_node_id) REFERENCES inventory_nodes(id),
+    FOREIGN KEY (to_node_id) REFERENCES inventory_nodes(id),
+    FOREIGN KEY (performed_by) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_inv_mov_event ON inventory_movements(event_id);
+CREATE INDEX IF NOT EXISTS idx_inv_mov_card ON inventory_movements(card_id);
+CREATE INDEX IF NOT EXISTS idx_inv_mov_batch ON inventory_movements(batch_id);
+CREATE INDEX IF NOT EXISTS idx_inv_mov_from ON inventory_movements(from_node_id);
+CREATE INDEX IF NOT EXISTS idx_inv_mov_to ON inventory_movements(to_node_id);
+CREATE INDEX IF NOT EXISTS idx_inv_mov_date ON inventory_movements(created_at);

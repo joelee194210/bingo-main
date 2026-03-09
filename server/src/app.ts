@@ -14,6 +14,7 @@ import gamesRouter from './routes/games.js';
 import dashboardRouter from './routes/dashboard.js';
 import exportRouter from './routes/export.js';
 import reportsRouter from './routes/reports.js';
+import inventoryRouter from './routes/inventory.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -50,6 +51,7 @@ app.use('/api/games', authenticate, gamesRouter);
 app.use('/api/dashboard', authenticate, dashboardRouter);
 app.use('/api/export', authenticate, exportRouter);
 app.use('/api/reports', authenticate, reportsRouter);
+app.use('/api/inventory', authenticate, inventoryRouter);
 
 // Ruta de salud
 app.get('/api/health', (_req, res) => {
