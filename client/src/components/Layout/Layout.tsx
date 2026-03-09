@@ -1,0 +1,198 @@
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  CalendarDays,
+  CreditCard,
+  Gamepad2,
+  CheckCircle,
+  Menu,
+  X,
+  Users,
+  LogOut,
+  ChevronRight,
+} from 'lucide-react';
+import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { ROLE_LABELS } from '@/types/auth';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+
+const navItems = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:read' },
+  { to: '/events', icon: CalendarDays, label: 'Eventos', permission: 'events:read' },
+  { to: '/cards', icon: CreditCard, label: 'Cartones', permission: 'cards:read' },
+  { to: '/games', icon: Gamepad2, label: 'Juegos', permission: 'games:read' },
+  { to: '/cards/validate', icon: CheckCircle, label: 'Validar', permission: 'cards:read' },
+  { to: '/users', icon: Users, label: 'Usuarios', permission: 'users:read' },
+];
+
+export default function Layout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, logout, hasPermission } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const visibleNavItems = navItems.filter((item) => hasPermission(item.permission));
+
+  const getRoleBadgeVariant = (role: string) => {
+    switch (role) {
+      case 'admin': return 'destructive';
+      case 'moderator': return 'info';
+      case 'seller': return 'success';
+      default: return 'secondary';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`sidebar fixed top-0 left-0 z-50 h-full w-64 transform transition-transform duration-300 lg:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {/* Logo */}
+        <div className="flex items-center justify-between h-16 px-5">
+          <div className="flex items-center gap-3">
+            <div className="sidebar-logo w-9 h-9 rounded-lg flex items-center justify-center text-lg font-bold text-white">
+              B
+            </div>
+            <div>
+              <span className="text-[15px] font-bold text-white tracking-tight">Bingo Pro</span>
+              <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase">Manager</p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden text-slate-400 hover:text-white hover:bg-white/5 h-8 w-8"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <Separator className="bg-white/[0.06] mx-5" />
+
+        {/* Navigation */}
+        <nav className="p-3 mt-2 space-y-0.5">
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest px-4 mb-2">
+            Menu
+          </p>
+          {visibleNavItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              className={({ isActive }) =>
+                isActive ? 'sidebar-item sidebar-item-active' : 'sidebar-item'
+              }
+              onClick={() => setSidebarOpen(false)}
+            >
+              <item.icon className="h-[18px] w-[18px] sidebar-icon" />
+              <span className="text-[13px] flex-1">{item.label}</span>
+              <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* User section at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 p-4">
+          <Separator className="bg-white/[0.06] mb-4" />
+          <div className="flex items-center gap-3 px-2">
+            <Avatar className="h-8 w-8 ring-2 ring-amber-500/20">
+              <AvatarFallback className="bg-amber-500/10 text-amber-400 text-xs font-bold">
+                {user?.full_name?.charAt(0).toUpperCase() || 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-slate-300 truncate">{user?.full_name}</p>
+              <p className="text-[10px] text-slate-500 truncate">
+                {user?.role ? ROLE_LABELS[user.role] : ''}
+              </p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="lg:ml-64">
+        {/* Top bar */}
+        <header className="topbar">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden h-9 w-9"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* User menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-3 h-auto py-2 hover:bg-muted/60">
+                <div className="hidden sm:block text-right">
+                  <p className="text-sm font-medium">{user?.full_name}</p>
+                  <Badge variant={getRoleBadgeVariant(user?.role || '')} className="text-[10px] h-[18px]">
+                    {user?.role ? ROLE_LABELS[user.role] : ''}
+                  </Badge>
+                </div>
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                    {user?.full_name?.charAt(0).toUpperCase() || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <p className="font-medium">{user?.full_name}</p>
+                <p className="text-xs text-muted-foreground font-normal">
+                  {user?.email || `@${user?.username}`}
+                </p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="text-destructive focus:text-destructive cursor-pointer"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Cerrar Sesion
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
+
+        {/* Page content */}
+        <main className="p-4 lg:p-8 animate-fade-in-up">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}

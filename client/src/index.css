@@ -1,0 +1,348 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 224 28% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 28% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 28% 12%;
+    --primary: 38 92% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 224 28% 12%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 38 92% 95%;
+    --accent-foreground: 38 92% 30%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 38 92% 50%;
+    --radius: 0.625rem;
+    --sidebar-bg: 224 40% 10%;
+    --sidebar-accent: 38 92% 50%;
+  }
+
+  .dark {
+    --background: 224 32% 8%;
+    --foreground: 210 20% 95%;
+    --card: 224 28% 12%;
+    --card-foreground: 210 20% 95%;
+    --popover: 224 28% 12%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 38 92% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 224 20% 18%;
+    --secondary-foreground: 210 20% 90%;
+    --muted: 224 20% 18%;
+    --muted-foreground: 220 9% 56%;
+    --accent: 38 92% 15%;
+    --accent-foreground: 38 92% 70%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 224 20% 18%;
+    --input: 224 20% 20%;
+    --ring: 38 92% 50%;
+    --sidebar-bg: 224 40% 6%;
+    --sidebar-accent: 38 92% 50%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  code, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  /* Better heading weight */
+  h1, h2, h3, h4 {
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer components {
+  /* ========================================
+     SIDEBAR
+     ======================================== */
+  .sidebar {
+    background: linear-gradient(180deg,
+      hsl(224 40% 10%) 0%,
+      hsl(224 36% 7%) 100%
+    );
+  }
+
+  .dark .sidebar {
+    background: linear-gradient(180deg,
+      hsl(224 40% 6%) 0%,
+      hsl(224 36% 4%) 100%
+    );
+  }
+
+  .sidebar-logo {
+    @apply relative;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 text-slate-400 hover:text-white;
+  }
+
+  .sidebar-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .sidebar-item-active {
+    @apply text-white font-medium;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.08) 100%);
+    border-left: 3px solid #f59e0b;
+    box-shadow: inset 0 0 20px rgba(245, 158, 11, 0.05);
+  }
+
+  .sidebar-item-active .sidebar-icon {
+    color: #f59e0b;
+  }
+
+  /* ========================================
+     STAT CARDS
+     ======================================== */
+  .stat-card {
+    @apply relative overflow-hidden rounded-xl border bg-card transition-all duration-300;
+  }
+
+  .stat-card::before {
+    content: '';
+    @apply absolute top-0 left-0 right-0 h-1;
+  }
+
+  .stat-card:hover {
+    @apply shadow-lg -translate-y-0.5;
+  }
+
+  .stat-card-amber::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+  .stat-card-emerald::before { background: linear-gradient(90deg, #10b981, #059669); }
+  .stat-card-violet::before { background: linear-gradient(90deg, #8b5cf6, #7c3aed); }
+  .stat-card-rose::before { background: linear-gradient(90deg, #f43f5e, #e11d48); }
+  .stat-card-sky::before { background: linear-gradient(90deg, #0ea5e9, #0284c7); }
+
+  .stat-icon-amber { @apply bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400; }
+  .stat-icon-emerald { @apply bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400; }
+  .stat-icon-violet { @apply bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400; }
+  .stat-icon-rose { @apply bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400; }
+  .stat-icon-sky { @apply bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400; }
+
+  /* ========================================
+     BINGO BALLS — 3D Gradient Style
+     ======================================== */
+  .bingo-ball {
+    @apply w-12 h-12 rounded-full flex items-center justify-center font-bold text-white text-lg transition-all duration-200;
+    font-family: 'JetBrains Mono', monospace;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  .bingo-ball-B {
+    background: radial-gradient(circle at 35% 35%, #f87171, #dc2626 60%, #991b1b);
+    box-shadow: 0 3px 8px rgba(220, 38, 38, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  }
+  .bingo-ball-I {
+    background: radial-gradient(circle at 35% 35%, #fb923c, #ea580c 60%, #9a3412);
+    box-shadow: 0 3px 8px rgba(234, 88, 12, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  }
+  .bingo-ball-N {
+    background: radial-gradient(circle at 35% 35%, #fbbf24, #d97706 60%, #92400e);
+    box-shadow: 0 3px 8px rgba(217, 119, 6, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    color: #422006;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
+  }
+  .bingo-ball-G {
+    background: radial-gradient(circle at 35% 35%, #34d399, #059669 60%, #065f46);
+    box-shadow: 0 3px 8px rgba(5, 150, 105, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  }
+  .bingo-ball-O {
+    background: radial-gradient(circle at 35% 35%, #60a5fa, #2563eb 60%, #1e3a8a);
+    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  }
+
+  .bingo-ball-called {
+    @apply ring-4 ring-white/50 scale-110;
+  }
+
+  .bingo-ball-available {
+    @apply opacity-40 hover:opacity-100 cursor-pointer hover:scale-110;
+  }
+
+  /* ========================================
+     BINGO CARD CELLS
+     ======================================== */
+  .bingo-cell {
+    @apply w-12 h-12 flex items-center justify-center font-bold text-lg border transition-all duration-200;
+    border-color: hsl(var(--border));
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .bingo-cell-header {
+    @apply text-white;
+  }
+
+  .bingo-cell-free {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #422006;
+    font-size: 0.7rem;
+    font-weight: 800;
+  }
+
+  .bingo-cell-marked {
+    @apply bg-emerald-500 text-white;
+  }
+
+  /* ========================================
+     QUICK ACTION CARDS
+     ======================================== */
+  .action-card {
+    @apply relative flex items-center gap-4 p-4 rounded-xl border bg-card transition-all duration-300 cursor-pointer;
+  }
+
+  .action-card:hover {
+    @apply shadow-md -translate-y-0.5 border-primary/30;
+  }
+
+  .action-card::after {
+    content: '';
+    @apply absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.03) 0%, transparent 100%);
+  }
+
+  .action-card:hover::after {
+    @apply opacity-100;
+  }
+
+  /* ========================================
+     GLASS EFFECT FOR MODALS
+     ======================================== */
+  .glass-panel {
+    @apply bg-card/95 backdrop-blur-sm;
+  }
+
+  /* ========================================
+     PAGE HEADER ACCENT
+     ======================================== */
+  .page-header {
+    @apply relative pb-6 mb-2;
+  }
+
+  .page-header::after {
+    content: '';
+    @apply absolute bottom-0 left-0 h-px;
+    width: 60px;
+    background: linear-gradient(90deg, #f59e0b, transparent);
+  }
+
+  /* ========================================
+     EVENT/GAME CARDS WITH HOVER GLOW
+     ======================================== */
+  .glow-card {
+    @apply relative rounded-xl border bg-card transition-all duration-300;
+  }
+
+  .glow-card:hover {
+    @apply shadow-lg -translate-y-0.5;
+    border-color: hsl(var(--primary) / 0.3);
+  }
+
+  /* ========================================
+     TOP BAR
+     ======================================== */
+  .topbar {
+    @apply sticky top-0 z-30 h-16 border-b bg-card/80 backdrop-blur-md flex items-center justify-between px-4 lg:px-8;
+  }
+}
+
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+@keyframes bounce-slow {
+  0%, 100% {
+    transform: translateY(-8%);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 2s infinite;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(245, 158, 11, 0.08) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite;
+}
+
+/* ========================================
+   SCROLLBAR
+   ======================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/40;
+}
+
+/* Sidebar scrollbar */
+.sidebar ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ========================================
+   SELECTION COLOR
+   ======================================== */
+::selection {
+  background: rgba(245, 158, 11, 0.25);
+  color: inherit;
+}
