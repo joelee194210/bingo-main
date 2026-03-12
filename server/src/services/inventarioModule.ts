@@ -113,11 +113,11 @@ export async function getAlmacenTree(pool: Pool, eventId: number): Promise<Almac
       GROUP BY c.almacen_id
     ) stock ON stock.almacen_id = a.id
     LEFT JOIN (
-      SELECT ia.almacen_id,
-        SUM(ia.cartones_vendidos) AS vendidos
-      FROM inv_asignaciones ia
-      WHERE ia.event_id = $1 AND ia.estado NOT IN ('devuelto', 'cancelado')
-      GROUP BY ia.almacen_id
+      SELECT ca.almacen_id,
+        COUNT(*) AS vendidos
+      FROM cards ca
+      WHERE ca.event_id = $1 AND ca.is_sold = true
+      GROUP BY ca.almacen_id
     ) sold ON sold.almacen_id = a.id
     WHERE a.event_id = $1
     ORDER BY a.name
@@ -234,45 +234,41 @@ export async function getResumenInventario(pool: Pool, eventId: number, almacenI
   cartonesDisponibles: number;
 }> {
   if (almacenId) {
-    // Per-almacen: count cajas/lotes/cards that are loaded into this almacen
+    // Per-almacen: count cajas/lotes/cards que estan en este almacen
     const cajasRow = (await pool.query('SELECT COUNT(*) as total FROM cajas WHERE event_id = $1 AND almacen_id = $2', [eventId, almacenId])).rows[0];
-    const lotesRow = (await pool.query('SELECT COUNT(*) as total FROM lotes l JOIN cajas c ON c.id = l.caja_id WHERE c.event_id = $1 AND c.almacen_id = $2', [eventId, almacenId])).rows[0];
-    const cartonesRow = (await pool.query('SELECT COUNT(*) as total FROM cards ca JOIN lotes l ON l.id = ca.lote_id JOIN cajas c ON c.id = l.caja_id WHERE c.event_id = $1 AND c.almacen_id = $2', [eventId, almacenId])).rows[0];
-    const asignadosRow = (await pool.query(`
-      SELECT COUNT(DISTINCT iac.card_id) as total
-      FROM inv_asignacion_cartones iac
-      JOIN inv_asignaciones ia ON ia.id = iac.asignacion_id
-      WHERE ia.event_id = $1 AND ia.estado NOT IN ('cancelado', 'devuelto') AND ia.almacen_id = $2
-    `, [eventId, almacenId])).rows[0];
+    const lotesRow = (await pool.query('SELECT COUNT(*) as total FROM lotes WHERE event_id = $1 AND almacen_id = $2', [eventId, almacenId])).rows[0];
+    const cartonesRow = (await pool.query(
+      'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_sold = true) as vendidos FROM cards WHERE event_id = $1 AND almacen_id = $2',
+      [eventId, almacenId]
+    )).rows[0];
 
     const totalCartones = Number(cartonesRow.total);
-    const asignados = Number(asignadosRow.total);
+    const vendidos = Number(cartonesRow.vendidos);
     return {
       totalCartones,
       totalLibretas: Number(lotesRow.total),
       totalCajas: Number(cajasRow.total),
-      cartonesAsignados: asignados,
-      cartonesDisponibles: totalCartones - asignados,
+      cartonesAsignados: vendidos,
+      cartonesDisponibles: totalCartones - vendidos,
     };
   }
 
   // Global: all event inventory
-  const totalRow = (await pool.query('SELECT COUNT(*) as total FROM cards WHERE event_id = $1', [eventId])).rows[0];
+  const totalRow = (await pool.query(
+    'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_sold = true) as vendidos FROM cards WHERE event_id = $1',
+    [eventId]
+  )).rows[0];
   const lotesRow = (await pool.query('SELECT COUNT(*) as total FROM lotes WHERE event_id = $1', [eventId])).rows[0];
   const cajasRow = (await pool.query('SELECT COUNT(*) as total FROM cajas WHERE event_id = $1', [eventId])).rows[0];
-  const asignadosRow = (await pool.query(`
-    SELECT COUNT(DISTINCT iac.card_id) as total
-    FROM inv_asignacion_cartones iac
-    JOIN inv_asignaciones ia ON ia.id = iac.asignacion_id
-    WHERE ia.event_id = $1 AND ia.estado NOT IN ('cancelado', 'devuelto')
-  `, [eventId])).rows[0];
 
+  const totalCartones = Number(totalRow.total);
+  const vendidos = Number(totalRow.vendidos);
   return {
-    totalCartones: Number(totalRow.total),
+    totalCartones,
     totalLibretas: Number(lotesRow.total),
     totalCajas: Number(cajasRow.total),
-    cartonesAsignados: Number(asignadosRow.total),
-    cartonesDisponibles: Number(totalRow.total) - Number(asignadosRow.total),
+    cartonesAsignados: vendidos,
+    cartonesDisponibles: totalCartones - vendidos,
   };
 }
 
@@ -710,9 +706,7 @@ export async function ejecutarVenta(
       const detalle: DocumentoItemDetalle = {
         tipo: item.tipo,
         referencia: item.referencia,
-        deAlmacen: almacenName,
-        aAlmacen: data.buyer_name || 'Comprador',
-        cantidadCartones: 0,
+        cartones: 0,
       };
 
       if (item.tipo === 'caja') {
@@ -733,7 +727,7 @@ export async function ejecutarVenta(
         );
         const vendidos = updateResult.rowCount || 0;
         totalCartones += vendidos;
-        detalle.cantidadCartones = vendidos;
+        detalle.cartones = vendidos;
 
         // Actualizar lotes
         await pool.query(
@@ -769,7 +763,7 @@ export async function ejecutarVenta(
         );
         const vendidos = updateResult.rowCount || 0;
         totalCartones += vendidos;
-        detalle.cantidadCartones = vendidos;
+        detalle.cartones = vendidos;
 
         await pool.query(
           `UPDATE lotes SET cards_sold = (SELECT COUNT(*) FROM cards WHERE lote_id = $1 AND is_sold = true) WHERE id = $1`,
@@ -797,7 +791,7 @@ export async function ejecutarVenta(
           [data.buyer_name || null, data.buyer_phone || null, userId, card.id]
         );
         totalCartones += 1;
-        detalle.cantidadCartones = 1;
+        detalle.cartones = 1;
 
         if (card.lote_id) {
           await pool.query(
@@ -812,7 +806,7 @@ export async function ejecutarVenta(
         `INSERT INTO inv_movimientos (event_id, almacen_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, detalles, realizado_por, documento_id)
          VALUES ($1, $2, $3, $4, 'venta', $5, $6, $7, $8, $9, $10)`,
         [eventId, data.almacen_id, item.tipo, item.referencia, almacenName, data.buyer_name || 'Comprador',
-         detalle.cantidadCartones, JSON.stringify({ buyer_phone: data.buyer_phone }), userId, documentoId]
+         detalle.cartones, JSON.stringify({ buyer_phone: data.buyer_phone }), userId, documentoId]
       );
 
       pdfItems.push(detalle);
@@ -972,13 +966,7 @@ export async function getCajas(pool: Pool, eventId: number, almacenId?: number):
   const cajasResult = await pool.query(`
     SELECT c.*,
       COALESCE((SELECT SUM(l.total_cards) FROM lotes l WHERE l.caja_id = c.id), 0) as total_cartones,
-      COALESCE((SELECT COUNT(DISTINCT iac.card_id)
-        FROM inv_asignacion_cartones iac
-        JOIN inv_asignaciones ia ON ia.id = iac.asignacion_id
-        JOIN cards ca ON ca.id = iac.card_id
-        JOIN lotes l ON l.id = ca.lote_id
-        WHERE l.caja_id = c.id AND ia.estado NOT IN ('cancelado', 'devuelto')
-      ), 0) as asignados,
+      COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND ca.is_sold = true), 0) as asignados,
       a.name as almacen_name
     FROM cajas c
     LEFT JOIN almacenes a ON a.id = c.almacen_id

@@ -1,9 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Gamepad2, Play, Clock, Trophy } from 'lucide-react';
+import { Gamepad2, Play, Clock, Trophy, Search } from 'lucide-react';
 import { getGames, getEvents } from '@/services/api';
 import { GAME_TYPE_LABELS, STATUS_LABELS, type GameStatus } from '@/types';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { Input } from '@/components/ui/input';
+import { DataExportMenu } from '@/components/ui/data-export-menu';
+import { getStatusColor } from '@/lib/badge-variants';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +24,7 @@ import {
 export default function GameList() {
   const [eventId, setEventId] = useState<number | undefined>();
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: eventsData } = useQuery({
     queryKey: ['events'],
@@ -33,7 +37,23 @@ export default function GameList() {
   });
 
   const events = eventsData?.data || [];
-  const games = data?.data || [];
+  const allGames = data?.data || [];
+
+  const games = useMemo(() => {
+    if (!searchTerm.trim()) return allGames;
+    const q = searchTerm.toLowerCase();
+    return allGames.filter(g =>
+      (g.name && g.name.toLowerCase().includes(q)) ||
+      GAME_TYPE_LABELS[g.game_type]?.toLowerCase().includes(q)
+    );
+  }, [allGames, searchTerm]);
+
+  const EXPORT_COLUMNS = [
+    { key: 'name', label: 'Nombre' },
+    { key: 'game_type', label: 'Tipo' },
+    { key: 'status', label: 'Estado' },
+    { key: 'is_practice_mode', label: 'Modo' },
+  ];
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -44,15 +64,9 @@ export default function GameList() {
     }
   };
 
-  const getStatusBadge = (status: GameStatus) => {
-    switch (status) {
-      case 'in_progress': return <Badge variant="success">{STATUS_LABELS[status]}</Badge>;
-      case 'completed': return <Badge variant="info">{STATUS_LABELS[status]}</Badge>;
-      case 'paused': return <Badge variant="warning">{STATUS_LABELS[status]}</Badge>;
-      case 'cancelled': return <Badge variant="destructive">{STATUS_LABELS[status]}</Badge>;
-      default: return <Badge variant="secondary">{STATUS_LABELS[status]}</Badge>;
-    }
-  };
+  const getStatusBadge = (status: GameStatus) => (
+    <Badge className={getStatusColor(status)}>{STATUS_LABELS[status]}</Badge>
+  );
 
   if (isLoading) {
     return (
@@ -89,16 +103,27 @@ export default function GameList() {
           <h2 className="text-2xl font-bold tracking-tight">Juegos</h2>
           <p className="text-muted-foreground text-sm mt-1">Gestiona las partidas de bingo</p>
         </div>
-        {events.length > 0 && (
-          <Button asChild>
-            <Link to={`/events/${eventId ? eventId : events[0].id}`}>
-              <Play className="mr-2 h-4 w-4" /> Nuevo Juego
-            </Link>
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <DataExportMenu
+            data={games as unknown as Record<string, unknown>[]}
+            columns={EXPORT_COLUMNS}
+            filename="juegos"
+          />
+          {events.length > 0 && (
+            <Button asChild>
+              <Link to={`/events/${eventId ? eventId : events[0].id}`}>
+                <Play className="mr-2 h-4 w-4" /> Nuevo Juego
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Filters */}
+      {/* Search + Filters */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+        <Input className="pl-9" placeholder="Buscar juego..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+      </div>
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4">

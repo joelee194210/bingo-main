@@ -1,15 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Package, ClipboardList, CreditCard, Warehouse,
+  ChevronRight, ChevronDown, Search, Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -17,10 +16,16 @@ import {
   getMisAlmacenes,
   getResumenInventario,
   getCajas,
+  getCartonesLote,
 } from '@/services/api';
 
 export default function MiInventario() {
   const [selectedAlmacen, setSelectedAlmacen] = useState<string>('');
+  const [search, setSearch] = useState('');
+  const [expandedCajas, setExpandedCajas] = useState<Set<number>>(new Set());
+  const [expandedLotes, setExpandedLotes] = useState<Set<number>>(new Set());
+  const [loteCartones, setLoteCartones] = useState<Record<number, { id: number; card_code: string; serial: string; is_sold: boolean; buyer_name: string | null }[]>>({});
+  const [loadingLotes, setLoadingLotes] = useState<Set<number>>(new Set());
 
   const { data: misAlmacenesData, isLoading: loadingAlmacenes } = useQuery({
     queryKey: ['mis-almacenes'],
@@ -44,6 +49,56 @@ export default function MiInventario() {
 
   const resumen = resumenData?.data;
   const cajas = cajasData?.data ?? [];
+
+  // Auto-select if only one almacen
+  useEffect(() => {
+    if (misAlmacenes.length === 1 && !selectedAlmacen) {
+      setSelectedAlmacen(misAlmacenes[0].almacen_id.toString());
+    }
+  }, [misAlmacenes, selectedAlmacen]);
+
+  const toggleCaja = (cajaId: number) => {
+    setExpandedCajas(prev => {
+      const next = new Set(prev);
+      if (next.has(cajaId)) next.delete(cajaId);
+      else next.add(cajaId);
+      return next;
+    });
+  };
+
+  const toggleLote = async (loteId: number) => {
+    if (expandedLotes.has(loteId)) {
+      setExpandedLotes(prev => { const next = new Set(prev); next.delete(loteId); return next; });
+      return;
+    }
+
+    // Cargar cartones si no estan cargados
+    if (!loteCartones[loteId]) {
+      setLoadingLotes(prev => new Set(prev).add(loteId));
+      try {
+        const result = await getCartonesLote(loteId);
+        setLoteCartones(prev => ({ ...prev, [loteId]: result.data || [] }));
+      } catch {
+        setLoteCartones(prev => ({ ...prev, [loteId]: [] }));
+      } finally {
+        setLoadingLotes(prev => { const next = new Set(prev); next.delete(loteId); return next; });
+      }
+    }
+
+    setExpandedLotes(prev => new Set(prev).add(loteId));
+  };
+
+  // Filtrar cajas por búsqueda
+  const searchLower = search.toLowerCase();
+  const filteredCajas = search
+    ? cajas.filter(c =>
+        c.caja_code.toLowerCase().includes(searchLower) ||
+        c.lotes.some(l =>
+          l.lote_code.toLowerCase().includes(searchLower) ||
+          l.series_number.toLowerCase().includes(searchLower)
+        )
+      )
+    : cajas;
 
   if (loadingAlmacenes) {
     return (
@@ -72,11 +127,6 @@ export default function MiInventario() {
         </Card>
       </div>
     );
-  }
-
-  // Auto-select if only one almacen
-  if (misAlmacenes.length === 1 && !selectedAlmacen) {
-    setSelectedAlmacen(misAlmacenes[0].almacen_id.toString());
   }
 
   return (
@@ -168,89 +218,125 @@ export default function MiInventario() {
             </div>
           )}
 
-          {/* Cajas */}
+          {/* Buscador */}
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar caja, libreta o serie..."
+              className="pl-9"
+            />
+          </div>
+
+          {/* Arbol expandible */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Cajas</CardTitle>
+              <CardTitle className="text-base">Inventario ({filteredCajas.length} cajas)</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {cajasLoading ? (
-                <Skeleton className="h-32 w-full" />
-              ) : cajas.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No hay cajas en este almacen
+                <div className="p-6"><Skeleton className="h-32 w-full" /></div>
+              ) : filteredCajas.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  {search ? 'Sin resultados' : 'No hay cajas en este almacen'}
                 </p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Caja</TableHead>
-                      <TableHead>Lotes</TableHead>
-                      <TableHead>Cartones</TableHead>
-                      <TableHead>Vendidos</TableHead>
-                      <TableHead>Disponibles</TableHead>
-                      <TableHead>Estado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cajas.map((c) => (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-mono font-medium">{c.caja_code}</TableCell>
-                        <TableCell>{c.total_lotes}</TableCell>
-                        <TableCell>{c.total_cartones}</TableCell>
-                        <TableCell>{c.asignados}</TableCell>
-                        <TableCell className="text-green-600 font-medium">
-                          {c.total_cartones - c.asignados}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="capitalize">{c.status}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="divide-y">
+                  {filteredCajas.map((caja) => {
+                    const isExpanded = expandedCajas.has(caja.id);
+                    const vendidosCaja = caja.lotes.reduce((s, l) => s + l.cards_sold, 0);
+
+                    return (
+                      <div key={caja.id}>
+                        {/* Fila de Caja */}
+                        <button
+                          onClick={() => toggleCaja(caja.id)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
+                        >
+                          {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+                          <Package className="h-4 w-4 text-blue-600 shrink-0" />
+                          <span className="font-mono font-bold text-sm">{caja.caja_code}</span>
+                          <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
+                            <span>{caja.total_lotes} libretas</span>
+                            <span>{caja.total_cartones} cartones</span>
+                            <span className="text-orange-600">{vendidosCaja} vendidos</span>
+                            <span className="text-green-600 font-medium">{caja.total_cartones - vendidosCaja} disp.</span>
+                            <Badge variant="outline" className="capitalize text-xs">{caja.status}</Badge>
+                          </div>
+                        </button>
+
+                        {/* Libretas de la caja */}
+                        {isExpanded && (
+                          <div className="bg-muted/30">
+                            {caja.lotes.map((lote) => {
+                              const isLoteExpanded = expandedLotes.has(lote.id);
+                              const isLoading = loadingLotes.has(lote.id);
+                              const cartones = loteCartones[lote.id];
+                              const disponibles = lote.total_cards - lote.cards_sold;
+
+                              return (
+                                <div key={lote.id}>
+                                  {/* Fila de Libreta */}
+                                  <button
+                                    onClick={() => toggleLote(lote.id)}
+                                    className="w-full flex items-center gap-3 px-4 py-2 pl-12 hover:bg-muted/60 transition-colors text-left"
+                                  >
+                                    {isLoading ? (
+                                      <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin shrink-0" />
+                                    ) : isLoteExpanded ? (
+                                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    ) : (
+                                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    )}
+                                    <ClipboardList className="h-3.5 w-3.5 text-purple-600 shrink-0" />
+                                    <span className="font-mono font-medium text-sm">{lote.lote_code}</span>
+                                    <span className="text-xs text-muted-foreground">Serie: {lote.series_number}</span>
+                                    <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
+                                      <span>{lote.total_cards} cartones</span>
+                                      <span className="text-orange-600">{lote.cards_sold} vendidos</span>
+                                      <span className="text-green-600 font-medium">{disponibles} disp.</span>
+                                    </div>
+                                  </button>
+
+                                  {/* Cartones del lote */}
+                                  {isLoteExpanded && cartones && (
+                                    <div className="bg-muted/50 px-4 py-2 pl-20">
+                                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
+                                        {cartones.map((c) => (
+                                          <div
+                                            key={c.id}
+                                            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs border ${
+                                              c.is_sold
+                                                ? 'bg-orange-50 border-orange-200 text-orange-700'
+                                                : 'bg-green-50 border-green-200 text-green-700'
+                                            }`}
+                                          >
+                                            <CreditCard className="h-3 w-3 shrink-0" />
+                                            <span className="font-mono font-medium">{c.card_code}</span>
+                                            {c.is_sold && c.buyer_name && (
+                                              <span className="truncate text-[10px] opacity-70">({c.buyer_name})</span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className="mt-2 text-xs text-muted-foreground">
+                                        {cartones.filter(c => !c.is_sold).length} disponibles — {cartones.filter(c => c.is_sold).length} vendidos
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </CardContent>
           </Card>
-
-          {/* Lotes */}
-          {cajas.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Lotes (Libretas)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Lote</TableHead>
-                      <TableHead>Caja</TableHead>
-                      <TableHead>Serie</TableHead>
-                      <TableHead>Cartones</TableHead>
-                      <TableHead>Vendidos</TableHead>
-                      <TableHead>Estado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cajas.flatMap((c) =>
-                      c.lotes.map((l) => (
-                        <TableRow key={l.id}>
-                          <TableCell className="font-mono font-medium">{l.lote_code}</TableCell>
-                          <TableCell className="font-mono text-sm">{c.caja_code}</TableCell>
-                          <TableCell className="font-mono text-sm">{l.series_number}</TableCell>
-                          <TableCell>{l.total_cards}</TableCell>
-                          <TableCell>{l.cards_sold}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="capitalize text-xs">{l.status.replace('_', ' ')}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
         </>
       )}
     </div>

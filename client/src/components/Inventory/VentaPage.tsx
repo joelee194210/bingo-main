@@ -27,6 +27,7 @@ import {
 } from '@/services/api';
 import type { TipoEntidad } from '@/types';
 import SignaturePad from './SignaturePad';
+import { getStatusColor } from '@/lib/badge-variants';
 import QRCameraScanner from './QRCameraScanner';
 
 const TIPO_ENTIDAD_LABELS: Record<TipoEntidad, string> = {
@@ -113,7 +114,6 @@ export default function VentaPage() {
 
       if (!data || !data.existe) {
         toast.error(`"${code}" no existe en el sistema`);
-        setItems(prev => [...prev, { tipo: tipoHint || 'carton', referencia: code, validado: false, error: 'No encontrado' }]);
         return;
       }
 
@@ -121,13 +121,11 @@ export default function VentaPage() {
 
       if (!data.enMiAlmacen) {
         toast.error(`${TIPO_ENTIDAD_LABELS[tipo]} "${code}" no esta en tu almacen (esta en ${data.almacen || 'otro'})`);
-        setItems(prev => [...prev, { tipo, referencia: code, validado: false, error: `En ${data.almacen || 'otro almacen'}` }]);
         return;
       }
 
       if ((data.disponibles ?? 0) === 0) {
         toast.error(`${TIPO_ENTIDAD_LABELS[tipo]} "${code}" ya fue vendida completamente`);
-        setItems(prev => [...prev, { tipo, referencia: code, validado: false, error: 'Ya vendido' }]);
         return;
       }
 
@@ -139,7 +137,6 @@ export default function VentaPage() {
       toast.success(`${TIPO_ENTIDAD_LABELS[tipo]} "${code}" — ${info}`);
     } catch {
       toast.error(`Error validando "${code}"`);
-      setItems(prev => [...prev, { tipo: tipoHint || 'carton', referencia: code, validado: false, error: 'Error de validacion' }]);
     } finally {
       setValidating(false);
     }
@@ -166,6 +163,11 @@ export default function VentaPage() {
   const downloadPdf = async (documentoId: number) => {
     try {
       const blob = await getDocumentoPdf(documentoId);
+      // Verificar que sea un PDF real (no un error JSON devuelto como blob)
+      if (blob.size < 100 || blob.type === 'application/json') {
+        toast.error('PDF no disponible para este documento');
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -401,7 +403,7 @@ export default function VentaPage() {
                     {Object.entries(countByType).map(([tipo, count]) => {
                       const Icon = TIPO_ICONS[tipo as TipoEntidad];
                       return (
-                        <Badge key={tipo} variant="secondary" className="gap-1">
+                        <Badge key={tipo} className={getStatusColor(tipo) + ' gap-1'}>
                           <Icon className="h-3 w-3" /> {count} {TIPO_ENTIDAD_LABELS[tipo as TipoEntidad]}(s)
                         </Badge>
                       );
@@ -422,7 +424,7 @@ export default function VentaPage() {
                         <TableRow key={idx} className={item.error ? 'bg-red-50' : ''}>
                           <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="capitalize">{item.tipo}</Badge>
+                            <Badge className={getStatusColor(item.tipo) + ' text-xs'}>{TIPO_ENTIDAD_LABELS[item.tipo]}</Badge>
                           </TableCell>
                           <TableCell className="font-mono font-bold">{item.referencia}</TableCell>
                           <TableCell>

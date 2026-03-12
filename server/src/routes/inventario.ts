@@ -293,6 +293,21 @@ router.get('/lotes/:eventId', requirePermission('inventory:read'), async (req, r
   }
 });
 
+// Cartones de un lote
+router.get('/lotes/:loteId/cartones', requirePermission('inventory:read'), async (req, res) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT c.id, c.card_code, c.serial, c.is_sold, c.buyer_name, c.sold_at
+       FROM cards c WHERE c.lote_id = $1 ORDER BY c.card_number`,
+      [parseInt(req.params.loteId as string, 10)]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
 // =====================================================
 // ASIGNACIONES
 // =====================================================

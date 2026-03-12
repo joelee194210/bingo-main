@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -38,6 +38,7 @@ import {
   getMovimientoPdf,
   escanearCodigo,
   getEvents,
+  getMisAlmacenes,
 } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -48,14 +49,9 @@ import {
   type AsignacionProposito,
 } from '@/types';
 import MovimientoDialog from './MovimientoDialog';
-
-const estadoColor: Record<AsignacionEstado, string> = {
-  asignado: 'bg-blue-100 text-blue-800',
-  parcial: 'bg-yellow-100 text-yellow-800',
-  completado: 'bg-green-100 text-green-800',
-  devuelto: 'bg-gray-100 text-gray-800',
-  cancelado: 'bg-red-100 text-red-800',
-};
+import { DataExportMenu } from '@/components/ui/data-export-menu';
+import { SortableHeader } from '@/components/ui/sortable-header';
+import { getStatusColor } from '@/lib/badge-variants';
 
 // ============================================================
 // Almacen Tree Node
@@ -195,7 +191,23 @@ export default function InventoryPage() {
   const [cargarTipo, setCargarTipo] = useState<'caja' | 'libreta' | 'carton'>('caja');
   const [cargarReferencia, setCargarReferencia] = useState('');
 
+  // Cajas/Lotes search & sort
+  const [invSearch, setInvSearch] = useState('');
+  const [cajasSort, setCajasSort] = useState<{ column: string | null; direction: 'asc' | 'desc' | null }>({ column: null, direction: null });
+  const [lotesSort, setLotesSort] = useState<{ column: string | null; direction: 'asc' | 'desc' | null }>({ column: null, direction: null });
+  // Movimientos search
+  const [movSearch, setMovSearch] = useState('');
+
   // ---- Queries ----
+
+  // Para no-admin: obtener almacén asignado
+  const { data: misAlmacenesData } = useQuery({
+    queryKey: ['mis-almacenes'],
+    queryFn: getMisAlmacenes,
+    enabled: !isAdmin,
+  });
+  const miAlmacen = misAlmacenesData?.data?.find(a => a.event_id === eventId);
+  const miAlmacenId = isAdmin ? undefined : miAlmacen?.almacen_id;
 
   const { data: treeData, isLoading: treeLoading } = useQuery({
     queryKey: ['almacen-tree', eventId],
@@ -210,14 +222,14 @@ export default function InventoryPage() {
   });
 
   const { data: resumenData, isLoading: resumenLoading } = useQuery({
-    queryKey: ['resumen-inventario', eventId],
-    queryFn: () => getResumenInventario(eventId),
+    queryKey: ['resumen-inventario', eventId, miAlmacenId],
+    queryFn: () => getResumenInventario(eventId, miAlmacenId),
     enabled: !!eventId,
   });
 
   const { data: cajasData, isLoading: cajasLoading } = useQuery({
-    queryKey: ['cajas', eventId],
-    queryFn: () => getCajas(eventId),
+    queryKey: ['cajas', eventId, miAlmacenId],
+    queryFn: () => getCajas(eventId, miAlmacenId),
     enabled: !!eventId,
   });
 
@@ -230,6 +242,7 @@ export default function InventoryPage() {
 
   const movimientoParams: Record<string, any> = { limit: 100 };
   if (asignacionAlmacenFilter && asignacionAlmacenFilter !== '__all__') movimientoParams.almacen_id = Number(asignacionAlmacenFilter);
+  else if (miAlmacenId) movimientoParams.almacen_id = miAlmacenId;
 
   const { data: movimientosData, isLoading: movimientosLoading } = useQuery({
     queryKey: ['movimientos', eventId, movimientoParams],
@@ -258,6 +271,112 @@ export default function InventoryPage() {
   const movimientos = movimientosData?.data ?? [];
   const documentos = documentosData?.data ?? [];
 
+  const toggleCajasSort = (column: string) => {
+    setCajasSort(prev => {
+      if (prev.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return { column: null, direction: null };
+    });
+  };
+
+  const toggleLotesSort = (column: string) => {
+    setLotesSort(prev => {
+      if (prev.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return { column: null, direction: null };
+    });
+  };
+
+  const filteredCajas = useMemo(() => {
+    let result = cajas;
+    if (invSearch.trim()) {
+      const q = invSearch.toLowerCase();
+      result = result.filter((c: any) =>
+        c.caja_code?.toLowerCase().includes(q) ||
+        c.status?.toLowerCase().includes(q)
+      );
+    }
+    if (cajasSort.column && cajasSort.direction) {
+      const col = cajasSort.column;
+      const dir = cajasSort.direction === 'asc' ? 1 : -1;
+      result = [...result].sort((a: any, b: any) => {
+        const aVal = a[col]; const bVal = b[col];
+        if (aVal === bVal) return 0;
+        if (aVal == null) return 1; if (bVal == null) return -1;
+        if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * dir;
+        return String(aVal).localeCompare(String(bVal)) * dir;
+      });
+    }
+    return result;
+  }, [cajas, invSearch, cajasSort]);
+
+  const allLotes = useMemo(() => cajas.flatMap((c: any) => c.lotes.map((l: any) => ({ ...l, caja_code: c.caja_code }))), [cajas]);
+
+  const filteredLotes = useMemo(() => {
+    let result = allLotes;
+    if (invSearch.trim()) {
+      const q = invSearch.toLowerCase();
+      result = result.filter((l: any) =>
+        l.lote_code?.toLowerCase().includes(q) ||
+        l.caja_code?.toLowerCase().includes(q) ||
+        l.series_number?.toString().includes(q) ||
+        l.status?.toLowerCase().includes(q)
+      );
+    }
+    if (lotesSort.column && lotesSort.direction) {
+      const col = lotesSort.column;
+      const dir = lotesSort.direction === 'asc' ? 1 : -1;
+      result = [...result].sort((a: any, b: any) => {
+        const aVal = a[col]; const bVal = b[col];
+        if (aVal === bVal) return 0;
+        if (aVal == null) return 1; if (bVal == null) return -1;
+        if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * dir;
+        return String(aVal).localeCompare(String(bVal)) * dir;
+      });
+    }
+    return result;
+  }, [allLotes, invSearch, lotesSort]);
+
+  const filteredDocumentos = useMemo(() => {
+    if (!movSearch.trim()) return documentos;
+    const q = movSearch.toLowerCase();
+    return documentos.filter((d: any) =>
+      d.accion?.toLowerCase().includes(q) ||
+      d.de_nombre?.toLowerCase().includes(q) ||
+      d.a_nombre?.toLowerCase().includes(q) ||
+      d.realizado_por_nombre?.toLowerCase().includes(q) ||
+      `DOC-${d.id.toString().padStart(6, '0')}`.toLowerCase().includes(q)
+    );
+  }, [documentos, movSearch]);
+
+  const CAJAS_EXPORT_COLUMNS = [
+    { key: 'caja_code', label: 'Caja' },
+    { key: 'total_lotes', label: 'Lotes' },
+    { key: 'total_cartones', label: 'Cartones' },
+    { key: 'asignados', label: 'Vendidos' },
+    { key: 'status', label: 'Estado' },
+  ];
+
+  const LOTES_EXPORT_COLUMNS = [
+    { key: 'lote_code', label: 'Lote' },
+    { key: 'caja_code', label: 'Caja' },
+    { key: 'series_number', label: 'Serie' },
+    { key: 'total_cards', label: 'Cartones' },
+    { key: 'cards_sold', label: 'Vendidos' },
+    { key: 'status', label: 'Estado' },
+  ];
+
+  const MOVIMIENTOS_EXPORT_COLUMNS = [
+    { key: 'id', label: 'No. Doc' },
+    { key: 'created_at', label: 'Fecha' },
+    { key: 'accion', label: 'Accion' },
+    { key: 'de_nombre', label: 'De' },
+    { key: 'a_nombre', label: 'A' },
+    { key: 'total_items', label: 'Items' },
+    { key: 'total_cartones', label: 'Cartones' },
+    { key: 'realizado_por_nombre', label: 'Realizado por' },
+  ];
+
   // Agrupar movimientos legacy (sin documento) por timestamp+accion+almacen
   const movimientosAgrupados = (() => {
     const sinDoc = movimientos.filter((m: any) => !m.documento_id);
@@ -283,9 +402,24 @@ export default function InventoryPage() {
     }));
   })();
 
+  const filteredMovAgrupados = useMemo(() => {
+    if (!movSearch.trim()) return movimientosAgrupados;
+    const q = movSearch.toLowerCase();
+    return movimientosAgrupados.filter((g: any) =>
+      g.accion?.toLowerCase().includes(q) ||
+      g.de_persona?.toLowerCase().includes(q) ||
+      g.a_persona?.toLowerCase().includes(q) ||
+      g.realizado_por_nombre?.toLowerCase().includes(q)
+    );
+  }, [movimientosAgrupados, movSearch]);
+
   const handleDownloadDocPdf = async (docId: number) => {
     try {
       const blob = await getDocumentoPdf(docId);
+      if (blob.size < 100 || blob.type === 'application/json') {
+        toast.error('PDF no disponible para este documento');
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -293,13 +427,17 @@ export default function InventoryPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast.error('No se pudo descargar el PDF');
+      toast.error('PDF no disponible');
     }
   };
 
   const handleDownloadMovPdf = async (movId: number) => {
     try {
       const blob = await getMovimientoPdf(movId);
+      if (blob.size < 100 || blob.type === 'application/json') {
+        toast.error('PDF no disponible para este movimiento');
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -307,7 +445,7 @@ export default function InventoryPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast.error('No se pudo descargar el PDF');
+      toast.error('PDF no disponible');
     }
   };
 
@@ -532,7 +670,7 @@ export default function InventoryPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Asignados</CardTitle>
+            <CardTitle className="text-sm font-medium">Vendidos</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -630,7 +768,16 @@ export default function InventoryPage() {
 
         {/* ============ INVENTARIO TAB ============ */}
         <TabsContent value="inventario" className="space-y-4">
-          <h2 className="text-lg font-semibold">Cajas y Libretas</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Cajas y Libretas</h2>
+            <div className="flex items-center gap-2">
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input className="pl-9 h-9" placeholder="Buscar caja, lote, serie..." value={invSearch} onChange={(e) => setInvSearch(e.target.value)} />
+              </div>
+              <DataExportMenu data={filteredCajas as unknown as Record<string, unknown>[]} columns={CAJAS_EXPORT_COLUMNS} filename="cajas" />
+            </div>
+          </div>
 
           <Card>
             <CardHeader>
@@ -647,16 +794,16 @@ export default function InventoryPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Caja</TableHead>
-                      <TableHead>Lotes</TableHead>
-                      <TableHead>Cartones</TableHead>
-                      <TableHead>Asignados</TableHead>
+                      <TableHead><SortableHeader label="Caja" column="caja_code" sort={cajasSort} onSort={toggleCajasSort} /></TableHead>
+                      <TableHead><SortableHeader label="Lotes" column="total_lotes" sort={cajasSort} onSort={toggleCajasSort} /></TableHead>
+                      <TableHead><SortableHeader label="Cartones" column="total_cartones" sort={cajasSort} onSort={toggleCajasSort} /></TableHead>
+                      <TableHead><SortableHeader label="Vendidos" column="asignados" sort={cajasSort} onSort={toggleCajasSort} /></TableHead>
                       <TableHead>Disponibles</TableHead>
-                      <TableHead>Estado</TableHead>
+                      <TableHead><SortableHeader label="Estado" column="status" sort={cajasSort} onSort={toggleCajasSort} /></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {cajas.map((c) => (
+                    {filteredCajas.map((c: any) => (
                       <TableRow key={c.id}>
                         <TableCell className="font-mono font-medium">{c.caja_code}</TableCell>
                         <TableCell>{c.total_lotes} lotes</TableCell>
@@ -666,7 +813,7 @@ export default function InventoryPage() {
                           {c.total_cartones - c.asignados}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="capitalize">{c.status}</Badge>
+                          <Badge className={getStatusColor(c.status) + ' text-xs'}>{c.status}</Badge>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -680,35 +827,36 @@ export default function InventoryPage() {
           {cajas.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Lotes (Libretas)</CardTitle>
+                <div className="flex items-center justify-between w-full">
+                  <CardTitle className="text-base">Lotes (Libretas)</CardTitle>
+                  <DataExportMenu data={filteredLotes as unknown as Record<string, unknown>[]} columns={LOTES_EXPORT_COLUMNS} filename="lotes" />
+                </div>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Lote</TableHead>
-                      <TableHead>Caja</TableHead>
-                      <TableHead>Serie</TableHead>
-                      <TableHead>Cartones</TableHead>
-                      <TableHead>Vendidos</TableHead>
-                      <TableHead>Estado</TableHead>
+                      <TableHead><SortableHeader label="Lote" column="lote_code" sort={lotesSort} onSort={toggleLotesSort} /></TableHead>
+                      <TableHead><SortableHeader label="Caja" column="caja_code" sort={lotesSort} onSort={toggleLotesSort} /></TableHead>
+                      <TableHead><SortableHeader label="Serie" column="series_number" sort={lotesSort} onSort={toggleLotesSort} /></TableHead>
+                      <TableHead><SortableHeader label="Cartones" column="total_cards" sort={lotesSort} onSort={toggleLotesSort} /></TableHead>
+                      <TableHead><SortableHeader label="Vendidos" column="cards_sold" sort={lotesSort} onSort={toggleLotesSort} /></TableHead>
+                      <TableHead><SortableHeader label="Estado" column="status" sort={lotesSort} onSort={toggleLotesSort} /></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {cajas.flatMap((c) =>
-                      c.lotes.map((l) => (
+                    {filteredLotes.map((l: any) => (
                         <TableRow key={l.id}>
                           <TableCell className="font-mono font-medium">{l.lote_code}</TableCell>
-                          <TableCell className="font-mono text-sm">{c.caja_code}</TableCell>
+                          <TableCell className="font-mono text-sm">{l.caja_code}</TableCell>
                           <TableCell className="font-mono text-sm">{l.series_number}</TableCell>
                           <TableCell>{l.total_cards}</TableCell>
                           <TableCell>{l.cards_sold}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="capitalize text-xs">{l.status.replace('_', ' ')}</Badge>
+                            <Badge className={getStatusColor(l.status) + ' text-xs'}>{l.status.replace('_', ' ')}</Badge>
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -720,10 +868,17 @@ export default function InventoryPage() {
         <TabsContent value="movimientos" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">Movimientos</h2>
-            <Button onClick={() => setShowMovimientoDialog(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Movimiento
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input className="pl-9 h-9" placeholder="Buscar movimiento..." value={movSearch} onChange={(e) => setMovSearch(e.target.value)} />
+              </div>
+              <DataExportMenu data={documentos as unknown as Record<string, unknown>[]} columns={MOVIMIENTOS_EXPORT_COLUMNS} filename="movimientos" />
+              <Button onClick={() => setShowMovimientoDialog(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo Movimiento
+              </Button>
+            </div>
           </div>
 
           {/* Filters */}
@@ -751,7 +906,7 @@ export default function InventoryPage() {
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : (documentos.length === 0 && movimientosAgrupados.length === 0) ? (
+              ) : (filteredDocumentos.length === 0 && filteredMovAgrupados.length === 0) ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   No hay movimientos registrados
                 </p>
@@ -772,7 +927,7 @@ export default function InventoryPage() {
                   </TableHeader>
                   <TableBody>
                     {/* Documentos nuevos (agrupados) */}
-                    {documentos.map((d) => (
+                    {filteredDocumentos.map((d: any) => (
                       <TableRow
                         key={`doc-${d.id}`}
                         className="cursor-pointer hover:bg-muted/50"
@@ -785,7 +940,7 @@ export default function InventoryPage() {
                           {new Date(d.created_at).toLocaleString()}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="capitalize">{(d.accion || '').replace(/_/g, ' ')}</Badge>
+                          <Badge className={getStatusColor(d.accion) + ' text-xs capitalize'}>{(d.accion || '').replace(/_/g, ' ')}</Badge>
                         </TableCell>
                         <TableCell className="text-sm">{d.de_nombre || '-'}</TableCell>
                         <TableCell className="text-sm">{d.a_nombre || '-'}</TableCell>
@@ -804,7 +959,7 @@ export default function InventoryPage() {
                       </TableRow>
                     ))}
                     {/* Movimientos legacy agrupados */}
-                    {movimientosAgrupados.map((g) => (
+                    {filteredMovAgrupados.map((g: any) => (
                       <TableRow
                         key={`grp-${g.id}`}
                         className="cursor-pointer hover:bg-muted/50"
@@ -817,7 +972,7 @@ export default function InventoryPage() {
                           {new Date(g.created_at).toLocaleString()}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="capitalize">{g.accion.replace(/_/g, ' ')}</Badge>
+                          <Badge className={getStatusColor(g.accion) + ' text-xs capitalize'}>{g.accion.replace(/_/g, ' ')}</Badge>
                         </TableCell>
                         <TableCell className="text-sm">{g.de_persona || '-'}</TableCell>
                         <TableCell className="text-sm">{g.a_persona || '-'}</TableCell>
@@ -1053,7 +1208,7 @@ export default function InventoryPage() {
                       </p>
                       <p className="text-sm">
                         <span className="text-muted-foreground">Estado:</span>{' '}
-                        <Badge className={estadoColor[scanResult.asignacion.estado as AsignacionEstado]}>
+                        <Badge className={getStatusColor(scanResult.asignacion.estado)}>
                           {ESTADO_LABELS[scanResult.asignacion.estado as AsignacionEstado]}
                         </Badge>
                       </p>

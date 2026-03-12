@@ -5,6 +5,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '@/services/api';
+import { useTableControls } from '@/hooks/useTableControls';
+import { SortableHeader } from '@/components/ui/sortable-header';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { DataExportMenu } from '@/components/ui/data-export-menu';
+import { getStatusColor } from '@/lib/badge-variants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -36,7 +41,6 @@ import { ROL_ALMACEN_LABELS, type AlmacenRol } from '@/types';
 export default function InventarioUsuarios() {
   const queryClient = useQueryClient();
   const [eventId, setEventId] = useState<number | undefined>();
-  const [searchTerm, setSearchTerm] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [dialogTab, setDialogTab] = useState<'crear' | 'existente'>('crear');
 
@@ -185,25 +189,24 @@ export default function InventarioUsuarios() {
     setShowEditDialog(true);
   };
 
-  const filteredUsuarios = usuarios.filter(
-    (u) =>
-      u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.almacen_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const table = useTableControls(
+    usuarios as (typeof usuarios[0] & Record<string, unknown>)[],
+    ['full_name', 'username', 'almacen_name'],
   );
+
+  const filteredUsuarios = table.paginatedData as typeof usuarios;
 
   const availableUsers = allUsers?.filter(
     (u) => u.is_active && !usuarios.some((au) => au.user_id === u.id && au.almacen_id === Number(selectedAlmacenId))
   ) || [];
 
-  const rolBadgeVariant = (rol: string) => {
-    switch (rol) {
-      case 'administrador': return 'destructive' as const;
-      case 'operador': return 'default' as const;
-      case 'vendedor': return 'secondary' as const;
-      default: return 'outline' as const;
-    }
-  };
+  const EXPORT_COLUMNS = [
+    { key: 'full_name', label: 'Nombre' },
+    { key: 'username', label: 'Usuario' },
+    { key: 'almacen_name', label: 'Almacen' },
+    { key: 'almacen_code', label: 'Codigo Almacen' },
+    { key: 'rol', label: 'Rol' },
+  ];
 
   if (isLoading && eventId) {
     return (
@@ -228,10 +231,17 @@ export default function InventarioUsuarios() {
           </p>
         </div>
         {eventId && (
-          <Button onClick={() => { resetDialog(); setShowAddDialog(true); }}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Nuevo Usuario
-          </Button>
+          <div className="flex items-center gap-2">
+            <DataExportMenu
+              data={table.allFilteredData as Record<string, unknown>[]}
+              columns={EXPORT_COLUMNS}
+              filename="usuarios_inventario"
+            />
+            <Button onClick={() => { resetDialog(); setShowAddDialog(true); }}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Nuevo Usuario
+            </Button>
+          </div>
         )}
       </div>
 
@@ -265,8 +275,8 @@ export default function InventarioUsuarios() {
                   <Input
                     className="pl-9"
                     placeholder="Nombre, usuario o almacen..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    value={table.search}
+                    onChange={(e) => table.setSearch(e.target.value)}
                   />
                 </div>
               </div>
@@ -303,9 +313,9 @@ export default function InventarioUsuarios() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Almacen</TableHead>
-                <TableHead>Rol</TableHead>
+                <TableHead><SortableHeader label="Usuario" column="full_name" sort={table.sort} onSort={table.toggleSort} /></TableHead>
+                <TableHead><SortableHeader label="Almacen" column="almacen_name" sort={table.sort} onSort={table.toggleSort} /></TableHead>
+                <TableHead><SortableHeader label="Rol" column="rol" sort={table.sort} onSort={table.toggleSort} /></TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -333,7 +343,7 @@ export default function InventarioUsuarios() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={rolBadgeVariant(u.rol)}>
+                    <Badge className={getStatusColor(u.rol)}>
                       {ROL_ALMACEN_LABELS[u.rol as AlmacenRol] || u.rol}
                     </Badge>
                   </TableCell>
@@ -362,6 +372,11 @@ export default function InventarioUsuarios() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={table.page} totalPages={table.totalPages} pageSize={table.pageSize}
+            from={table.from} to={table.to} total={table.totalFiltered}
+            onPageChange={table.setPage} onPageSizeChange={table.setPageSize}
+          />
         </Card>
       )}
 

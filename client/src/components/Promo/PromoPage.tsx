@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -11,6 +11,11 @@ import {
   Trophy,
   AlertTriangle,
   CheckCircle,
+  Search,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -23,6 +28,9 @@ import {
   getPromoWinners,
 } from '@/services/api';
 import type { BingoEvent, PromoWinner } from '@/types';
+import { DataExportMenu } from '@/components/ui/data-export-menu';
+import { SortableHeader } from '@/components/ui/sortable-header';
+import { getStatusColor } from '@/lib/badge-variants';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -66,6 +74,17 @@ export default function PromoPage() {
   const [prizes, setPrizes] = useState<{ name: string; quantity: number }[]>([]);
   const [winnersPage, setWinnersPage] = useState(1);
   const [prizeFilter, setPrizeFilter] = useState<string>('');
+  const [winnersSearch, setWinnersSearch] = useState('');
+  const [winnersSort, setWinnersSort] = useState<{ column: string | null; direction: 'asc' | 'desc' | null }>({ column: null, direction: null });
+
+  const WINNERS_EXPORT_COLUMNS = [
+    { key: 'card_number', label: '#' },
+    { key: 'serial', label: 'Serial' },
+    { key: 'card_code', label: 'Codigo' },
+    { key: 'promo_text', label: 'Premio' },
+    { key: 'is_sold', label: 'Vendido' },
+    { key: 'buyer_name', label: 'Comprador' },
+  ];
 
   const { data: eventsData } = useQuery({ queryKey: ['events'], queryFn: getEvents });
   const events = eventsData?.data || [];
@@ -165,10 +184,44 @@ export default function PromoPage() {
     setPrizes(updated);
   };
 
+  const toggleWinnersSort = (column: string) => {
+    setWinnersSort(prev => {
+      if (prev.column !== column) return { column, direction: 'asc' };
+      if (prev.direction === 'asc') return { column, direction: 'desc' };
+      return { column: null, direction: null };
+    });
+  };
+
   const totalPrizes = prizes.reduce((sum, p) => sum + (p.quantity || 0), 0);
   const selectedEvent = events.find((e: BingoEvent) => e.id === selectedEventId);
   const hasDistributed = !!(promo?.stats?.cards_with_promo && promo.stats.cards_with_promo > 0);
   const winners = winnersData?.data || [];
+  const filteredWinners = useMemo(() => {
+    let result = winners;
+    if (winnersSearch.trim()) {
+      const q = winnersSearch.toLowerCase();
+      result = result.filter((w: PromoWinner) =>
+        w.serial?.toLowerCase().includes(q) ||
+        w.card_code?.toLowerCase().includes(q) ||
+        w.promo_text?.toLowerCase().includes(q) ||
+        w.buyer_name?.toLowerCase().includes(q)
+      );
+    }
+    if (winnersSort.column && winnersSort.direction) {
+      const col = winnersSort.column;
+      const dir = winnersSort.direction === 'asc' ? 1 : -1;
+      result = [...result].sort((a: any, b: any) => {
+        const aVal = a[col];
+        const bVal = b[col];
+        if (aVal === bVal) return 0;
+        if (aVal == null) return 1;
+        if (bVal == null) return -1;
+        if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * dir;
+        return String(aVal).localeCompare(String(bVal)) * dir;
+      });
+    }
+    return result;
+  }, [winners, winnersSearch, winnersSort]);
   const winnersPagination = winnersData?.pagination;
 
   return (
@@ -446,46 +499,62 @@ export default function PromoPage() {
                     <Trophy className="h-5 w-5" />
                     Ganadores ({promo?.stats.cards_with_prize?.toLocaleString() || 0})
                   </CardTitle>
-                  {promo?.prizes && promo.prizes.length > 0 && (
-                    <Select value={prizeFilter} onValueChange={(v) => { setPrizeFilter(v === '__all__' ? '' : v); setWinnersPage(1); }}>
-                      <SelectTrigger className="w-48">
-                        <SelectValue placeholder="Filtrar por premio" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__all__">Todos los premios</SelectItem>
-                        {promo.prizes.map(p => (
-                          <SelectItem key={p.id} value={p.name}>
-                            {p.name} ({p.distributed})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {promo?.prizes && promo.prizes.length > 0 && (
+                      <Select value={prizeFilter} onValueChange={(v) => { setPrizeFilter(v === '__all__' ? '' : v); setWinnersPage(1); }}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Filtrar por premio" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">Todos los premios</SelectItem>
+                          {promo.prizes.map(p => (
+                            <SelectItem key={p.id} value={p.name}>
+                              {p.name} ({p.distributed})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <DataExportMenu
+                      data={filteredWinners as unknown as Record<string, unknown>[]}
+                      columns={WINNERS_EXPORT_COLUMNS}
+                      filename="ganadores_promo"
+                    />
+                  </div>
+                </div>
+                <div className="relative max-w-sm mt-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    className="pl-9 h-9"
+                    placeholder="Buscar serial, codigo, premio..."
+                    value={winnersSearch}
+                    onChange={(e) => setWinnersSearch(e.target.value)}
+                  />
                 </div>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>#</TableHead>
-                      <TableHead>Serial</TableHead>
-                      <TableHead>Codigo</TableHead>
-                      <TableHead>Premio</TableHead>
-                      <TableHead>Vendido</TableHead>
-                      <TableHead>Comprador</TableHead>
+                      <TableHead><SortableHeader label="#" column="card_number" sort={winnersSort} onSort={toggleWinnersSort} /></TableHead>
+                      <TableHead><SortableHeader label="Serial" column="serial" sort={winnersSort} onSort={toggleWinnersSort} /></TableHead>
+                      <TableHead><SortableHeader label="Codigo" column="card_code" sort={winnersSort} onSort={toggleWinnersSort} /></TableHead>
+                      <TableHead><SortableHeader label="Premio" column="promo_text" sort={winnersSort} onSort={toggleWinnersSort} /></TableHead>
+                      <TableHead><SortableHeader label="Vendido" column="is_sold" sort={winnersSort} onSort={toggleWinnersSort} /></TableHead>
+                      <TableHead><SortableHeader label="Comprador" column="buyer_name" sort={winnersSort} onSort={toggleWinnersSort} /></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {winners.map((w: PromoWinner) => (
+                    {filteredWinners.map((w: PromoWinner) => (
                       <TableRow key={w.id}>
                         <TableCell className="font-mono">{w.card_number}</TableCell>
                         <TableCell className="font-mono">{w.serial}</TableCell>
                         <TableCell className="font-mono">{w.card_code}</TableCell>
                         <TableCell>
-                          <Badge variant="success">{w.promo_text}</Badge>
+                          <Badge className={getStatusColor('prize') + ' text-xs'}>{w.promo_text}</Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={w.is_sold ? 'default' : 'secondary'}>
+                          <Badge className={getStatusColor(w.is_sold ? 'sold' : 'available') + ' text-xs'}>
                             {w.is_sold ? 'Si' : 'No'}
                           </Badge>
                         </TableCell>
@@ -504,26 +573,23 @@ export default function PromoPage() {
 
                 {/* Paginacion */}
                 {winnersPagination && winnersPagination.totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
+                  <div className="flex items-center justify-between mt-4 pt-3 border-t">
                     <p className="text-sm text-muted-foreground">
-                      Pagina {winnersPagination.page} de {winnersPagination.totalPages}
+                      Mostrando {((winnersPage - 1) * 50) + 1}-{Math.min(winnersPage * 50, winnersPagination.total || 0)} de {(winnersPagination.total || 0).toLocaleString()}
                     </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={winnersPage <= 1}
-                        onClick={() => setWinnersPage(p => p - 1)}
-                      >
-                        Anterior
+                    <div className="flex items-center gap-1.5">
+                      <Button variant="outline" size="icon" className="h-8 w-8" disabled={winnersPage <= 1} onClick={() => setWinnersPage(1)}>
+                        <ChevronsLeft className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={winnersPage >= winnersPagination.totalPages}
-                        onClick={() => setWinnersPage(p => p + 1)}
-                      >
-                        Siguiente
+                      <Button variant="outline" size="icon" className="h-8 w-8" disabled={winnersPage <= 1} onClick={() => setWinnersPage(p => p - 1)}>
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm font-medium px-2 tabular-nums">{winnersPage} / {winnersPagination.totalPages}</span>
+                      <Button variant="outline" size="icon" className="h-8 w-8" disabled={winnersPage >= winnersPagination.totalPages} onClick={() => setWinnersPage(p => p + 1)}>
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="icon" className="h-8 w-8" disabled={winnersPage >= winnersPagination.totalPages} onClick={() => setWinnersPage(winnersPagination.totalPages)}>
+                        <ChevronsRight className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>

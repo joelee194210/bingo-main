@@ -182,6 +182,27 @@ export const getQRProgress = (eventId: number) =>
 export const downloadQRZip = (eventId: number) =>
   api.get(`/export/qr/download/${eventId}`, { responseType: 'blob' }).then(r => r.data);
 
+// Barcode (Code 128)
+export const generateBarcodes = (data: {
+  event_id: number;
+  from_card?: number;
+  to_card?: number;
+  from_series?: number;
+  to_series?: number;
+}) =>
+  api.post<ApiResponse<{
+    event_name: string;
+    cards_processed: number;
+    zip_size_mb: string;
+    sample_serial: string;
+  }>>('/export/barcode', data).then(r => r.data);
+
+export const getBarcodeProgress = (eventId: number) =>
+  api.get<ApiResponse<{ total: number; generated: number; status: string } | null>>(`/export/barcode/progress/${eventId}`).then(r => r.data);
+
+export const downloadBarcodeZip = (eventId: number) =>
+  api.get(`/export/barcode/download/${eventId}`, { responseType: 'blob' }).then(r => r.data);
+
 // =====================================================
 // PROMOCIONES / RASPADITO
 // =====================================================
@@ -250,6 +271,9 @@ export const getResumenInventario = (eventId: number, almacenId?: number) =>
 
 export const getCajas = (eventId: number, almacenId?: number) =>
   api.get<ApiResponse<CajaReal[]>>(`/inventario/cajas/${eventId}`, { params: almacenId ? { almacen_id: almacenId } : undefined }).then(r => r.data);
+
+export const getCartonesLote = (loteId: number) =>
+  api.get<ApiResponse<{ id: number; card_code: string; serial: string; is_sold: boolean; buyer_name: string | null; sold_at: string | null }[]>>(`/inventario/lotes/${loteId}/cartones`).then(r => r.data);
 
 export const getCajasDisponibles = (eventId: number) =>
   api.get<ApiResponse<{ id: number; caja_code: string; total_lotes: number; total_cartones: number; almacen_id: number | null; almacen_name: string | null }[]>>(`/inventario/cajas-disponibles/${eventId}`).then(r => r.data);

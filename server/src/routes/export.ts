@@ -5,9 +5,48 @@ import { generateCardsPDF, exportCardsAsImages, generateCardImage } from '../ser
 import { requirePermission } from '../middleware/auth.js';
 import type { BingoCard, BingoEvent, CardNumbers } from '../types/index.js';
 import QRCode from 'qrcode';
+import bwipjs from 'bwip-js';
+import { createCanvas, loadImage } from 'canvas';
 import fs from 'fs';
 import path from 'path';
 import archiver from 'archiver';
+
+// Genera etiqueta: texto grande arriba + barcode Code128 abajo
+// Tamaño real: 1.9cm x 0.9cm a 300 DPI = 224 x 106 px
+async function generateBarcodeLabel(serial: string): Promise<Buffer> {
+  const W = 224;
+  const H = 106;
+  const textH = 42;  // mitad superior para texto
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+
+  // Fondo blanco
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  // Texto grande bold arriba, centrado
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 32px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(serial, W / 2, textH / 2);
+
+  // Barcode Code 128 (solo barras, sin texto)
+  const barcodePng = await bwipjs.toBuffer({
+    bcid: 'code128',
+    text: serial,
+    scale: 2,
+    height: 5,
+    includetext: false,
+  });
+
+  const barcodeImg = await loadImage(barcodePng);
+  // Dibujar barcode ocupando todo el ancho, desde textH hasta el final
+  const barcodeH = H - textH - 2;
+  ctx.drawImage(barcodeImg, 2, textH, W - 4, barcodeH);
+
+  return canvas.toBuffer('image/png');
+}
 
 const router = Router();
 
@@ -447,6 +486,190 @@ router.get('/qr/single/:cardCode', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error generando QR individual:', error);
     res.status(500).json({ success: false, error: 'Error generando QR' });
+  }
+});
+
+// =====================================================
+// BARCODE (Code 128) - Etiquetas de codigo de barras
+// =====================================================
+
+// Estado de generacion de barcodes por evento
+const barcodeExpected = new Map<number, { total: number; status: 'generating' | 'zipping' | 'completed' | 'error'; folder: string }>();
+
+// POST /api/export/barcode - Generar etiquetas de codigo de barras para cartones
+router.post('/barcode', requirePermission('cards:export'), async (req: Request, res: Response) => {
+  try {
+    const {
+      event_id,
+      from_card,
+      to_card,
+      from_series,
+      to_series,
+    } = req.body;
+
+    if (!event_id) {
+      return res.status(400).json({ success: false, error: 'event_id es requerido' });
+    }
+
+    const pool = getPool();
+
+    const { rows: eventRows } = await pool.query('SELECT * FROM events WHERE id = $1', [event_id]);
+    const event = eventRows[0] as BingoEvent | undefined;
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Evento no encontrado' });
+    }
+
+    // Construir query de seleccion
+    let whereClause = 'WHERE event_id = $1';
+    const params: unknown[] = [event_id];
+    let paramIdx = 2;
+
+    if (from_card && to_card) {
+      whereClause += ` AND card_number BETWEEN $${paramIdx} AND $${paramIdx + 1}`;
+      params.push(from_card, to_card);
+      paramIdx += 2;
+    } else if (from_series && to_series) {
+      const fromNum = (parseInt(from_series, 10) - 1) * 50 + 1;
+      const toNum = parseInt(to_series, 10) * 50;
+      whereClause += ` AND card_number BETWEEN $${paramIdx} AND $${paramIdx + 1}`;
+      params.push(fromNum, toNum);
+      paramIdx += 2;
+    }
+
+    const { rows: cards } = await pool.query(
+      `SELECT id, card_number, serial, card_code, validation_code FROM cards ${whereClause} ORDER BY card_number`,
+      params
+    );
+
+    if (cards.length === 0) {
+      return res.status(404).json({ success: false, error: 'No se encontraron cartones con esos criterios' });
+    }
+
+    // Crear carpeta
+    const safeName = event.name.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+    const outputDir = path.join(__dirname, '..', '..', 'data', 'barcode', `${safeName}_${event_id}`);
+    if (fs.existsSync(outputDir)) {
+      fs.rmSync(outputDir, { recursive: true });
+    }
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    barcodeExpected.set(event_id, { total: cards.length, status: 'generating', folder: outputDir });
+
+    // Generar etiquetas: texto grande arriba + barcode abajo (1.9cm x 0.9cm @ 300DPI)
+    for (const card of cards) {
+      const serial = card.serial as string;
+      const png = await generateBarcodeLabel(serial);
+      const filePath = path.join(outputDir, `${serial}.png`);
+      fs.writeFileSync(filePath, png);
+    }
+
+    // Crear ZIP
+    barcodeExpected.set(event_id, { total: cards.length, status: 'zipping', folder: outputDir });
+    const zipPath = path.join(__dirname, '..', '..', 'data', 'barcode', `${safeName}_${event_id}.zip`);
+    await new Promise<void>((resolve, reject) => {
+      const output = fs.createWriteStream(zipPath);
+      const archive = archiver('zip', { zlib: { level: 6 } });
+      output.on('close', resolve);
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.directory(outputDir, `Barcode_${safeName}`);
+      archive.finalize();
+    });
+
+    const zipSizeMB = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
+
+    barcodeExpected.set(event_id, { total: cards.length, status: 'completed', folder: outputDir });
+    setTimeout(() => barcodeExpected.delete(event_id), 5 * 60 * 1000);
+
+    res.json({
+      success: true,
+      data: {
+        event_name: event.name,
+        cards_processed: cards.length,
+        zip_file: zipPath,
+        zip_size_mb: zipSizeMB,
+        sample_serial: (cards[0] as { serial: string }).serial,
+      },
+    });
+  } catch (error) {
+    console.error('Error generando barcodes:', error);
+    const eventIdKey = req.body?.event_id;
+    if (eventIdKey) {
+      barcodeExpected.set(eventIdKey, { total: 0, status: 'error', folder: '' });
+    }
+    res.status(500).json({ success: false, error: 'Error generando codigos de barra' });
+  }
+});
+
+// GET /api/export/barcode/progress/:eventId
+router.get('/barcode/progress/:eventId', (req: Request, res: Response) => {
+  const eventId = parseInt(String(req.params.eventId), 10);
+  const info = barcodeExpected.get(eventId);
+
+  if (!info) {
+    return res.json({ success: true, data: null });
+  }
+
+  let generated = 0;
+  if (info.folder && fs.existsSync(info.folder)) {
+    try {
+      const files = fs.readdirSync(info.folder);
+      generated = files.filter(f => f.endsWith('.png')).length;
+    } catch {
+      generated = 0;
+    }
+  }
+
+  res.json({
+    success: true,
+    data: {
+      total: info.total,
+      generated,
+      status: info.status,
+    },
+  });
+});
+
+// GET /api/export/barcode/download/:eventId
+router.get('/barcode/download/:eventId', requirePermission('cards:export'), async (req: Request, res: Response) => {
+  try {
+    const eventId = parseInt(String(req.params.eventId), 10);
+    const pool = getPool();
+    const { rows } = await pool.query('SELECT name FROM events WHERE id = $1', [eventId]);
+    const event = rows[0] as { name: string } | undefined;
+
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Evento no encontrado' });
+    }
+
+    const safeName = event.name.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+    const zipPath = path.join(__dirname, '..', '..', 'data', 'barcode', `${safeName}_${eventId}.zip`);
+
+    if (!fs.existsSync(zipPath)) {
+      return res.status(404).json({ success: false, error: 'No se ha generado el ZIP. Ejecute POST /api/export/barcode primero.' });
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="Barcode_${safeName}.zip"`);
+    fs.createReadStream(zipPath).pipe(res);
+  } catch (error) {
+    console.error('Error descargando barcode:', error);
+    res.status(500).json({ success: false, error: 'Error descargando archivo' });
+  }
+});
+
+// GET /api/export/barcode/single/:serial - Generar barcode individual
+router.get('/barcode/single/:serial', async (req: Request, res: Response) => {
+  try {
+    const serial = req.params.serial as string;
+    const png = await generateBarcodeLabel(serial);
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `inline; filename="${serial}.png"`);
+    res.send(png);
+  } catch (error) {
+    console.error('Error generando barcode individual:', error);
+    res.status(500).json({ success: false, error: 'Error generando codigo de barras' });
   }
 });
 

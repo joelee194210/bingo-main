@@ -13,6 +13,7 @@ import CardValidator from './components/Cards/CardValidator';
 import CardActivation from './components/Cards/CardActivation';
 import Users from './pages/Users';
 import QRExport from './components/Export/QRExport';
+import BarcodeExport from './components/Export/BarcodeExport';
 import PromoPage from './components/Promo/PromoPage';
 import InventoryPage from './components/Inventory/InventoryPage';
 import AsignacionDetail from './components/Inventory/AsignacionDetail';
@@ -156,6 +157,16 @@ function App() {
           element={
             <ProtectedRoute permission="cards:export">
               <QRExport />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Exportar Codigos de Barra */}
+        <Route
+          path="export/barcode"
+          element={
+            <ProtectedRoute permission="cards:export">
+              <BarcodeExport />
             </ProtectedRoute>
           }
         />
