@@ -494,12 +494,12 @@ export default function PromoPage() {
           {hasDistributed && (
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Trophy className="h-5 w-5" />
                     Ganadores ({promo?.stats.cards_with_prize?.toLocaleString() || 0})
                   </CardTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {promo?.prizes && promo.prizes.length > 0 && (
                       <Select value={prizeFilter} onValueChange={(v) => { setPrizeFilter(v === '__all__' ? '' : v); setWinnersPage(1); }}>
                         <SelectTrigger className="w-48">
@@ -533,6 +533,7 @@ export default function PromoPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -570,6 +571,7 @@ export default function PromoPage() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
 
                 {/* Paginacion */}
                 {winnersPagination && winnersPagination.totalPages > 1 && (

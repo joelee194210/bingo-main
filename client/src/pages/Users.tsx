@@ -232,6 +232,7 @@ export default function Users() {
         </Card>
       ) : (
         <Card>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -303,6 +304,7 @@ export default function Users() {
               })}
             </TableBody>
           </Table>
+          </div>
           <TablePagination
             page={table.page} totalPages={table.totalPages} pageSize={table.pageSize}
             from={table.from} to={table.to} total={table.totalFiltered}

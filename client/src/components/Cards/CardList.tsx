@@ -87,7 +87,7 @@ export default function CardList() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Cartones</h2>
           <p className="text-muted-foreground text-sm mt-1">Busca por codigo, caja, libreta, serie, comprador</p>
@@ -109,8 +109,8 @@ export default function CardList() {
       {/* Search bar */}
       <Card>
         <CardContent className="pt-4 pb-4">
-          <div className="flex gap-3 items-end">
-            <div className="w-[220px] space-y-1">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="w-full sm:w-[220px] space-y-1">
               <Label className="text-xs">Evento</Label>
               <Select value={eventId?.toString() || ''} onValueChange={(v) => { setEventId(Number(v)); setPage(1); }}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
@@ -134,7 +134,7 @@ export default function CardList() {
             </Button>
           </div>
           {showFilters && (
-            <div className="flex gap-3 items-end mt-3 pt-3 border-t">
+            <div className="flex flex-wrap gap-3 items-end mt-3 pt-3 border-t">
               <div className="w-[160px] space-y-1">
                 <Label className="text-xs">Estado</Label>
                 <Select value={estadoFilter} onValueChange={(v) => { setEstadoFilter(v); setPage(1); }}>
@@ -198,6 +198,7 @@ export default function CardList() {
               {estadoFilter === 'false' && <Badge className={getStatusColor('available') + ' text-xs'}>Disponibles</Badge>}
             </div>
           )}
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -252,6 +253,7 @@ export default function CardList() {
               ))}
             </TableBody>
           </Table>
+          </div>
 
           {/* Pagination */}
           {pagination && pagination.totalPages > 1 && (

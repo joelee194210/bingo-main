@@ -599,17 +599,17 @@ export default function InventoryPage() {
   return (
     <div className="space-y-6">
       {/* Header with event selector */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Inventario</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
           <Label className="text-sm font-medium whitespace-nowrap">Evento / Bingo:</Label>
           <Select
             value={eventId ? String(eventId) : ''}
             onValueChange={(val) => setSelectedEventId(Number(val))}
           >
-            <SelectTrigger className="w-[280px]">
+            <SelectTrigger className="w-full sm:w-[280px]">
               <SelectValue placeholder="Seleccionar evento..." />
             </SelectTrigger>
             <SelectContent>
@@ -634,7 +634,7 @@ export default function InventoryPage() {
 
       {!!eventId && <>
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Cajas</CardTitle>
@@ -694,7 +694,7 @@ export default function InventoryPage() {
 
       {/* Tabs */}
       <Tabs value={defaultTab} onValueChange={handleTabChange}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="almacenes">
             <Warehouse className="mr-2 h-4 w-4" />
             Almacenes
@@ -715,9 +715,9 @@ export default function InventoryPage() {
 
         {/* ============ ALMACENES TAB ============ */}
         <TabsContent value="almacenes" className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-wrap justify-between items-center gap-3">
             <h2 className="text-lg font-semibold">Almacenes</h2>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {isAdmin && (
                 <Button
                   variant="outline"
@@ -768,10 +768,10 @@ export default function InventoryPage() {
 
         {/* ============ INVENTARIO TAB ============ */}
         <TabsContent value="inventario" className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Cajas y Libretas</h2>
-            <div className="flex items-center gap-2">
-              <div className="relative w-64">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input className="pl-9 h-9" placeholder="Buscar caja, lote, serie..." value={invSearch} onChange={(e) => setInvSearch(e.target.value)} />
               </div>
@@ -791,6 +791,7 @@ export default function InventoryPage() {
                   No hay cajas registradas. Genera cartones para crear cajas automaticamente.
                 </p>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -819,6 +820,7 @@ export default function InventoryPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -833,6 +835,7 @@ export default function InventoryPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -859,6 +862,7 @@ export default function InventoryPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -866,10 +870,10 @@ export default function InventoryPage() {
 
         {/* ============ MOVIMIENTOS TAB ============ */}
         <TabsContent value="movimientos" className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-wrap justify-between items-center gap-3">
             <h2 className="text-lg font-semibold">Movimientos</h2>
-            <div className="flex items-center gap-2">
-              <div className="relative w-64">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input className="pl-9 h-9" placeholder="Buscar movimiento..." value={movSearch} onChange={(e) => setMovSearch(e.target.value)} />
               </div>
@@ -911,6 +915,7 @@ export default function InventoryPage() {
                   No hay movimientos registrados
                 </p>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -996,6 +1001,7 @@ export default function InventoryPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -1038,6 +1044,7 @@ export default function InventoryPage() {
                     </div>
                   </div>
 
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1062,6 +1069,7 @@ export default function InventoryPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
 
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setSelectedDocumentoId(null)}>
@@ -1114,6 +1122,7 @@ export default function InventoryPage() {
                     </div>
                   </div>
 
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1138,6 +1147,7 @@ export default function InventoryPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
 
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setSelectedLegacyGroup(null)}>
@@ -1162,7 +1172,7 @@ export default function InventoryPage() {
 
           <Card>
             <CardContent className="pt-6">
-              <div className="flex gap-3 max-w-lg">
+              <div className="flex flex-col sm:flex-row gap-3 max-w-lg w-full">
                 <Input
                   placeholder="Ingrese codigo (ej: C001, L00001 o codigo de carton)"
                   value={scanInput}
@@ -1425,7 +1435,7 @@ export default function InventoryPage() {
                     </Button>
                   )}
                 </div>
-                <div className="border rounded-lg max-h-60 overflow-y-auto">
+                <div className="border rounded-lg max-h-60 overflow-auto">
                   {(cajasDispData?.data ?? []).length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       No hay cajas generadas. Genera cartones primero.

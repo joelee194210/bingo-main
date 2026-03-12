@@ -299,14 +299,14 @@ export default function VentaPage() {
       {currentAlmacen && (
         <>
           {/* Info del almacen + resumen */}
-          <div className="flex items-center gap-3 px-1">
+          <div className="flex flex-wrap items-center gap-3 px-1">
             <Warehouse className="h-5 w-5 text-primary" />
             <div>
               <span className="font-semibold">{currentAlmacen.almacen_name}</span>
               <span className="text-muted-foreground text-sm ml-2">({currentAlmacen.almacen_code})</span>
             </div>
             {resumen && (
-              <div className="ml-auto flex items-center gap-4 text-sm">
+              <div className="sm:ml-auto flex items-center gap-4 text-sm">
                 <span><strong>{resumen.totalCajas}</strong> cajas</span>
                 <span><strong>{resumen.totalLibretas}</strong> libretas</span>
                 <span><strong>{resumen.cartonesDisponibles}</strong> disponibles</span>
@@ -409,6 +409,7 @@ export default function VentaPage() {
                       );
                     })}
                   </div>
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -445,6 +446,7 @@ export default function VentaPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 </>
               )}
             </CardContent>

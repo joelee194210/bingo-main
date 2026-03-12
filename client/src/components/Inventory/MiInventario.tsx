@@ -164,14 +164,14 @@ export default function MiInventario() {
       {currentAlmacen && (
         <>
           {/* Info del almacen */}
-          <div className="flex items-center gap-3 px-1">
+          <div className="flex flex-wrap items-center gap-3 px-1">
             <Warehouse className="h-5 w-5 text-primary" />
             <div>
               <span className="font-semibold">{currentAlmacen.almacen_name}</span>
               <span className="text-muted-foreground text-sm ml-2">({currentAlmacen.almacen_code})</span>
             </div>
             <Badge variant="outline" className="capitalize ml-2">{currentAlmacen.rol}</Badge>
-            <span className="text-sm text-muted-foreground ml-auto">{currentAlmacen.event_name}</span>
+            <span className="text-sm text-muted-foreground sm:ml-auto">{currentAlmacen.event_name}</span>
           </div>
 
           {/* Resumen */}
@@ -252,12 +252,12 @@ export default function MiInventario() {
                         {/* Fila de Caja */}
                         <button
                           onClick={() => toggleCaja(caja.id)}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
+                          className="w-full flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
                         >
                           {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
                           <Package className="h-4 w-4 text-blue-600 shrink-0" />
                           <span className="font-mono font-bold text-sm">{caja.caja_code}</span>
-                          <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-3 ml-auto text-xs text-muted-foreground">
                             <span>{caja.total_lotes} libretas</span>
                             <span>{caja.total_cartones} cartones</span>
                             <span className="text-orange-600">{vendidosCaja} vendidos</span>
@@ -292,7 +292,7 @@ export default function MiInventario() {
                                     <ClipboardList className="h-3.5 w-3.5 text-purple-600 shrink-0" />
                                     <span className="font-mono font-medium text-sm">{lote.lote_code}</span>
                                     <span className="text-xs text-muted-foreground">Serie: {lote.series_number}</span>
-                                    <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
+                                    <div className="flex flex-wrap items-center gap-3 ml-auto text-xs text-muted-foreground">
                                       <span>{lote.total_cards} cartones</span>
                                       <span className="text-orange-600">{lote.cards_sold} vendidos</span>
                                       <span className="text-green-600 font-medium">{disponibles} disp.</span>

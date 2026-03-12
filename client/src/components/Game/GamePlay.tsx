@@ -278,18 +278,18 @@ export default function GamePlay() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="shrink-0" asChild>
             <Link to="/games">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
           <div>
-            <h2 className="text-2xl font-bold">
+            <h2 className="text-xl sm:text-2xl font-bold">
               {gameState.name || GAME_TYPE_LABELS[gameState.gameType]}
             </h2>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {GAME_TYPE_LABELS[gameState.gameType]} • {gameState.isPracticeMode ? 'Modo Práctica' : 'Modo Real'}
             </p>
           </div>
@@ -312,26 +312,26 @@ export default function GamePlay() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6 text-center">
-            <p className="text-3xl font-bold text-blue-600">{gameState.calledBalls.length}</p>
-            <p className="text-sm text-muted-foreground">Balotas Llamadas</p>
+            <p className="text-2xl sm:text-3xl font-bold text-blue-600">{gameState.calledBalls.length}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Balotas Llamadas</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6 text-center">
-            <p className="text-3xl font-bold text-purple-600">{75 - gameState.calledBalls.length}</p>
-            <p className="text-sm text-muted-foreground">Balotas Restantes</p>
+            <p className="text-2xl sm:text-3xl font-bold text-purple-600">{75 - gameState.calledBalls.length}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Balotas Restantes</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6 text-center">
-            <p className="text-3xl font-bold text-green-600">{gameState.activeCards.toLocaleString()}</p>
-            <p className="text-sm text-muted-foreground">Cartones Activos</p>
+            <p className="text-2xl sm:text-3xl font-bold text-green-600">{gameState.activeCards.toLocaleString()}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Cartones Activos</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6 text-center">
-            <p className="text-3xl font-bold text-yellow-600">{gameState.winnerCards.length}</p>
-            <p className="text-sm text-muted-foreground">Ganadores</p>
+            <p className="text-2xl sm:text-3xl font-bold text-yellow-600">{gameState.winnerCards.length}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Ganadores</p>
           </CardContent>
         </Card>
       </div>
@@ -342,7 +342,7 @@ export default function GamePlay() {
           <CardContent className="py-8 flex items-center justify-center">
             <div className="text-center">
               <p className="text-sm text-muted-foreground mb-2">Última balota</p>
-              <div className={`bingo-ball bingo-ball-${getColumn(displayedLastBall)} w-24 h-24 text-4xl animate-bounce-slow`}>
+              <div className={`bingo-ball bingo-ball-${getColumn(displayedLastBall)} w-16 h-16 sm:w-24 sm:h-24 text-2xl sm:text-4xl animate-bounce-slow`}>
                 {displayedLastBall}
               </div>
               <p className="mt-2 text-lg font-semibold">
@@ -453,8 +453,8 @@ export default function GamePlay() {
                 const balls = Array.from({ length: 15 }, (_, i) => start + i);
 
                 return (
-                  <div key={column} className="flex items-center gap-2 flex-wrap">
-                    <div className={`bingo-ball bingo-ball-${column} w-10 h-10 text-lg`}>
+                  <div key={column} className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <div className={`bingo-ball bingo-ball-${column} w-8 h-8 sm:w-10 sm:h-10 text-base sm:text-lg`}>
                       {column}
                     </div>
                     <div className="flex flex-wrap gap-1">
@@ -469,7 +469,7 @@ export default function GamePlay() {
                               }
                             }}
                             disabled={!isPlaying || isCalled || callBallMutation.isPending}
-                            className={`w-10 h-10 rounded-full font-bold text-sm transition-all ${
+                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full font-bold text-xs sm:text-sm transition-all ${
                               isCalled
                                 ? `bingo-ball-${column} text-white shadow-md`
                                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -494,11 +494,11 @@ export default function GamePlay() {
               <CardTitle>Historial ({gameState.calledBalls.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2 2xl:max-h-[500px] 2xl:overflow-y-auto">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2 max-h-[300px] sm:max-h-none 2xl:max-h-[500px] overflow-y-auto 2xl:overflow-y-auto">
                 {gameState.calledBalls.map((ball, index) => (
                   <div
                     key={ball}
-                    className={`bingo-ball bingo-ball-${getColumn(ball)} w-10 h-10 text-sm`}
+                    className={`bingo-ball bingo-ball-${getColumn(ball)} w-8 h-8 sm:w-10 sm:h-10 text-xs sm:text-sm`}
                     title={`#${index + 1}: ${getColumn(ball)}-${ball}`}
                   >
                     {ball}

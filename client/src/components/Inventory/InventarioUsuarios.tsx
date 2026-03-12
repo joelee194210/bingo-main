@@ -310,6 +310,7 @@ export default function InventarioUsuarios() {
         </Card>
       ) : (
         <Card>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -372,6 +373,7 @@ export default function InventarioUsuarios() {
               ))}
             </TableBody>
           </Table>
+          </div>
           <TablePagination
             page={table.page} totalPages={table.totalPages} pageSize={table.pageSize}
             from={table.from} to={table.to} total={table.totalFiltered}
