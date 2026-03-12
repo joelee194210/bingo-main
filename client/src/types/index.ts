@@ -37,6 +37,7 @@ export interface BingoCard {
   sold_at: string | null;
   buyer_name: string | null;
   buyer_phone: string | null;
+  promo_text: string | null;
   created_at: string;
 }
 
@@ -179,89 +180,194 @@ export interface FinishGameResult {
 }
 
 // =====================================================
-// INVENTARIO
+// MÓDULO DE INVENTARIO (AISLADO)
 // =====================================================
 
-export interface InventoryLevel {
-  id: number;
-  event_id: number;
-  level: number;
-  name: string;
-}
+export type AsignacionProposito = 'custodia' | 'venta';
+export type AsignacionEstado = 'asignado' | 'parcial' | 'completado' | 'devuelto' | 'cancelado';
+export type TipoEntidad = 'caja' | 'libreta' | 'carton';
+export type AlmacenRol = 'administrador' | 'operador' | 'vendedor';
 
-export interface InventoryNode {
+export interface Almacen {
   id: number;
   event_id: number;
   parent_id: number | null;
-  level: number;
   name: string;
-  code: string | null;
+  code: string;
+  address: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   is_active: number;
-  total_assigned: number;
-  total_distributed: number;
-  total_sold: number;
-  total_returned: number;
-  level_name?: string;
-  children?: InventoryNode[];
-  available_in_hand?: number;
+  created_at: string;
+  updated_at: string;
+  children?: Almacen[];
+  inv_cajas?: number;
+  inv_libretas?: number;
+  inv_cartones?: number;
+  inv_vendidos?: number;
+}
+
+export interface AlmacenUsuario {
+  id: number;
+  almacen_id: number;
+  user_id: number;
+  rol: AlmacenRol;
+  is_active: number;
+  created_at: string;
+  full_name?: string;
+  username?: string;
+}
+
+export interface InvAsignacion {
+  id: number;
+  event_id: number;
+  almacen_id: number;
+  tipo_entidad: TipoEntidad;
+  referencia: string;
+  cantidad_cartones: number;
+  persona_nombre: string;
+  persona_telefono: string | null;
+  persona_user_id: number | null;
+  proposito: AsignacionProposito;
+  estado: AsignacionEstado;
+  cartones_vendidos: number;
+  asignado_por: number;
+  asignado_por_nombre: string;
+  created_at: string;
+  updated_at: string;
+  devuelto_at: string | null;
+  almacen_name?: string;
+  cartones?: InvAsignacionCarton[];
+}
+
+export interface InvAsignacionCarton {
+  id: number;
+  asignacion_id: number;
+  card_id: number;
+  card_code: string;
+  serial: string;
+  vendido: number;
+  vendido_at: string | null;
+  comprador_nombre: string | null;
+  comprador_telefono: string | null;
+}
+
+export interface InvMovimiento {
+  id: number;
+  event_id: number;
+  almacen_id: number | null;
+  asignacion_id: number | null;
+  tipo_entidad: TipoEntidad;
+  referencia: string;
+  accion: string;
+  de_persona: string | null;
+  a_persona: string | null;
+  cantidad_cartones: number;
+  detalles: string | null;
+  realizado_por: number;
+  realizado_por_nombre: string;
+  pdf_path: string | null;
+  nombre_entrega: string | null;
+  nombre_recibe: string | null;
   created_at: string;
 }
 
-export interface InventorySummary {
-  total_assigned: number;
-  distributed_to_children: number;
-  sold: number;
-  returned: number;
-  available_in_hand: number;
+export interface ResumenInventario {
+  totalCartones: number;
+  totalLibretas: number;
+  totalCajas: number;
+  cartonesAsignados: number;
+  cartonesDisponibles: number;
 }
 
-export interface ConsolidatedSummary extends InventorySummary {
-  descendants: { id: number; name: string; level: number; level_name: string; summary: InventorySummary }[];
+export interface CajaReal {
+  id: number;
+  caja_code: string;
+  total_lotes: number;
+  status: string;
+  total_cartones: number;
+  asignados: number;
+  lotes: LoteReal[];
 }
 
-export interface CardSelection {
-  type: 'series_range' | 'card_range' | 'card_ids';
-  from_series?: string;
-  to_series?: string;
-  from_card?: number;
-  to_card?: number;
-  card_ids?: number[];
+export interface LoteReal {
+  id: number;
+  lote_code: string;
+  series_number: string;
+  caja_id: number | null;
+  caja_code: string | null;
+  total_cards: number;
+  cards_sold: number;
+  status: string;
 }
 
-export interface BatchResult {
-  batch_id: string;
-  cards_affected: number;
-  movement_type: string;
+export const PROPOSITO_LABELS: Record<AsignacionProposito, string> = {
+  custodia: 'Custodia',
+  venta: 'Venta',
+};
+
+export const ESTADO_LABELS: Record<AsignacionEstado, string> = {
+  asignado: 'Asignado',
+  parcial: 'Parcial',
+  completado: 'Completado',
+  devuelto: 'Devuelto',
+  cancelado: 'Cancelado',
+};
+
+export const ROL_ALMACEN_LABELS: Record<AlmacenRol, string> = {
+  administrador: 'Administrador',
+  operador: 'Operador',
+  vendedor: 'Vendedor',
+};
+
+// =====================================================
+// PROMOCIONES / RASPADITO
+// =====================================================
+
+export interface PromoConfig {
+  id: number;
+  event_id: number;
+  is_enabled: number;
+  no_prize_text: string;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface MovementRecord {
+export interface PromoPrize {
+  id: number;
+  event_id: number;
+  name: string;
+  quantity: number;
+  distributed: number;
+  created_at: string;
+}
+
+export interface PromoStats {
+  total_cards: number;
+  cards_with_promo: number;
+  cards_with_prize: number;
+}
+
+export interface PromoData {
+  config: PromoConfig;
+  prizes: PromoPrize[];
+  stats: PromoStats;
+}
+
+export interface PromoDistributeResult {
+  total_cards: number;
+  winners: number;
+  no_prize: number;
+  message: string;
+}
+
+export interface PromoWinner {
   id: number;
   card_number: number;
   serial: string;
   card_code: string;
-  movement_type: string;
-  from_node_name: string | null;
-  to_node_name: string | null;
-  performed_by_name: string;
-  batch_id: string | null;
-  notes: string | null;
-  created_at: string;
+  promo_text: string;
+  is_sold: number;
+  buyer_name: string | null;
 }
 
-export interface EventInventoryOverview {
-  levels: InventoryLevel[];
-  tree: InventoryNode[];
-  total_event_cards: number;
-  cards_in_inventory: number;
-  cards_unassigned: number;
-}
-
-export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
-  initial_load: 'Carga Inicial',
-  assign_down: 'Asignacion',
-  return_up: 'Devolucion',
-  mark_sold: 'Venta',
-  unmark_sold: 'Reversion Venta',
-};

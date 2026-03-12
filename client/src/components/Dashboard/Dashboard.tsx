@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import {
   CalendarDays,
   CreditCard,
@@ -14,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { getDashboard } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { GAME_TYPE_LABELS } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,13 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Dashboard() {
+  const { user } = useAuth();
+
+  // Usuarios de inventario van directo a su sección
+  if (user?.role === 'inventory') {
+    return <Navigate to="/inventory" replace />;
+  }
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboard,

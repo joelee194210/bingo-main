@@ -1,5 +1,5 @@
 import { randomInt } from 'crypto';
-import type Database from 'better-sqlite3';
+import type { Pool } from 'pg';
 import type { BingoGame, GameType, GameStatus, Position } from '../types/index.js';
 import { findWinners } from './cardVerifier.js';
 import { recordBallCall, recordWinner, generateGameReport, type GameReport } from './reportService.js';
@@ -22,8 +22,8 @@ export interface GameState {
 /**
  * Crea un nuevo juego de Bingo
  */
-export function createGame(
-  db: Database.Database,
+export async function createGame(
+  pool: Pool,
   eventId: number,
   gameType: GameType,
   options: {
@@ -32,7 +32,7 @@ export function createGame(
     customPattern?: Position[];
     prizeDescription?: string;
   } = {}
-): BingoGame {
+): Promise<BingoGame> {
   const {
     name = null,
     isPracticeMode = true,
@@ -40,26 +40,29 @@ export function createGame(
     prizeDescription = null,
   } = options;
 
-  const result = db.prepare(`
+  const result = await pool.query(`
     INSERT INTO games (event_id, name, game_type, custom_pattern, is_practice_mode, prize_description)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING id
+  `, [
     eventId,
     name,
     gameType,
     customPattern ? JSON.stringify(customPattern) : null,
-    isPracticeMode ? 1 : 0,
+    isPracticeMode,
     prizeDescription
-  );
+  ]);
 
-  return db.prepare('SELECT * FROM games WHERE id = ?').get(result.lastInsertRowid) as BingoGame;
+  const row = (await pool.query('SELECT * FROM games WHERE id = $1', [result.rows[0].id])).rows[0];
+  return row as BingoGame;
 }
 
 /**
  * Obtiene el estado actual de un juego
  */
-export function getGameState(db: Database.Database, gameId: number): GameState | null {
-  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(gameId) as BingoGame | undefined;
+export async function getGameState(pool: Pool, gameId: number): Promise<GameState | null> {
+  const gameResult = await pool.query('SELECT * FROM games WHERE id = $1', [gameId]);
+  const game = gameResult.rows[0] as BingoGame | undefined;
 
   if (!game) {
     return null;
@@ -78,13 +81,14 @@ export function getGameState(db: Database.Database, gameId: number): GameState |
   }
 
   // Contar cartones
-  const cardCounts = db.prepare(`
+  const cardCountsResult = await pool.query(`
     SELECT
       COUNT(*) as total,
-      SUM(CASE WHEN is_sold = 1 THEN 1 ELSE 0 END) as sold
+      SUM(CASE WHEN is_sold = TRUE THEN 1 ELSE 0 END) as sold
     FROM cards
-    WHERE event_id = ?
-  `).get(game.event_id) as { total: number; sold: number };
+    WHERE event_id = $1
+  `, [game.event_id]);
+  const cardCounts = cardCountsResult.rows[0] as { total: number; sold: number };
 
   return {
     id: game.id,
@@ -92,12 +96,12 @@ export function getGameState(db: Database.Database, gameId: number): GameState |
     name: game.name,
     gameType: game.game_type,
     status: game.status,
-    isPracticeMode: game.is_practice_mode === 1,
+    isPracticeMode: !!game.is_practice_mode,
     calledBalls,
     winnerCards,
     availableBalls,
-    totalCards: cardCounts.total,
-    activeCards: game.is_practice_mode === 1 ? cardCounts.total : cardCounts.sold,
+    totalCards: Number(cardCounts.total),
+    activeCards: game.is_practice_mode ? Number(cardCounts.total) : Number(cardCounts.sold),
     startedAt: game.started_at,
   };
 }
@@ -105,8 +109,8 @@ export function getGameState(db: Database.Database, gameId: number): GameState |
 /**
  * Inicia un juego
  */
-export function startGame(db: Database.Database, gameId: number): GameState {
-  const game = getGameState(db, gameId);
+export async function startGame(pool: Pool, gameId: number): Promise<GameState> {
+  const game = await getGameState(pool, gameId);
 
   if (!game) {
     throw new Error('Juego no encontrado');
@@ -120,20 +124,20 @@ export function startGame(db: Database.Database, gameId: number): GameState {
     throw new Error('No hay cartones vendidos para jugar en modo real');
   }
 
-  db.prepare(`
+  await pool.query(`
     UPDATE games
     SET status = 'in_progress', started_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(gameId);
+    WHERE id = $1
+  `, [gameId]);
 
-  return getGameState(db, gameId)!;
+  return (await getGameState(pool, gameId))!;
 }
 
 /**
  * Pausa un juego
  */
-export function pauseGame(db: Database.Database, gameId: number): GameState {
-  const game = getGameState(db, gameId);
+export async function pauseGame(pool: Pool, gameId: number): Promise<GameState> {
+  const game = await getGameState(pool, gameId);
 
   if (!game) {
     throw new Error('Juego no encontrado');
@@ -143,16 +147,16 @@ export function pauseGame(db: Database.Database, gameId: number): GameState {
     throw new Error('Solo se puede pausar un juego en progreso');
   }
 
-  db.prepare('UPDATE games SET status = ? WHERE id = ?').run('paused', gameId);
+  await pool.query('UPDATE games SET status = $1 WHERE id = $2', ['paused', gameId]);
 
-  return getGameState(db, gameId)!;
+  return (await getGameState(pool, gameId))!;
 }
 
 /**
  * Reanuda un juego pausado
  */
-export function resumeGame(db: Database.Database, gameId: number): GameState {
-  const game = getGameState(db, gameId);
+export async function resumeGame(pool: Pool, gameId: number): Promise<GameState> {
+  const game = await getGameState(pool, gameId);
 
   if (!game) {
     throw new Error('Juego no encontrado');
@@ -162,9 +166,9 @@ export function resumeGame(db: Database.Database, gameId: number): GameState {
     throw new Error('Solo se puede reanudar un juego pausado');
   }
 
-  db.prepare('UPDATE games SET status = ? WHERE id = ?').run('in_progress', gameId);
+  await pool.query('UPDATE games SET status = $1 WHERE id = $2', ['in_progress', gameId]);
 
-  return getGameState(db, gameId)!;
+  return (await getGameState(pool, gameId))!;
 }
 
 /**
@@ -184,12 +188,12 @@ export interface CallBallResult {
   }>;
 }
 
-export function callBall(
-  db: Database.Database,
+export async function callBall(
+  pool: Pool,
   gameId: number,
   ball: number
-): CallBallResult {
-  const game = getGameState(db, gameId);
+): Promise<CallBallResult> {
+  const game = await getGameState(pool, gameId);
 
   if (!game) {
     throw new Error('Juego no encontrado');
@@ -203,10 +207,6 @@ export function callBall(
     throw new Error('Balota inválida. Debe estar entre 1 y 75');
   }
 
-  if (game.calledBalls.includes(ball)) {
-    throw new Error(`La balota ${ball} ya fue llamada`);
-  }
-
   // Determinar columna de la balota
   let column: string;
   if (ball <= 15) column = 'B';
@@ -215,28 +215,48 @@ export function callBall(
   else if (ball <= 60) column = 'G';
   else column = 'O';
 
-  // Envolver todo en transacción para consistencia y rendimiento
-  const callBallTx = db.transaction(() => {
+  // Envolver todo en transacción para consistencia y evitar race conditions
+  let newWinners: Array<{
+    cardId: number;
+    cardCode: string;
+    cardNumber: number;
+    validationCode: string;
+    winningPattern: string;
+    buyerName?: string;
+  }>;
+
+  await pool.query('BEGIN');
+  try {
+    // Re-leer called_balls dentro de la transacción para evitar duplicados por concurrencia
+    const freshGameResult = await pool.query('SELECT called_balls FROM games WHERE id = $1', [gameId]);
+    const freshGame = freshGameResult.rows[0] as { called_balls: string };
+    const currentBalls: number[] = JSON.parse(freshGame.called_balls || '[]');
+
+    if (currentBalls.includes(ball)) {
+      throw new Error(`La balota ${ball} ya fue llamada`);
+    }
+
     // Agregar balota a la lista
-    const newCalledBalls = [...game.calledBalls, ball];
+    const newCalledBalls = [...currentBalls, ball];
     const callOrder = newCalledBalls.length;
 
     // Actualizar en BD
-    db.prepare('UPDATE games SET called_balls = ? WHERE id = ?')
-      .run(JSON.stringify(newCalledBalls), gameId);
+    await pool.query('UPDATE games SET called_balls = $1 WHERE id = $2',
+      [JSON.stringify(newCalledBalls), gameId]);
 
     // Registrar balota en historial (para certificación)
-    recordBallCall(db, gameId, ball, callOrder);
+    await recordBallCall(pool, gameId, ball, callOrder);
 
     // Verificar ganadores
-    const gameData = db.prepare('SELECT * FROM games WHERE id = ?').get(gameId) as BingoGame;
+    const gameDataResult = await pool.query('SELECT * FROM games WHERE id = $1', [gameId]);
+    const gameData = gameDataResult.rows[0] as BingoGame;
     const customPattern = gameData.custom_pattern ? JSON.parse(gameData.custom_pattern) : undefined;
 
     // Obtener ganadores existentes para no registrar duplicados
     const existingWinnerIds = new Set(JSON.parse(gameData.winner_cards || '[]') as number[]);
 
-    const winners = findWinners(
-      db,
+    const winners = await findWinners(
+      pool,
       game.eventId,
       gameId,
       newCalledBalls,
@@ -246,29 +266,39 @@ export function callBall(
     );
 
     // Filtrar solo los nuevos ganadores
-    const newWinners = winners.filter(w => !existingWinnerIds.has(w.cardId));
+    newWinners = winners.filter(w => !existingWinnerIds.has(w.cardId));
 
-    // Si hay nuevos ganadores, registrarlos
+    // Si hay nuevos ganadores, registrarlos y finalizar el juego
     if (newWinners.length > 0) {
       for (const winner of newWinners) {
-        recordWinner(db, gameId, winner.cardId, winner.winningPattern, callOrder);
+        await recordWinner(pool, gameId, winner.cardId, winner.winningPattern, callOrder);
       }
 
       // Actualizar lista de ganadores en el juego
       const allWinnerIds = [...existingWinnerIds, ...newWinners.map(w => w.cardId)];
-      db.prepare('UPDATE games SET winner_cards = ? WHERE id = ?')
-        .run(JSON.stringify(allWinnerIds), gameId);
+      await pool.query('UPDATE games SET winner_cards = $1 WHERE id = $2',
+        [JSON.stringify(allWinnerIds), gameId]);
+
+      // Finalizar el juego automaticamente al detectar ganador(es)
+      await pool.query(`
+        UPDATE games SET status = 'completed', finished_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [gameId]);
+
+      // Generar reporte automatico
+      await generateGameReport(pool, gameId);
     }
 
-    return newWinners;
-  });
-
-  const newWinners = callBallTx();
+    await pool.query('COMMIT');
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    throw e;
+  }
 
   return {
     ball,
     column,
-    gameState: getGameState(db, gameId)!,
+    gameState: (await getGameState(pool, gameId))!,
     winners: newWinners,
   };
 }
@@ -276,8 +306,8 @@ export function callBall(
 /**
  * Llama una balota aleatoria
  */
-export function callRandomBall(db: Database.Database, gameId: number): CallBallResult {
-  const game = getGameState(db, gameId);
+export async function callRandomBall(pool: Pool, gameId: number): Promise<CallBallResult> {
+  const game = await getGameState(pool, gameId);
 
   if (!game) {
     throw new Error('Juego no encontrado');
@@ -291,14 +321,14 @@ export function callRandomBall(db: Database.Database, gameId: number): CallBallR
   const randomIndex = randomInt(game.availableBalls.length);
   const ball = game.availableBalls[randomIndex];
 
-  return callBall(db, gameId, ball);
+  return callBall(pool, gameId, ball);
 }
 
 /**
  * Finaliza un juego y genera el reporte
  */
-export function finishGame(db: Database.Database, gameId: number): { gameState: GameState; report: GameReport | null } {
-  const game = getGameState(db, gameId);
+export async function finishGame(pool: Pool, gameId: number): Promise<{ gameState: GameState; report: GameReport | null }> {
+  const game = await getGameState(pool, gameId);
 
   if (!game) {
     throw new Error('Juego no encontrado');
@@ -312,17 +342,17 @@ export function finishGame(db: Database.Database, gameId: number): { gameState: 
     throw new Error('No se puede finalizar un juego que no ha iniciado');
   }
 
-  db.prepare(`
+  await pool.query(`
     UPDATE games
     SET status = 'completed', finished_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(gameId);
+    WHERE id = $1
+  `, [gameId]);
 
   // Generar reporte automáticamente al finalizar
-  const report = generateGameReport(db, gameId);
+  const report = await generateGameReport(pool, gameId);
 
   return {
-    gameState: getGameState(db, gameId)!,
+    gameState: (await getGameState(pool, gameId))!,
     report,
   };
 }
@@ -330,8 +360,8 @@ export function finishGame(db: Database.Database, gameId: number): { gameState: 
 /**
  * Cancela un juego
  */
-export function cancelGame(db: Database.Database, gameId: number): GameState {
-  const game = getGameState(db, gameId);
+export async function cancelGame(pool: Pool, gameId: number): Promise<GameState> {
+  const game = await getGameState(pool, gameId);
 
   if (!game) {
     throw new Error('Juego no encontrado');
@@ -341,46 +371,69 @@ export function cancelGame(db: Database.Database, gameId: number): GameState {
     throw new Error('No se puede cancelar un juego completado');
   }
 
-  db.prepare(`
+  await pool.query(`
     UPDATE games
     SET status = 'cancelled', finished_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(gameId);
+    WHERE id = $1
+  `, [gameId]);
 
-  return getGameState(db, gameId)!;
+  return (await getGameState(pool, gameId))!;
 }
 
 /**
  * Reinicia un juego (borra balotas llamadas, ganadores e historial)
  */
-export function resetGame(db: Database.Database, gameId: number): GameState {
-  const game = getGameState(db, gameId);
+export async function resetGame(pool: Pool, gameId: number): Promise<GameState> {
+  const game = await getGameState(pool, gameId);
 
   if (!game) {
     throw new Error('Juego no encontrado');
   }
 
+  if (game.status === 'completed') {
+    throw new Error('No se puede reiniciar un juego completado. Los datos de certificación son permanentes.');
+  }
+
   // Limpiar historial de balotas
-  db.prepare('DELETE FROM ball_history WHERE game_id = ?').run(gameId);
+  await pool.query('DELETE FROM ball_history WHERE game_id = $1', [gameId]);
 
   // Limpiar ganadores
-  db.prepare('DELETE FROM game_winners WHERE game_id = ?').run(gameId);
+  await pool.query('DELETE FROM game_winners WHERE game_id = $1', [gameId]);
 
   // Limpiar reporte si existe
-  db.prepare('DELETE FROM game_reports WHERE game_id = ?').run(gameId);
+  await pool.query('DELETE FROM game_reports WHERE game_id = $1', [gameId]);
 
   // Reiniciar el juego
-  db.prepare(`
+  await pool.query(`
     UPDATE games
     SET status = 'pending',
         called_balls = '[]',
         winner_cards = '[]',
         started_at = NULL,
         finished_at = NULL
-    WHERE id = ?
-  `).run(gameId);
+    WHERE id = $1
+  `, [gameId]);
 
-  return getGameState(db, gameId)!;
+  return (await getGameState(pool, gameId))!;
+}
+
+/**
+ * Crea un nuevo juego con la misma configuración de uno existente
+ */
+export async function replayGame(pool: Pool, gameId: number): Promise<BingoGame> {
+  const gameResult = await pool.query('SELECT * FROM games WHERE id = $1', [gameId]);
+  const game = gameResult.rows[0] as BingoGame | undefined;
+
+  if (!game) {
+    throw new Error('Juego no encontrado');
+  }
+
+  return createGame(pool, game.event_id, game.game_type, {
+    name: game.name ?? undefined,
+    isPracticeMode: !!game.is_practice_mode,
+    customPattern: game.custom_pattern ? JSON.parse(game.custom_pattern) : undefined,
+    prizeDescription: game.prize_description ?? undefined,
+  });
 }
 
 /**
@@ -394,8 +447,9 @@ export interface GameStats {
   duration: number | null; // en segundos
 }
 
-export function getGameStats(db: Database.Database, gameId: number): GameStats | null {
-  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(gameId) as BingoGame | undefined;
+export async function getGameStats(pool: Pool, gameId: number): Promise<GameStats | null> {
+  const gameResult = await pool.query('SELECT * FROM games WHERE id = $1', [gameId]);
+  const game = gameResult.rows[0] as BingoGame | undefined;
 
   if (!game) {
     return null;
@@ -439,13 +493,14 @@ export function getGameStats(db: Database.Database, gameId: number): GameStats |
 /**
  * Obtiene todos los juegos de un evento
  */
-export function getEventGames(
-  db: Database.Database,
+export async function getEventGames(
+  pool: Pool,
   eventId: number
-): BingoGame[] {
-  return db.prepare(`
+): Promise<BingoGame[]> {
+  const result = await pool.query(`
     SELECT * FROM games
-    WHERE event_id = ?
+    WHERE event_id = $1
     ORDER BY created_at DESC
-  `).all(eventId) as BingoGame[];
+  `, [eventId]);
+  return result.rows as BingoGame[];
 }

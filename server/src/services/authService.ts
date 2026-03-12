@@ -1,11 +1,14 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import type Database from 'better-sqlite3';
+import type { Pool } from 'pg';
 import type { User, UserPublic, JWTPayload, UserRole, CreateUserRequest, UpdateUserRequest } from '../types/auth.js';
 
 // Clave secreta para JWT
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET debe estar configurado en producción');
+  }
   console.warn('⚠️  JWT_SECRET no configurado. Usando clave por defecto (NO usar en producción).');
 }
 const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'bingo-dev-secret-local-only';
@@ -22,7 +25,7 @@ export function toUserPublic(user: User): UserPublic {
     email: user.email,
     full_name: user.full_name,
     role: user.role,
-    is_active: user.is_active === 1,
+    is_active: user.is_active,
     last_login: user.last_login,
     created_at: user.created_at,
   };
@@ -70,13 +73,14 @@ export function verifyToken(token: string): JWTPayload | null {
  * Login de usuario
  */
 export async function loginUser(
-  db: Database.Database,
+  pool: Pool,
   username: string,
   password: string
 ): Promise<{ token: string; user: UserPublic } | null> {
-  const user = db.prepare(
-    'SELECT * FROM users WHERE username = ? AND is_active = 1'
-  ).get(username) as User | undefined;
+  const userResult = await pool.query(
+    'SELECT * FROM users WHERE username = $1 AND is_active = true', [username]
+  );
+  const user = userResult.rows[0] as User | undefined;
 
   if (!user) {
     return null;
@@ -88,7 +92,7 @@ export async function loginUser(
   }
 
   // Actualizar last_login
-  db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
+  await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
   const token = generateToken(user);
 
@@ -101,24 +105,27 @@ export async function loginUser(
 /**
  * Obtener usuario por ID
  */
-export function getUserById(db: Database.Database, userId: number): UserPublic | null {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as User | undefined;
+export async function getUserById(pool: Pool, userId: number): Promise<UserPublic | null> {
+  const result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+  const user = result.rows[0] as User | undefined;
   return user ? toUserPublic(user) : null;
 }
 
 /**
  * Obtener usuario por username
  */
-export function getUserByUsername(db: Database.Database, username: string): UserPublic | null {
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as User | undefined;
+export async function getUserByUsername(pool: Pool, username: string): Promise<UserPublic | null> {
+  const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+  const user = result.rows[0] as User | undefined;
   return user ? toUserPublic(user) : null;
 }
 
 /**
  * Listar todos los usuarios
  */
-export function getAllUsers(db: Database.Database): UserPublic[] {
-  const users = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all() as User[];
+export async function getAllUsers(pool: Pool): Promise<UserPublic[]> {
+  const result = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
+  const users = result.rows as User[];
   return users.map(toUserPublic);
 }
 
@@ -126,31 +133,34 @@ export function getAllUsers(db: Database.Database): UserPublic[] {
  * Crear nuevo usuario
  */
 export async function createUser(
-  db: Database.Database,
+  pool: Pool,
   data: CreateUserRequest
 ): Promise<UserPublic> {
   // Verificar username único
-  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(data.username);
-  if (existing) {
+  const existingResult = await pool.query('SELECT id FROM users WHERE username = $1', [data.username]);
+  if (existingResult.rows[0]) {
     throw new Error('El nombre de usuario ya existe');
   }
 
   // Verificar email único si se proporciona
   if (data.email) {
-    const existingEmail = db.prepare('SELECT id FROM users WHERE email = ?').get(data.email);
-    if (existingEmail) {
+    const existingEmailResult = await pool.query('SELECT id FROM users WHERE email = $1', [data.email]);
+    if (existingEmailResult.rows[0]) {
       throw new Error('El email ya está registrado');
     }
   }
 
   const passwordHash = await hashPassword(data.password);
 
-  const result = db.prepare(`
+  const result = await pool.query(`
     INSERT INTO users (username, email, password_hash, full_name, role)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(data.username, data.email || null, passwordHash, data.full_name, data.role);
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id
+  `, [data.username, data.email || null, passwordHash, data.full_name, data.role]);
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid) as User;
+  const newUserId = result.rows[0].id;
+  const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [newUserId]);
+  const user = userResult.rows[0] as User;
   return toUserPublic(user);
 }
 
@@ -158,78 +168,81 @@ export async function createUser(
  * Actualizar usuario
  */
 export async function updateUser(
-  db: Database.Database,
+  pool: Pool,
   userId: number,
   data: UpdateUserRequest
 ): Promise<UserPublic | null> {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as User | undefined;
+  const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+  const user = userResult.rows[0] as User | undefined;
   if (!user) {
     return null;
   }
 
   const updates: string[] = [];
   const values: unknown[] = [];
+  let paramIndex = 1;
 
   if (data.email !== undefined) {
     // Verificar email único
     if (data.email) {
-      const existing = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(data.email, userId);
-      if (existing) {
+      const existing = await pool.query('SELECT id FROM users WHERE email = $1 AND id != $2', [data.email, userId]);
+      if (existing.rows[0]) {
         throw new Error('El email ya está registrado');
       }
     }
-    updates.push('email = ?');
+    updates.push(`email = $${paramIndex++}`);
     values.push(data.email || null);
   }
 
   if (data.full_name !== undefined) {
-    updates.push('full_name = ?');
+    updates.push(`full_name = $${paramIndex++}`);
     values.push(data.full_name);
   }
 
   if (data.role !== undefined) {
-    updates.push('role = ?');
+    updates.push(`role = $${paramIndex++}`);
     values.push(data.role);
   }
 
   if (data.is_active !== undefined) {
-    updates.push('is_active = ?');
-    values.push(data.is_active ? 1 : 0);
+    updates.push(`is_active = $${paramIndex++}`);
+    values.push(data.is_active);
   }
 
   if (data.password !== undefined && data.password.length > 0) {
     const passwordHash = await hashPassword(data.password);
-    updates.push('password_hash = ?');
+    updates.push(`password_hash = $${paramIndex++}`);
     values.push(passwordHash);
   }
 
   if (updates.length > 0) {
     updates.push('updated_at = CURRENT_TIMESTAMP');
     values.push(userId);
-    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}`, values);
   }
 
-  return getUserById(db, userId);
+  return getUserById(pool, userId);
 }
 
 /**
  * Eliminar usuario
  */
-export function deleteUser(db: Database.Database, userId: number): boolean {
-  const result = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
-  return result.changes > 0;
+export async function deleteUser(pool: Pool, userId: number): Promise<boolean> {
+  const result = await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+  return (result.rowCount ?? 0) > 0;
 }
 
 /**
  * Cambiar contraseña
  */
 export async function changePassword(
-  db: Database.Database,
+  pool: Pool,
   userId: number,
   currentPassword: string,
   newPassword: string
 ): Promise<boolean> {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as User | undefined;
+  const result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+  const user = result.rows[0] as User | undefined;
   if (!user) {
     return false;
   }
@@ -240,8 +253,10 @@ export async function changePassword(
   }
 
   const newHash = await hashPassword(newPassword);
-  db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-    .run(newHash, userId);
+  await pool.query(
+    'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+    [newHash, userId]
+  );
 
   return true;
 }
@@ -249,21 +264,25 @@ export async function changePassword(
 /**
  * Crear usuario admin por defecto si no existe ningún usuario
  */
-export async function ensureAdminExists(db: Database.Database): Promise<void> {
-  const count = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+export async function ensureAdminExists(pool: Pool): Promise<void> {
+  const countResult = await pool.query('SELECT COUNT(*) as count FROM users');
+  const count = countResult.rows[0] as { count: string };
 
-  if (count.count === 0) {
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  if (parseInt(count.count, 10) === 0) {
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('ADMIN_PASSWORD debe estar configurado en producción');
+      }
+      console.warn('⚠️  ADMIN_PASSWORD no configurado. Usando contraseña por defecto (NO usar en producción).');
+    }
     console.log('🔐 Creando usuario administrador por defecto...');
-    await createUser(db, {
+    await createUser(pool, {
       username: 'admin',
-      password: adminPassword,
+      password: adminPassword || 'admin123',
       full_name: 'Administrador',
       role: 'admin',
     });
     console.log('✅ Usuario admin creado (usuario: admin)');
-    if (!process.env.ADMIN_PASSWORD) {
-      console.log('⚠️  IMPORTANTE: Establece ADMIN_PASSWORD en las variables de entorno. Usando contraseña por defecto.');
-    }
   }
 }

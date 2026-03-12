@@ -1,157 +1,133 @@
 import { useState } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import {
-  Network,
-  Plus,
-  Package,
-  ChevronRight,
-  ChevronDown,
-  Loader2,
-  Settings,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  DollarSign,
-  Boxes,
-  AlertCircle,
+  Warehouse, Plus, Search, Loader2, ChevronRight, Package, Upload,
+  ClipboardList, Users, ScanLine, Building2, FileDown, Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  getEvents,
-  getEventInventoryOverview,
-  setInventoryLevels,
-  createInventoryNode,
-  loadCardsToNode,
-  assignCardsToChild,
-  returnCardsToParent,
-  sellCardsAtNode,
-} from '@/services/api';
-import type {
-  InventoryNode,
-  InventoryLevel,
-  CardSelection,
-  BingoEvent,
-} from '@/types';
-import { MOVEMENT_TYPE_LABELS } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
+  getAlmacenTree,
+  getAlmacenes,
+  createAlmacen,
+  updateAlmacen,
+  getCajas,
+  getCajasDisponibles,
+  cargarInventario,
+  cargarPorReferencia,
+  crearInventarioInicial,
+  getResumenInventario,
+  getDocumentos,
+  getDocumento,
+  getDocumentoPdf,
+  getMovimientos,
+  getMovimientoPdf,
+  escanearCodigo,
+  getEvents,
+} from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  ESTADO_LABELS,
+  PROPOSITO_LABELS,
+  type Almacen,
+  type AsignacionEstado,
+  type AsignacionProposito,
+} from '@/types';
+import MovimientoDialog from './MovimientoDialog';
 
-// =====================================================
-// TREE NODE COMPONENT
-// =====================================================
+const estadoColor: Record<AsignacionEstado, string> = {
+  asignado: 'bg-blue-100 text-blue-800',
+  parcial: 'bg-yellow-100 text-yellow-800',
+  completado: 'bg-green-100 text-green-800',
+  devuelto: 'bg-gray-100 text-gray-800',
+  cancelado: 'bg-red-100 text-red-800',
+};
 
-function TreeNodeItem({
-  node,
-  levels,
-  onAction,
-  depth = 0,
+// ============================================================
+// Almacen Tree Node
+// ============================================================
+function AlmacenNode({
+  almacen,
+  level,
+  onEdit,
 }: {
-  node: InventoryNode;
-  levels: InventoryLevel[];
-  onAction: (action: string, node: InventoryNode) => void;
-  depth?: number;
+  almacen: Almacen;
+  level: number;
+  onEdit: (a: Almacen) => void;
 }) {
-  const [expanded, setExpanded] = useState(depth < 2);
-  const children = node.children || [];
-  const hasChildren = children.length > 0;
-  const available = node.total_assigned - node.total_distributed - node.total_sold;
-  const levelName = levels.find(l => l.level === node.level)?.name || `Nivel ${node.level}`;
+  const [expanded, setExpanded] = useState(level === 0);
+  const hasChildren = almacen.children && almacen.children.length > 0;
 
   return (
     <div>
       <div
-        className={`flex items-center gap-2 py-2.5 px-3 rounded-lg hover:bg-muted/60 transition-colors group ${depth === 0 ? 'bg-muted/30' : ''}`}
-        style={{ paddingLeft: `${depth * 24 + 12}px` }}
+        className="flex items-center gap-2 py-2 px-3 rounded-md hover:bg-muted/50 cursor-pointer"
+        style={{ paddingLeft: `${level * 24 + 12}px` }}
+        onClick={() => hasChildren && setExpanded(!expanded)}
       >
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-5 h-5 flex items-center justify-center text-muted-foreground"
+        {hasChildren ? (
+          <ChevronRight className={`h-4 w-4 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+        ) : (
+          <div className="w-4" />
+        )}
+        <Building2 className="h-4 w-4 text-muted-foreground" />
+        <span className="font-medium">{almacen.name}</span>
+        <span className="text-xs text-muted-foreground font-mono">{almacen.code}</span>
+        <div className="flex items-center gap-2 ml-auto mr-2">
+          {(almacen.inv_cajas ?? 0) > 0 && (
+            <Badge variant="outline" className="text-xs gap-1">
+              <Package className="h-3 w-3" />
+              {almacen.inv_cajas} cajas
+            </Badge>
+          )}
+          {(almacen.inv_libretas ?? 0) > 0 && (
+            <Badge variant="outline" className="text-xs gap-1">
+              <ClipboardList className="h-3 w-3" />
+              {almacen.inv_libretas} libretas
+            </Badge>
+          )}
+          {(almacen.inv_cartones ?? 0) > 0 && (
+            <Badge variant="secondary" className="text-xs">
+              {almacen.inv_vendidos ?? 0}/{almacen.inv_cartones} vendidos
+            </Badge>
+          )}
+          {(almacen.inv_cajas ?? 0) === 0 && (almacen.inv_libretas ?? 0) === 0 && (almacen.inv_cartones ?? 0) === 0 && (
+            <span className="text-xs text-muted-foreground">Sin inventario</span>
+          )}
+        </div>
+        {!almacen.is_active && (
+          <Badge variant="outline" className="text-xs">Inactivo</Badge>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 text-xs"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(almacen);
+          }}
         >
-          {hasChildren ? (
-            expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
-          ) : (
-            <span className="w-4 h-4 rounded-full bg-muted" />
-          )}
-        </button>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-sm truncate">{node.name}</span>
-            <Badge variant="secondary" className="text-[10px] h-5">{levelName}</Badge>
-            {node.code && <span className="text-xs text-muted-foreground font-mono">{node.code}</span>}
-          </div>
-        </div>
-
-        {/* Counters */}
-        <div className="hidden md:flex items-center gap-3 text-xs">
-          <div className="text-center min-w-[50px]">
-            <p className="font-bold">{node.total_assigned}</p>
-            <p className="text-muted-foreground">Asignados</p>
-          </div>
-          <div className="text-center min-w-[50px]">
-            <p className="font-bold text-blue-600">{node.total_distributed}</p>
-            <p className="text-muted-foreground">Distribuid.</p>
-          </div>
-          <div className="text-center min-w-[50px]">
-            <p className="font-bold text-emerald-600">{node.total_sold}</p>
-            <p className="text-muted-foreground">Vendidos</p>
-          </div>
-          <div className="text-center min-w-[50px]">
-            <p className={`font-bold ${available > 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>{available}</p>
-            <p className="text-muted-foreground">En Mano</p>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {node.level === 1 && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" title="Cargar cartones" onClick={() => onAction('load', node)}>
-              <ArrowDownToLine className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {available > 0 && hasChildren && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" title="Asignar a hijo" onClick={() => onAction('assign', node)}>
-              <ArrowDownToLine className="h-3.5 w-3.5 text-blue-500" />
-            </Button>
-          )}
-          {available > 0 && node.parent_id && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" title="Devolver al padre" onClick={() => onAction('return', node)}>
-              <ArrowUpFromLine className="h-3.5 w-3.5 text-orange-500" />
-            </Button>
-          )}
-          {available > 0 && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" title="Marcar venta" onClick={() => onAction('sell', node)}>
-              <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
-            </Button>
-          )}
-          <Button variant="ghost" size="icon" className="h-7 w-7" title="Agregar hijo" onClick={() => onAction('add_child', node)}>
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+          Editar
+        </Button>
       </div>
-
       {expanded && hasChildren && (
         <div>
-          {children.map(child => (
-            <TreeNodeItem key={child.id} node={child} levels={levels} onAction={onAction} depth={depth + 1} />
+          {almacen.children!.map((child) => (
+            <AlmacenNode key={child.id} almacen={child} level={level + 1} onEdit={onEdit} />
           ))}
         </div>
       )}
@@ -159,244 +135,349 @@ function TreeNodeItem({
   );
 }
 
-// =====================================================
-// CARD SELECTION FORM
-// =====================================================
-
-function CardSelectionForm({
-  value,
-  onChange,
-}: {
-  value: CardSelection;
-  onChange: (s: CardSelection) => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>Tipo de seleccion</Label>
-        <Select value={value.type} onValueChange={(t) => onChange({ ...value, type: t as CardSelection['type'] })}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="series_range">Por rango de series</SelectItem>
-            <SelectItem value="card_range">Por rango de numeros</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {value.type === 'series_range' && (
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Desde serie</Label>
-            <Input
-              className="font-mono"
-              placeholder="00001"
-              value={value.from_series || ''}
-              onChange={(e) => onChange({ ...value, from_series: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Hasta serie</Label>
-            <Input
-              className="font-mono"
-              placeholder="00010"
-              value={value.to_series || ''}
-              onChange={(e) => onChange({ ...value, to_series: e.target.value })}
-            />
-          </div>
-          <p className="col-span-2 text-xs text-muted-foreground">
-            Cada serie contiene 50 cartones
-          </p>
-        </div>
-      )}
-
-      {value.type === 'card_range' && (
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Desde carton #</Label>
-            <Input
-              type="number"
-              placeholder="1"
-              value={value.from_card || ''}
-              onChange={(e) => onChange({ ...value, from_card: parseInt(e.target.value) || undefined })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Hasta carton #</Label>
-            <Input
-              type="number"
-              placeholder="500"
-              value={value.to_card || ''}
-              onChange={(e) => onChange({ ...value, to_card: parseInt(e.target.value) || undefined })}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// =====================================================
-// MAIN INVENTORY PAGE
-// =====================================================
-
+// ============================================================
+// Main Component
+// ============================================================
 export default function InventoryPage() {
+  const { eventId: eventIdParam } = useParams<{ eventId: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedEventId, setSelectedEventId] = useState<number | undefined>(
+    eventIdParam ? Number(eventIdParam) : undefined
+  );
 
-  // Modals state
-  const [showLevelsModal, setShowLevelsModal] = useState(false);
-  const [showNodeModal, setShowNodeModal] = useState(false);
-  const [showCardModal, setShowCardModal] = useState(false);
+  const { data: eventsData } = useQuery({
+    queryKey: ['events'],
+    queryFn: getEvents,
+  });
+  const eventsList = eventsData?.data || [];
 
-  // Modal data
-  const [levelsConfig, setLevelsConfig] = useState<{ level: number; name: string }[]>([]);
-  const [nodeForm, setNodeForm] = useState({ parent_id: 0, name: '', code: '', contact_name: '', contact_phone: '' });
-  const [cardAction, setCardAction] = useState<{ type: string; node: InventoryNode; targetNodeId?: number } | null>(null);
-  const [cardSelection, setCardSelection] = useState<CardSelection>({ type: 'series_range' });
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerPhone, setBuyerPhone] = useState('');
+  const eventId = selectedEventId || (eventIdParam ? Number(eventIdParam) : 0);
 
-  // Queries
-  const { data: eventsData } = useQuery({ queryKey: ['events'], queryFn: getEvents });
-  const events = eventsData?.data || [];
+  // Auto-select first event if none selected and no URL param
+  if (!eventId && eventsList.length > 0 && !selectedEventId) {
+    setSelectedEventId(eventsList[0].id);
+  }
 
-  const { data: overviewData, isLoading: overviewLoading } = useQuery({
-    queryKey: ['inventory-overview', selectedEventId],
-    queryFn: () => getEventInventoryOverview(selectedEventId!),
-    enabled: !!selectedEventId,
+  const defaultTab = searchParams.get('tab') || 'almacenes';
+
+  // Almacen dialog state
+  const [showAlmacenDialog, setShowAlmacenDialog] = useState(false);
+  const [editingAlmacen, setEditingAlmacen] = useState<Almacen | null>(null);
+  const [almacenForm, setAlmacenForm] = useState({
+    name: '',
+    code: '',
+    parent_id: '__none__',
+    address: '',
+    contact_name: '',
+    contact_phone: '',
   });
 
-  const overview = overviewData?.data;
+  // Asignacion dialog
+  // Movimiento unificado dialog
+  const [showMovimientoDialog, setShowMovimientoDialog] = useState(false);
 
-  // Mutations
-  const saveLevelsMutation = useMutation({
-    mutationFn: () => setInventoryLevels(selectedEventId!, levelsConfig),
-    onSuccess: () => {
-      toast.success('Niveles configurados');
-      setShowLevelsModal(false);
-      queryClient.invalidateQueries({ queryKey: ['inventory-overview', selectedEventId] });
-    },
-    onError: (e: Error) => toast.error(e.message),
+  // Filters
+  const [asignacionAlmacenFilter, setAsignacionAlmacenFilter] = useState<string>('__all__');
+
+  // Scan
+  const [scanInput, setScanInput] = useState('');
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [scanning, setScanning] = useState(false);
+
+  // Cargar inventario
+  const [showCargarDialog, setShowCargarDialog] = useState(false);
+  const [cargarAlmacenId, setCargarAlmacenId] = useState<string>('');
+  const [selectedCajaIds, setSelectedCajaIds] = useState<number[]>([]);
+  const [cargarTipo, setCargarTipo] = useState<'caja' | 'libreta' | 'carton'>('caja');
+  const [cargarReferencia, setCargarReferencia] = useState('');
+
+  // ---- Queries ----
+
+  const { data: treeData, isLoading: treeLoading } = useQuery({
+    queryKey: ['almacen-tree', eventId],
+    queryFn: () => getAlmacenTree(eventId),
+    enabled: !!eventId,
   });
 
-  const createNodeMutation = useMutation({
-    mutationFn: () => createInventoryNode(selectedEventId!, {
-      parent_id: nodeForm.parent_id || undefined,
-      name: nodeForm.name,
-      code: nodeForm.code || undefined,
-      contact_name: nodeForm.contact_name || undefined,
-      contact_phone: nodeForm.contact_phone || undefined,
-    }),
-    onSuccess: () => {
-      toast.success('Nodo creado');
-      setShowNodeModal(false);
-      queryClient.invalidateQueries({ queryKey: ['inventory-overview', selectedEventId] });
-    },
-    onError: (e: Error) => toast.error(e.message),
+  const { data: almacenesData } = useQuery({
+    queryKey: ['almacenes', eventId],
+    queryFn: () => getAlmacenes(eventId),
+    enabled: !!eventId,
   });
 
-  const cardOperationMutation = useMutation({
-    mutationFn: async () => {
-      if (!cardAction) throw new Error('Sin accion');
-      const { type, node, targetNodeId } = cardAction;
-      switch (type) {
-        case 'load':
-          return loadCardsToNode(node.id, cardSelection);
-        case 'assign':
-          if (!targetNodeId) throw new Error('Seleccione nodo destino');
-          return assignCardsToChild(node.id, targetNodeId, cardSelection);
-        case 'return':
-          return returnCardsToParent(node.id, cardSelection);
-        case 'sell':
-          return sellCardsAtNode(node.id, cardSelection, buyerName || undefined, buyerPhone || undefined);
-        default:
-          throw new Error('Accion desconocida');
-      }
-    },
-    onSuccess: (data) => {
-      const result = data?.data;
-      toast.success(`Operacion completada: ${result?.cards_affected || 0} cartones afectados`);
-      setShowCardModal(false);
-      setCardAction(null);
-      queryClient.invalidateQueries({ queryKey: ['inventory-overview', selectedEventId] });
-    },
-    onError: (e: { response?: { data?: { error?: string } } }) => {
-      toast.error(e.response?.data?.error || (e as Error).message || 'Error en operacion');
-    },
+  const { data: resumenData, isLoading: resumenLoading } = useQuery({
+    queryKey: ['resumen-inventario', eventId],
+    queryFn: () => getResumenInventario(eventId),
+    enabled: !!eventId,
   });
 
-  // Handlers
-  const handleAction = (action: string, node: InventoryNode) => {
-    if (action === 'add_child') {
-      setNodeForm({ parent_id: node.id, name: '', code: '', contact_name: '', contact_phone: '' });
-      setShowNodeModal(true);
-    } else {
-      setCardAction({ type: action, node });
-      setCardSelection({ type: 'series_range' });
-      setBuyerName('');
-      setBuyerPhone('');
-      setShowCardModal(true);
+  const { data: cajasData, isLoading: cajasLoading } = useQuery({
+    queryKey: ['cajas', eventId],
+    queryFn: () => getCajas(eventId),
+    enabled: !!eventId,
+  });
+
+  const { data: cajasDispData } = useQuery({
+    queryKey: ['cajas-disponibles', eventId],
+    queryFn: () => getCajasDisponibles(eventId),
+    enabled: showCargarDialog,
+  });
+
+
+  const movimientoParams: Record<string, any> = { limit: 100 };
+  if (asignacionAlmacenFilter && asignacionAlmacenFilter !== '__all__') movimientoParams.almacen_id = Number(asignacionAlmacenFilter);
+
+  const { data: movimientosData, isLoading: movimientosLoading } = useQuery({
+    queryKey: ['movimientos', eventId, movimientoParams],
+    queryFn: () => getMovimientos(eventId, movimientoParams),
+    enabled: !!eventId,
+  });
+
+  const { data: documentosData, isLoading: documentosLoading } = useQuery({
+    queryKey: ['documentos', eventId, movimientoParams],
+    queryFn: () => getDocumentos(eventId, movimientoParams),
+    enabled: !!eventId,
+  });
+
+  const [selectedDocumentoId, setSelectedDocumentoId] = useState<number | null>(null);
+  const [selectedLegacyGroup, setSelectedLegacyGroup] = useState<typeof movimientosAgrupados[0] | null>(null);
+  const { data: documentoDetalle } = useQuery({
+    queryKey: ['documento-detalle', selectedDocumentoId],
+    queryFn: () => getDocumento(selectedDocumentoId!),
+    enabled: !!selectedDocumentoId,
+  });
+
+  const tree = treeData?.data ?? [];
+  const almacenes = almacenesData?.data ?? [];
+  const resumen = resumenData?.data;
+  const cajas = cajasData?.data ?? [];
+  const movimientos = movimientosData?.data ?? [];
+  const documentos = documentosData?.data ?? [];
+
+  // Agrupar movimientos legacy (sin documento) por timestamp+accion+almacen
+  const movimientosAgrupados = (() => {
+    const sinDoc = movimientos.filter((m: any) => !m.documento_id);
+    const groups: Record<string, typeof sinDoc> = {};
+    for (const m of sinDoc) {
+      // Agrupar por segundo exacto + accion + almacen destino
+      const key = `${new Date(m.created_at).toISOString().slice(0, 19)}_${m.accion}_${m.a_persona || ''}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(m);
+    }
+    return Object.values(groups).map(items => ({
+      id: items[0].id,
+      items,
+      created_at: items[0].created_at,
+      accion: items[0].accion,
+      de_persona: items[0].de_persona,
+      a_persona: items[0].a_persona,
+      total_items: items.length,
+      total_cartones: items.reduce((sum, m) => sum + (m.cantidad_cartones || 0), 0),
+      realizado_por_nombre: items[0].realizado_por_nombre,
+      has_pdf: items.some(m => m.pdf_path),
+      pdf_mov_id: items.find(m => m.pdf_path)?.id,
+    }));
+  })();
+
+  const handleDownloadDocPdf = async (docId: number) => {
+    try {
+      const blob = await getDocumentoPdf(docId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `MOV-${docId.toString().padStart(6, '0')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('No se pudo descargar el PDF');
     }
   };
 
-  const openLevelsConfig = () => {
-    if (overview?.levels && overview.levels.length > 0) {
-      setLevelsConfig(overview.levels.map(l => ({ level: l.level, name: l.name })));
-    } else {
-      setLevelsConfig([
-        { level: 1, name: 'Loteria' },
-        { level: 2, name: 'Agencia' },
-        { level: 3, name: 'Vendedor' },
-      ]);
+  const handleDownloadMovPdf = async (movId: number) => {
+    try {
+      const blob = await getMovimientoPdf(movId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `MOV-${movId.toString().padStart(6, '0')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('No se pudo descargar el PDF');
     }
-    setShowLevelsModal(true);
   };
 
-  const addLevel = () => {
-    if (levelsConfig.length >= 5) return;
-    setLevelsConfig([...levelsConfig, { level: levelsConfig.length + 1, name: '' }]);
+  // ---- Mutations ----
+
+  const createAlmacenMutation = useMutation({
+    mutationFn: () =>
+      createAlmacen({
+        event_id: eventId,
+        name: almacenForm.name,
+        code: almacenForm.code || undefined,
+        parent_id: almacenForm.parent_id && almacenForm.parent_id !== '__none__' ? Number(almacenForm.parent_id) : undefined,
+        address: almacenForm.address || undefined,
+        contact_name: almacenForm.contact_name || undefined,
+        contact_phone: almacenForm.contact_phone || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['almacen-tree', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['almacenes', eventId] });
+      toast.success('Almacen creado exitosamente');
+      setShowAlmacenDialog(false);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error ?? 'Error al crear almacen');
+    },
+  });
+
+  const updateAlmacenMutation = useMutation({
+    mutationFn: () =>
+      updateAlmacen(editingAlmacen!.id, {
+        name: almacenForm.name || undefined,
+        parent_id: almacenForm.parent_id && almacenForm.parent_id !== '__none__' ? Number(almacenForm.parent_id) : null,
+        address: almacenForm.address || undefined,
+        contact_name: almacenForm.contact_name || undefined,
+        contact_phone: almacenForm.contact_phone || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['almacen-tree', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['almacenes', eventId] });
+      toast.success('Almacen actualizado');
+      setShowAlmacenDialog(false);
+      setEditingAlmacen(null);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error ?? 'Error al actualizar almacen');
+    },
+  });
+
+  const invalidateInventario = () => {
+    queryClient.invalidateQueries({ queryKey: ['almacen-tree', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['resumen-inventario', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['cajas-disponibles', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['cajas', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['movimientos', eventId] });
   };
 
-  const removeLevel = () => {
-    if (levelsConfig.length <= 1) return;
-    setLevelsConfig(levelsConfig.slice(0, -1));
-  };
+  const cargarMutation = useMutation({
+    mutationFn: () =>
+      cargarInventario({
+        event_id: eventId,
+        almacen_id: Number(cargarAlmacenId),
+        caja_ids: selectedCajaIds,
+      }),
+    onSuccess: (res) => {
+      invalidateInventario();
+      toast.success(`${res.data?.cargadas ?? 0} cajas cargadas al almacen`);
+      setShowCargarDialog(false);
+      setCargarAlmacenId('');
+      setSelectedCajaIds([]);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error ?? 'Error al cargar inventario');
+    },
+  });
 
-  const getActionLabel = (type: string) => MOVEMENT_TYPE_LABELS[type === 'load' ? 'initial_load' : type === 'assign' ? 'assign_down' : type === 'return' ? 'return_up' : 'mark_sold'] || type;
+  const cargarRefMutation = useMutation({
+    mutationFn: () =>
+      cargarPorReferencia({
+        event_id: eventId,
+        almacen_id: Number(cargarAlmacenId),
+        tipo_entidad: cargarTipo,
+        referencia: cargarReferencia.trim(),
+      }),
+    onSuccess: (res) => {
+      invalidateInventario();
+      const d = res.data;
+      toast.success(`${d?.tipo} "${d?.referencia}" cargada (${d?.cartones} cartones)`);
+      setCargarReferencia('');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error ?? 'Error al cargar');
+    },
+  });
 
-  const childrenOfNode = (node: InventoryNode): InventoryNode[] => {
-    const flattenChildren = (n: InventoryNode): InventoryNode[] => {
-      const result: InventoryNode[] = [];
-      for (const child of (n.children || [])) {
-        if (child.parent_id === node.id) result.push(child);
+  const inventarioInicialMutation = useMutation({
+    mutationFn: () => crearInventarioInicial(eventId),
+    onSuccess: (res) => {
+      invalidateInventario();
+      const d = res.data;
+      if (d?.cajasAsignadas === 0) {
+        toast.info(d.message || 'Todas las cajas ya estan en el almacen raiz');
+      } else {
+        toast.success(`${d?.cajasAsignadas} cajas asignadas al almacen "${d?.almacen}"`);
       }
-      return result;
-    };
-    return flattenChildren(node);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error ?? 'Error al crear inventario inicial');
+    },
+  });
+
+  // ---- Handlers ----
+
+  const openCreateAlmacen = () => {
+    setEditingAlmacen(null);
+    setAlmacenForm({ name: '', code: '', parent_id: '__none__', address: '', contact_name: '', contact_phone: '' });
+    setShowAlmacenDialog(true);
+  };
+
+  const openEditAlmacen = (a: Almacen) => {
+    setEditingAlmacen(a);
+    setAlmacenForm({
+      name: a.name,
+      code: a.code,
+      parent_id: a.parent_id?.toString() ?? '__none__',
+      address: a.address ?? '',
+      contact_name: a.contact_name ?? '',
+      contact_phone: a.contact_phone ?? '',
+    });
+    setShowAlmacenDialog(true);
+  };
+
+  const handleScan = async () => {
+    if (!scanInput.trim()) return;
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const res = await escanearCodigo(eventId, scanInput.trim());
+      setScanResult(res.data);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error ?? 'Codigo no encontrado');
+      setScanResult(null);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleTabChange = (tab: string) => {
+    setSearchParams({ tab });
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="page-header flex items-center justify-between">
+      {/* Header with event selector */}
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Inventario</h2>
-          <p className="text-muted-foreground text-sm mt-1">Control de distribucion de cartones</p>
+          <h1 className="text-2xl font-bold tracking-tight">Inventario</h1>
         </div>
         <div className="flex items-center gap-3">
+          <Label className="text-sm font-medium whitespace-nowrap">Evento / Bingo:</Label>
           <Select
-            value={selectedEventId?.toString() || ''}
-            onValueChange={(v) => setSelectedEventId(Number(v))}
+            value={eventId ? String(eventId) : ''}
+            onValueChange={(val) => setSelectedEventId(Number(val))}
           >
-            <SelectTrigger className="w-[250px]">
+            <SelectTrigger className="w-[280px]">
               <SelectValue placeholder="Seleccionar evento..." />
             </SelectTrigger>
             <SelectContent>
-              {events.map((event: BingoEvent) => (
-                <SelectItem key={event.id} value={event.id.toString()}>
-                  {event.name} ({event.total_cards.toLocaleString()})
+              {eventsList.map((ev) => (
+                <SelectItem key={ev.id} value={String(ev.id)}>
+                  {ev.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -404,301 +485,869 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {!selectedEventId && (
-        <Card className="text-center py-12">
-          <CardContent>
-            <Network className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Seleccione un Evento</h3>
-            <p className="text-muted-foreground text-sm">Escoja un evento para ver y gestionar su inventario</p>
+      {!eventId && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Warehouse className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-lg font-medium text-muted-foreground">Selecciona un evento para ver el inventario</p>
           </CardContent>
         </Card>
       )}
 
-      {selectedEventId && overviewLoading && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
-          </div>
-          <Skeleton className="h-64 rounded-xl" />
-        </div>
-      )}
+      {!!eventId && <>
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-5">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Cajas</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {resumenLoading ? <Skeleton className="h-8 w-20" /> : (
+              <div className="text-2xl font-bold">{resumen?.totalCajas ?? 0}</div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Libretas</CardTitle>
+            <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {resumenLoading ? <Skeleton className="h-8 w-20" /> : (
+              <div className="text-2xl font-bold">{resumen?.totalLibretas ?? 0}</div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Cartones</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {resumenLoading ? <Skeleton className="h-8 w-20" /> : (
+              <div className="text-2xl font-bold">{resumen?.totalCartones ?? 0}</div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Asignados</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {resumenLoading ? <Skeleton className="h-8 w-20" /> : (
+              <div className="text-2xl font-bold text-orange-600">{resumen?.cartonesAsignados ?? 0}</div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Disponibles</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {resumenLoading ? <Skeleton className="h-8 w-20" /> : (
+              <div className="text-2xl font-bold text-green-600">{resumen?.cartonesDisponibles ?? 0}</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-      {selectedEventId && overview && (
-        <>
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="stat-card stat-card-amber p-5">
-              <div className="flex items-center gap-4">
-                <div className="stat-icon-amber p-3 rounded-xl">
-                  <Boxes className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Total Cartones</p>
-                  <p className="text-2xl font-bold tracking-tight">{overview.total_event_cards.toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
-            <div className="stat-card stat-card-emerald p-5">
-              <div className="flex items-center gap-4">
-                <div className="stat-icon-emerald p-3 rounded-xl">
-                  <Package className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">En Inventario</p>
-                  <p className="text-2xl font-bold tracking-tight">{overview.cards_in_inventory.toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
-            <div className="stat-card stat-card-violet p-5">
-              <div className="flex items-center gap-4">
-                <div className="stat-icon-violet p-3 rounded-xl">
-                  <AlertCircle className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Sin Asignar</p>
-                  <p className="text-2xl font-bold tracking-tight">{overview.cards_unassigned.toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Tabs */}
+      <Tabs value={defaultTab} onValueChange={handleTabChange}>
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="almacenes">
+            <Warehouse className="mr-2 h-4 w-4" />
+            Almacenes
+          </TabsTrigger>
+          <TabsTrigger value="inventario">
+            <Package className="mr-2 h-4 w-4" />
+            Inventario
+          </TabsTrigger>
+          <TabsTrigger value="movimientos">
+            <ClipboardList className="mr-2 h-4 w-4" />
+            Movimientos
+          </TabsTrigger>
+          <TabsTrigger value="escanear">
+            <ScanLine className="mr-2 h-4 w-4" />
+            Escanear
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Levels config or Tree */}
-          {overview.levels.length === 0 ? (
-            <Card className="text-center py-12">
-              <CardContent>
-                <Settings className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Configure la Jerarquia</h3>
-                <p className="text-muted-foreground text-sm mb-4">Defina los niveles de distribucion para este evento</p>
-                <Button onClick={openLevelsConfig}>
-                  <Settings className="mr-2 h-4 w-4" /> Configurar Niveles
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="glow-card">
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <div className="flex items-center gap-2">
-                  <Network className="h-4 w-4 text-muted-foreground" />
-                  <CardTitle className="text-sm font-semibold">
-                    Arbol de Distribucion
-                    <span className="text-muted-foreground font-normal ml-2">
-                      ({overview.levels.map(l => l.name).join(' → ')})
-                    </span>
-                  </CardTitle>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={openLevelsConfig}>
-                    <Settings className="mr-1 h-3 w-3" /> Niveles
-                  </Button>
-                  {overview.tree.length === 0 && (
-                    <Button size="sm" className="h-7 text-xs" onClick={() => {
-                      setNodeForm({ parent_id: 0, name: '', code: '', contact_name: '', contact_phone: '' });
-                      setShowNodeModal(true);
-                    }}>
-                      <Plus className="mr-1 h-3 w-3" /> Nodo Raiz
-                    </Button>
+        {/* ============ ALMACENES TAB ============ */}
+        <TabsContent value="almacenes" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold">Almacenes</h2>
+            <div className="flex gap-2">
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  onClick={() => inventarioInicialMutation.mutate()}
+                  disabled={inventarioInicialMutation.isPending}
+                >
+                  {inventarioInicialMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Package className="mr-2 h-4 w-4" />
                   )}
+                  Crear Inventario Inicial
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setShowMovimientoDialog(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                Nuevo Movimiento
+              </Button>
+              <Button onClick={openCreateAlmacen}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo Almacen
+              </Button>
+            </div>
+          </div>
+
+          <Card>
+            <CardContent className="pt-4">
+              {treeLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
                 </div>
+              ) : tree.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No hay almacenes registrados. Crea el primero.
+                </p>
+              ) : (
+                <div className="divide-y">
+                  {tree.map((a) => (
+                    <AlmacenNode key={a.id} almacen={a} level={0} onEdit={openEditAlmacen} />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ============ INVENTARIO TAB ============ */}
+        <TabsContent value="inventario" className="space-y-4">
+          <h2 className="text-lg font-semibold">Cajas y Libretas</h2>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Cajas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {cajasLoading ? (
+                <Skeleton className="h-32 w-full" />
+              ) : cajas.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No hay cajas registradas. Genera cartones para crear cajas automaticamente.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Caja</TableHead>
+                      <TableHead>Lotes</TableHead>
+                      <TableHead>Cartones</TableHead>
+                      <TableHead>Asignados</TableHead>
+                      <TableHead>Disponibles</TableHead>
+                      <TableHead>Estado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cajas.map((c) => (
+                      <TableRow key={c.id}>
+                        <TableCell className="font-mono font-medium">{c.caja_code}</TableCell>
+                        <TableCell>{c.total_lotes} lotes</TableCell>
+                        <TableCell>{c.total_cartones}</TableCell>
+                        <TableCell>{c.asignados}</TableCell>
+                        <TableCell className="text-green-600 font-medium">
+                          {c.total_cartones - c.asignados}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">{c.status}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Lotes dentro de cada caja */}
+          {cajas.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Lotes (Libretas)</CardTitle>
               </CardHeader>
               <CardContent>
-                {overview.tree.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground text-sm">No hay nodos aun. Cree el nodo raiz para empezar.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-0.5">
-                    {overview.tree.map(node => (
-                      <TreeNodeItem key={node.id} node={node} levels={overview.levels} onAction={handleAction} />
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Lote</TableHead>
+                      <TableHead>Caja</TableHead>
+                      <TableHead>Serie</TableHead>
+                      <TableHead>Cartones</TableHead>
+                      <TableHead>Vendidos</TableHead>
+                      <TableHead>Estado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cajas.flatMap((c) =>
+                      c.lotes.map((l) => (
+                        <TableRow key={l.id}>
+                          <TableCell className="font-mono font-medium">{l.lote_code}</TableCell>
+                          <TableCell className="font-mono text-sm">{c.caja_code}</TableCell>
+                          <TableCell className="font-mono text-sm">{l.series_number}</TableCell>
+                          <TableCell>{l.total_cards}</TableCell>
+                          <TableCell>{l.cards_sold}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize text-xs">{l.status.replace('_', ' ')}</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ============ MOVIMIENTOS TAB ============ */}
+        <TabsContent value="movimientos" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold">Movimientos</h2>
+            <Button onClick={() => setShowMovimientoDialog(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo Movimiento
+            </Button>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-3">
+            <div className="w-48">
+              <Select value={asignacionAlmacenFilter} onValueChange={setAsignacionAlmacenFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos los almacenes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos</SelectItem>
+                  {almacenes.map((a) => (
+                    <SelectItem key={a.id} value={a.id.toString()}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <Card>
+            <CardContent className="pt-4">
+              {(documentosLoading || movimientosLoading) ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (documentos.length === 0 && movimientosAgrupados.length === 0) ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No hay movimientos registrados
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-28">No. Doc</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Accion</TableHead>
+                      <TableHead>De</TableHead>
+                      <TableHead>A</TableHead>
+                      <TableHead>Items</TableHead>
+                      <TableHead>Cartones</TableHead>
+                      <TableHead>Realizado por</TableHead>
+                      <TableHead>Acta</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* Documentos nuevos (agrupados) */}
+                    {documentos.map((d) => (
+                      <TableRow
+                        key={`doc-${d.id}`}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setSelectedDocumentoId(d.id)}
+                      >
+                        <TableCell className="font-mono text-xs font-semibold text-primary">
+                          DOC-{d.id.toString().padStart(6, '0')}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {new Date(d.created_at).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">{(d.accion || '').replace(/_/g, ' ')}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">{d.de_nombre || '-'}</TableCell>
+                        <TableCell className="text-sm">{d.a_nombre || '-'}</TableCell>
+                        <TableCell className="text-sm">{d.total_items}</TableCell>
+                        <TableCell>{d.total_cartones?.toLocaleString()}</TableCell>
+                        <TableCell className="text-sm">{d.realizado_por_nombre}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); handleDownloadDocPdf(d.id); }}
+                          >
+                            <FileDown className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
                     ))}
+                    {/* Movimientos legacy agrupados */}
+                    {movimientosAgrupados.map((g) => (
+                      <TableRow
+                        key={`grp-${g.id}`}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setSelectedLegacyGroup(g)}
+                      >
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          MOV-{g.id.toString().padStart(6, '0')}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {new Date(g.created_at).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">{g.accion.replace(/_/g, ' ')}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">{g.de_persona || '-'}</TableCell>
+                        <TableCell className="text-sm">{g.a_persona || '-'}</TableCell>
+                        <TableCell className="text-sm">{g.total_items}</TableCell>
+                        <TableCell>{g.total_cartones.toLocaleString()}</TableCell>
+                        <TableCell className="text-sm">{g.realizado_por_nombre}</TableCell>
+                        <TableCell>
+                          {g.has_pdf && g.pdf_mov_id ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); handleDownloadMovPdf(g.pdf_mov_id!); }}
+                            >
+                              <FileDown className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Detalle del documento */}
+          <Dialog open={!!selectedDocumentoId} onOpenChange={(v) => { if (!v) setSelectedDocumentoId(null); }}>
+            <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  Documento MOV-{selectedDocumentoId?.toString().padStart(6, '0')}
+                </DialogTitle>
+                <DialogDescription>
+                  {documentoDetalle?.data?.documento && (
+                    <>
+                      {(documentoDetalle.data.documento.accion || '').replace(/_/g, ' ')} — {' '}
+                      {documentoDetalle.data.documento.de_nombre || '-'} → {documentoDetalle.data.documento.a_nombre || '-'}
+                    </>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+
+              {documentoDetalle?.data?.documento && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium">Fecha: </span>
+                      {new Date(documentoDetalle.data.documento.created_at).toLocaleString()}
+                    </div>
+                    <div>
+                      <span className="font-medium">Realizado por: </span>
+                      {documentoDetalle.data.documento.realizado_por_nombre}
+                    </div>
+                    <div>
+                      <span className="font-medium">Total items: </span>
+                      {documentoDetalle.data.documento.total_items}
+                    </div>
+                    <div>
+                      <span className="font-medium">Total cartones: </span>
+                      {documentoDetalle.data.documento.total_cartones?.toLocaleString()}
+                    </div>
                   </div>
+
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Referencia</TableHead>
+                        <TableHead>De</TableHead>
+                        <TableHead>A</TableHead>
+                        <TableHead>Cartones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(documentoDetalle.data.movimientos || []).map((m: any) => (
+                        <TableRow key={m.id}>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs capitalize">{m.tipo_entidad}</Badge>
+                          </TableCell>
+                          <TableCell className="font-mono font-medium">{m.referencia}</TableCell>
+                          <TableCell className="text-sm">{m.de_persona || '-'}</TableCell>
+                          <TableCell className="text-sm">{m.a_persona || '-'}</TableCell>
+                          <TableCell>{m.cantidad_cartones}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setSelectedDocumentoId(null)}>
+                      Cerrar
+                    </Button>
+                    <Button onClick={() => handleDownloadDocPdf(selectedDocumentoId!)}>
+                      <FileDown className="mr-2 h-4 w-4" />
+                      Descargar PDF
+                    </Button>
+                  </DialogFooter>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* Detalle de movimiento legacy agrupado */}
+          <Dialog open={!!selectedLegacyGroup} onOpenChange={(v) => { if (!v) setSelectedLegacyGroup(null); }}>
+            <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  Movimiento MOV-{selectedLegacyGroup?.id.toString().padStart(6, '0')}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedLegacyGroup && (
+                    <>
+                      {selectedLegacyGroup.accion.replace(/_/g, ' ')} — {selectedLegacyGroup.de_persona || '-'} → {selectedLegacyGroup.a_persona || '-'}
+                    </>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+
+              {selectedLegacyGroup && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium">Fecha: </span>
+                      {new Date(selectedLegacyGroup.created_at).toLocaleString()}
+                    </div>
+                    <div>
+                      <span className="font-medium">Realizado por: </span>
+                      {selectedLegacyGroup.realizado_por_nombre}
+                    </div>
+                    <div>
+                      <span className="font-medium">Total items: </span>
+                      {selectedLegacyGroup.total_items}
+                    </div>
+                    <div>
+                      <span className="font-medium">Total cartones: </span>
+                      {selectedLegacyGroup.total_cartones.toLocaleString()}
+                    </div>
+                  </div>
+
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Referencia</TableHead>
+                        <TableHead>De</TableHead>
+                        <TableHead>A</TableHead>
+                        <TableHead>Cartones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedLegacyGroup.items.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs capitalize">{m.tipo_entidad}</Badge>
+                          </TableCell>
+                          <TableCell className="font-mono font-medium">{m.referencia}</TableCell>
+                          <TableCell className="text-sm">{m.de_persona || '-'}</TableCell>
+                          <TableCell className="text-sm">{m.a_persona || '-'}</TableCell>
+                          <TableCell>{m.cantidad_cartones}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setSelectedLegacyGroup(null)}>
+                      Cerrar
+                    </Button>
+                    {selectedLegacyGroup.has_pdf && selectedLegacyGroup.pdf_mov_id && (
+                      <Button onClick={() => handleDownloadMovPdf(selectedLegacyGroup.pdf_mov_id!)}>
+                        <FileDown className="mr-2 h-4 w-4" />
+                        Descargar PDF
+                      </Button>
+                    )}
+                  </DialogFooter>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        </TabsContent>
+
+        {/* ============ ESCANEAR TAB ============ */}
+        <TabsContent value="escanear" className="space-y-4">
+          <h2 className="text-lg font-semibold">Escanear Codigo</h2>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex gap-3 max-w-lg">
+                <Input
+                  placeholder="Ingrese codigo (ej: C001, L00001 o codigo de carton)"
+                  value={scanInput}
+                  onChange={(e) => setScanInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleScan()}
+                />
+                <Button onClick={handleScan} disabled={scanning || !scanInput.trim()}>
+                  {scanning ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="mr-2 h-4 w-4" />
+                  )}
+                  Buscar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {scanResult && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Resultado</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2 items-center">
+                  <span className="text-sm text-muted-foreground">Tipo:</span>
+                  <Badge variant="outline" className="capitalize">{scanResult.tipo}</Badge>
+                </div>
+                {scanResult.entidad && (
+                  <div className="bg-muted p-4 rounded-md">
+                    <pre className="text-sm whitespace-pre-wrap">
+                      {JSON.stringify(scanResult.entidad, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {scanResult.asignacion && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-sm">Asignacion Actual</h4>
+                    <div className="bg-muted p-4 rounded-md space-y-1">
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Persona:</span>{' '}
+                        {scanResult.asignacion.persona_nombre}
+                      </p>
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Estado:</span>{' '}
+                        <Badge className={estadoColor[scanResult.asignacion.estado as AsignacionEstado]}>
+                          {ESTADO_LABELS[scanResult.asignacion.estado as AsignacionEstado]}
+                        </Badge>
+                      </p>
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Proposito:</span>{' '}
+                        {PROPOSITO_LABELS[scanResult.asignacion.proposito as AsignacionProposito]}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        onClick={() => navigate(`/inventory/${eventId}/asignacion/${scanResult.asignacion.id}`)}
+                      >
+                        Ver Detalle
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {!scanResult.asignacion && (
+                  <p className="text-sm text-muted-foreground">
+                    Este elemento no tiene asignacion activa.
+                  </p>
                 )}
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+      </Tabs>
 
-          {/* Link to movements */}
-          <div className="flex justify-end">
-            <Link
-              to={`/inventory/movements/${selectedEventId}`}
-              className="text-sm text-primary hover:underline"
-            >
-              Ver historial de movimientos →
-            </Link>
-          </div>
-        </>
-      )}
-
-      {/* ======= LEVELS MODAL ======= */}
-      <Dialog open={showLevelsModal} onOpenChange={setShowLevelsModal}>
-        <DialogContent>
+      {/* ============ ALMACEN DIALOG ============ */}
+      <Dialog open={showAlmacenDialog} onOpenChange={setShowAlmacenDialog}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Configurar Niveles de Jerarquia</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            {levelsConfig.map((lvl, idx) => (
-              <div key={idx} className="flex items-center gap-3">
-                <Badge variant="secondary" className="w-8 h-8 flex items-center justify-center rounded-full text-xs">
-                  {lvl.level}
-                </Badge>
-                <Input
-                  value={lvl.name}
-                  onChange={(e) => {
-                    const updated = [...levelsConfig];
-                    updated[idx] = { ...updated[idx], name: e.target.value };
-                    setLevelsConfig(updated);
-                  }}
-                  placeholder={`Nombre del nivel ${lvl.level}`}
-                />
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={addLevel} disabled={levelsConfig.length >= 5}>
-                <Plus className="mr-1 h-3 w-3" /> Agregar Nivel
-              </Button>
-              <Button variant="outline" size="sm" onClick={removeLevel} disabled={levelsConfig.length <= 1}>
-                Quitar Ultimo
-              </Button>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowLevelsModal(false)}>Cancelar</Button>
-            <Button
-              onClick={() => saveLevelsMutation.mutate()}
-              disabled={saveLevelsMutation.isPending || levelsConfig.some(l => !l.name.trim())}
-            >
-              {saveLevelsMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ======= CREATE NODE MODAL ======= */}
-      <Dialog open={showNodeModal} onOpenChange={setShowNodeModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {nodeForm.parent_id ? 'Agregar Nodo Hijo' : 'Crear Nodo Raiz'}
-            </DialogTitle>
+            <DialogTitle>{editingAlmacen ? 'Editar Almacen' : 'Nuevo Almacen'}</DialogTitle>
+            <DialogDescription>
+              {editingAlmacen
+                ? 'Modifica los datos del almacen.'
+                : 'Crea un nuevo almacen para gestionar inventario.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Nombre *</Label>
+              <Label>Nombre</Label>
               <Input
-                value={nodeForm.name}
-                onChange={(e) => setNodeForm({ ...nodeForm, name: e.target.value })}
-                placeholder="Ej: Agencia Norte"
+                value={almacenForm.name}
+                onChange={(e) => setAlmacenForm({ ...almacenForm, name: e.target.value })}
+                placeholder="Nombre del almacen"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            {!editingAlmacen && (
               <div className="space-y-2">
-                <Label>Codigo (opcional)</Label>
+                <Label>Codigo (opcional, se genera automaticamente)</Label>
                 <Input
-                  value={nodeForm.code}
-                  onChange={(e) => setNodeForm({ ...nodeForm, code: e.target.value })}
-                  placeholder="Ej: AG-01"
-                  className="font-mono"
+                  value={almacenForm.code}
+                  onChange={(e) => setAlmacenForm({ ...almacenForm, code: e.target.value })}
+                  placeholder="ALM-001"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Contacto</Label>
-                <Input
-                  value={nodeForm.contact_name}
-                  onChange={(e) => setNodeForm({ ...nodeForm, contact_name: e.target.value })}
-                  placeholder="Nombre"
-                />
-              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Almacen Padre (opcional)</Label>
+              <Select
+                value={almacenForm.parent_id}
+                onValueChange={(v) => setAlmacenForm({ ...almacenForm, parent_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Ninguno (raiz)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Ninguno (raiz)</SelectItem>
+                  {almacenes.filter((a) => a.id !== editingAlmacen?.id).map((a) => (
+                    <SelectItem key={a.id} value={a.id.toString()}>
+                      {a.name} ({a.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
-              <Label>Telefono</Label>
+              <Label>Direccion (opcional)</Label>
               <Input
-                value={nodeForm.contact_phone}
-                onChange={(e) => setNodeForm({ ...nodeForm, contact_phone: e.target.value })}
-                placeholder="Telefono de contacto"
+                value={almacenForm.address}
+                onChange={(e) => setAlmacenForm({ ...almacenForm, address: e.target.value })}
+                placeholder="Direccion"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Contacto (opcional)</Label>
+              <Input
+                value={almacenForm.contact_name}
+                onChange={(e) => setAlmacenForm({ ...almacenForm, contact_name: e.target.value })}
+                placeholder="Nombre del contacto"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Telefono contacto (opcional)</Label>
+              <Input
+                value={almacenForm.contact_phone}
+                onChange={(e) => setAlmacenForm({ ...almacenForm, contact_phone: e.target.value })}
+                placeholder="Telefono"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNodeModal(false)}>Cancelar</Button>
-            <Button
-              onClick={() => createNodeMutation.mutate()}
-              disabled={createNodeMutation.isPending || !nodeForm.name.trim()}
-            >
-              {createNodeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Crear
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ======= CARD OPERATION MODAL ======= */}
-      <Dialog open={showCardModal} onOpenChange={(open) => { if (!open) { setShowCardModal(false); setCardAction(null); } }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {cardAction ? getActionLabel(cardAction.type) : 'Operacion'}
-              {cardAction && <span className="text-muted-foreground font-normal"> — {cardAction.node.name}</span>}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {/* Target node selector for assign */}
-            {cardAction?.type === 'assign' && (
-              <div className="space-y-2">
-                <Label>Nodo destino (hijo)</Label>
-                <Select
-                  value={cardAction.targetNodeId?.toString() || ''}
-                  onValueChange={(v) => setCardAction({ ...cardAction, targetNodeId: Number(v) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar hijo..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {childrenOfNode(cardAction.node).map(child => (
-                      <SelectItem key={child.id} value={child.id.toString()}>
-                        {child.name} {child.code ? `(${child.code})` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <CardSelectionForm value={cardSelection} onChange={setCardSelection} />
-
-            {/* Buyer info for sell */}
-            {cardAction?.type === 'sell' && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Comprador</Label>
-                  <Input value={buyerName} onChange={(e) => setBuyerName(e.target.value)} placeholder="Nombre" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Telefono</Label>
-                  <Input value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="Telefono" />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCardModal(false); setCardAction(null); }}>
+            <Button variant="outline" onClick={() => setShowAlmacenDialog(false)}>
               Cancelar
             </Button>
             <Button
-              onClick={() => cardOperationMutation.mutate()}
-              disabled={cardOperationMutation.isPending}
-              variant={cardAction?.type === 'sell' ? 'success' : cardAction?.type === 'return' ? 'warning' : 'default'}
+              onClick={() => editingAlmacen ? updateAlmacenMutation.mutate() : createAlmacenMutation.mutate()}
+              disabled={!almacenForm.name || createAlmacenMutation.isPending || updateAlmacenMutation.isPending}
             >
-              {cardOperationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {cardAction?.type === 'load' && 'Cargar Cartones'}
-              {cardAction?.type === 'assign' && 'Asignar'}
-              {cardAction?.type === 'return' && 'Devolver'}
-              {cardAction?.type === 'sell' && 'Registrar Venta'}
+              {(createAlmacenMutation.isPending || updateAlmacenMutation.isPending) && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              {editingAlmacen ? 'Guardar' : 'Crear'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Movimiento Unificado Dialog */}
+      <MovimientoDialog
+        eventId={eventId}
+        open={showMovimientoDialog}
+        onOpenChange={setShowMovimientoDialog}
+      />
+
+      {/* Cargar Inventario Dialog (legacy) */}
+      <Dialog open={showCargarDialog} onOpenChange={setShowCargarDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Cargar Inventario al Almacen</DialogTitle>
+            <DialogDescription>
+              Selecciona que tipo de entidad cargar y el almacen destino.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Almacen destino */}
+            <div className="space-y-2">
+              <Label>Almacen destino</Label>
+              <Select value={cargarAlmacenId} onValueChange={setCargarAlmacenId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar almacen..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {almacenes.map((a) => (
+                    <SelectItem key={a.id} value={a.id.toString()}>
+                      {a.name} ({a.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Tipo de entidad */}
+            <div className="space-y-2">
+              <Label>Tipo de entidad</Label>
+              <Select value={cargarTipo} onValueChange={(v) => setCargarTipo(v as 'caja' | 'libreta' | 'carton')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="caja">Caja</SelectItem>
+                  <SelectItem value="libreta">Libreta</SelectItem>
+                  <SelectItem value="carton">Carton</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Por Referencia (libreta/carton) */}
+            {(cargarTipo === 'libreta' || cargarTipo === 'carton') && (
+              <div className="space-y-2">
+                <Label>
+                  {cargarTipo === 'libreta' ? 'Codigo de libreta (ej: L00001)' : 'Codigo de carton'}
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={cargarReferencia}
+                    onChange={(e) => setCargarReferencia(e.target.value)}
+                    placeholder={cargarTipo === 'libreta' ? 'L00001' : 'Codigo del carton'}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && cargarReferencia.trim() && cargarAlmacenId) {
+                        cargarRefMutation.mutate();
+                      }
+                    }}
+                  />
+                  <Button
+                    onClick={() => cargarRefMutation.mutate()}
+                    disabled={!cargarAlmacenId || !cargarReferencia.trim() || cargarRefMutation.isPending}
+                  >
+                    {cargarRefMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Seleccion de cajas (solo tipo caja) */}
+            {cargarTipo === 'caja' && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Cajas disponibles</Label>
+                  {cajasDispData?.data && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        const sinAlmacen = (cajasDispData.data ?? []).filter(c => !c.almacen_id).map(c => c.id);
+                        setSelectedCajaIds(sinAlmacen.length === selectedCajaIds.length ? [] : sinAlmacen);
+                      }}
+                    >
+                      {selectedCajaIds.length > 0 ? 'Deseleccionar todo' : 'Seleccionar sin asignar'}
+                    </Button>
+                  )}
+                </div>
+                <div className="border rounded-lg max-h-60 overflow-y-auto">
+                  {(cajasDispData?.data ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No hay cajas generadas. Genera cartones primero.
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-10"></TableHead>
+                          <TableHead>Caja</TableHead>
+                          <TableHead>Lotes</TableHead>
+                          <TableHead>Cartones</TableHead>
+                          <TableHead>Almacen</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(cajasDispData?.data ?? []).map((c) => {
+                          const isSelected = selectedCajaIds.includes(c.id);
+                          const isInOtherAlmacen = c.almacen_id && c.almacen_id.toString() !== cargarAlmacenId;
+                          return (
+                            <TableRow
+                              key={c.id}
+                              className={`cursor-pointer ${isSelected ? 'bg-primary/5' : ''} ${isInOtherAlmacen ? 'opacity-50' : ''}`}
+                              onClick={() => {
+                                if (isInOtherAlmacen) return;
+                                setSelectedCajaIds(isSelected
+                                  ? selectedCajaIds.filter(id => id !== c.id)
+                                  : [...selectedCajaIds, c.id]
+                                );
+                              }}
+                            >
+                              <TableCell>
+                                {isSelected ? (
+                                  <Check className="h-4 w-4 text-primary" />
+                                ) : (
+                                  <div className="h-4 w-4 border rounded" />
+                                )}
+                              </TableCell>
+                              <TableCell className="font-mono font-bold text-sm">{c.caja_code}</TableCell>
+                              <TableCell className="text-sm">{c.total_lotes}</TableCell>
+                              <TableCell className="text-sm">{c.total_cartones}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {c.almacen_name || <span className="text-orange-500">Sin asignar</span>}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+                {selectedCajaIds.length > 0 && (
+                  <p className="text-sm text-primary font-medium">
+                    {selectedCajaIds.length} cajas seleccionadas
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCargarDialog(false)}>
+              Cancelar
+            </Button>
+            {cargarTipo === 'caja' && (
+              <Button
+                onClick={() => cargarMutation.mutate()}
+                disabled={!cargarAlmacenId || selectedCajaIds.length === 0 || cargarMutation.isPending}
+              >
+                {cargarMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Cargar {selectedCajaIds.length} Cajas
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </>}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { Search, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Loader2, Gift, PartyPopper } from 'lucide-react';
 import { validateCard, searchCard } from '@/services/api';
 import type { BingoCard, CardNumbers } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,52 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+function ScratchReveal({ text }: { text: string }) {
+  const [revealed, setRevealed] = useState(false);
+  // Determinar si es un premio real o "sin premio"
+  const noPrizeKeywords = ['gracias', 'participar', 'suerte', 'intenta'];
+  const isWinner = !noPrizeKeywords.some(kw => text.toLowerCase().includes(kw));
+
+  return (
+    <div className={`rounded-xl border-2 p-5 text-center space-y-3 transition-all ${
+      revealed
+        ? isWinner
+          ? 'border-amber-400 bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/30'
+          : 'border-border bg-muted/30'
+        : 'border-dashed border-muted-foreground/30 bg-muted/20'
+    }`}>
+      <div className="flex items-center justify-center gap-2">
+        <Gift className="h-5 w-5 text-primary" />
+        <span className="font-semibold text-sm">Raspadito</span>
+      </div>
+
+      {!revealed ? (
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={() => setRevealed(true)}
+          className="w-full border-dashed"
+        >
+          <Gift className="mr-2 h-4 w-4" />
+          Revelar Raspadito
+        </Button>
+      ) : (
+        <div className="animate-fade-in-up">
+          {isWinner ? (
+            <>
+              <PartyPopper className="h-10 w-10 text-amber-500 mx-auto mb-2" />
+              <p className="text-2xl font-black text-amber-600 dark:text-amber-400">{text}</p>
+              <Badge variant="success" className="mt-2">GANADOR</Badge>
+            </>
+          ) : (
+            <p className="text-lg font-medium text-muted-foreground">{text}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CardValidator() {
   const [searchParams] = useSearchParams();
@@ -240,6 +286,11 @@ export default function CardValidator() {
                 ].join(', ')}
               </p>
             </div>
+
+            {/* Raspadito / Promo */}
+            {card.promo_text && (
+              <ScratchReveal text={card.promo_text} />
+            )}
           </CardContent>
         </Card>
       )}

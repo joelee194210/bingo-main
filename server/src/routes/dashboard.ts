@@ -1,51 +1,49 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getDatabase } from '../database/init.js';
+import { getPool } from '../database/init.js';
 import type { DashboardStats, BingoEvent, BingoGame } from '../types/index.js';
 
 const router = Router();
 
 // GET /api/dashboard - Estadísticas generales
-router.get('/', (_req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response) => {
   try {
-    const db = getDatabase();
+    const pool = getPool();
 
     // Estadísticas de eventos
-    const eventStats = db.prepare(`
+    const eventStats = (await pool.query(`
       SELECT
         COUNT(*) as total_events,
         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_events
       FROM events
-    `).get() as { total_events: number; active_events: number };
+    `)).rows[0] as { total_events: number; active_events: number };
 
     // Estadísticas de cartones
-    const cardStats = db.prepare(`
+    const cardStats = (await pool.query(`
       SELECT
         COUNT(*) as total_cards,
-        SUM(CASE WHEN is_sold = 1 THEN 1 ELSE 0 END) as total_cards_sold
+        SUM(CASE WHEN is_sold = true THEN 1 ELSE 0 END) as total_cards_sold
       FROM cards
-    `).get() as { total_cards: number; total_cards_sold: number };
+    `)).rows[0] as { total_cards: number; total_cards_sold: number };
 
     // Estadísticas de juegos
-    const gameStats = db.prepare(`
+    const gameStats = (await pool.query(`
       SELECT COUNT(*) as total_games_played
       FROM games WHERE status = 'completed'
-    `).get() as { total_games_played: number };
+    `)).rows[0] as { total_games_played: number };
 
     // Eventos recientes
-    const recentEvents = db.prepare(`
+    const recentEvents = (await pool.query(`
       SELECT * FROM events ORDER BY created_at DESC LIMIT 5
-    `).all() as BingoEvent[];
+    `)).rows as BingoEvent[];
 
     // Juegos recientes
-    const recentGames = db.prepare(`
+    const recentGames = (await pool.query(`
       SELECT g.*, e.name as event_name
       FROM games g
       JOIN events e ON g.event_id = e.id
       ORDER BY g.created_at DESC LIMIT 5
-    `).all() as (BingoGame & { event_name: string })[];
-
-    db.close();
+    `)).rows as (BingoGame & { event_name: string })[];
 
     const stats: DashboardStats = {
       total_events: eventStats.total_events || 0,
@@ -65,39 +63,37 @@ router.get('/', (_req: Request, res: Response) => {
 });
 
 // GET /api/dashboard/chart-data - Datos para gráficos
-router.get('/chart-data', (req: Request, res: Response) => {
+router.get('/chart-data', async (req: Request, res: Response) => {
   try {
     const { days = '7' } = req.query;
     const daysNum = Math.min(30, Math.max(1, parseInt(days as string, 10) || 7));
 
-    const db = getDatabase();
+    const pool = getPool();
 
-    // Cartones generados por día (usando parámetro bind en vez de interpolación)
-    const cardsPerDay = db.prepare(`
+    // Cartones generados por día
+    const cardsPerDay = (await pool.query(`
       SELECT DATE(created_at) as date, COUNT(*) as count
       FROM cards
-      WHERE created_at >= DATE('now', '-' || ? || ' days')
+      WHERE created_at >= CURRENT_DATE - $1 * INTERVAL '1 day'
       GROUP BY DATE(created_at)
       ORDER BY date
-    `).all(daysNum) as Array<{ date: string; count: number }>;
+    `, [daysNum])).rows as Array<{ date: string; count: number }>;
 
     // Juegos por día
-    const gamesPerDay = db.prepare(`
+    const gamesPerDay = (await pool.query(`
       SELECT DATE(created_at) as date, COUNT(*) as count
       FROM games
-      WHERE created_at >= DATE('now', '-' || ? || ' days')
+      WHERE created_at >= CURRENT_DATE - $1 * INTERVAL '1 day'
       GROUP BY DATE(created_at)
       ORDER BY date
-    `).all(daysNum) as Array<{ date: string; count: number }>;
+    `, [daysNum])).rows as Array<{ date: string; count: number }>;
 
     // Distribución por tipo de juego
-    const gameTypeDistribution = db.prepare(`
+    const gameTypeDistribution = (await pool.query(`
       SELECT game_type, COUNT(*) as count
       FROM games
       GROUP BY game_type
-    `).all() as Array<{ game_type: string; count: number }>;
-
-    db.close();
+    `)).rows as Array<{ game_type: string; count: number }>;
 
     res.json({
       success: true,

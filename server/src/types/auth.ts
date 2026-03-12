@@ -1,6 +1,6 @@
 // Tipos para autenticación y usuarios
 
-export type UserRole = 'admin' | 'moderator' | 'seller' | 'viewer';
+export type UserRole = 'admin' | 'moderator' | 'seller' | 'viewer' | 'inventory';
 
 export interface User {
   id: number;
@@ -9,7 +9,7 @@ export interface User {
   password_hash: string;
   full_name: string;
   role: UserRole;
-  is_active: number;
+  is_active: boolean;
   last_login: string | null;
   created_at: string;
   updated_at: string;
@@ -69,7 +69,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'cards:read', 'cards:create', 'cards:sell', 'cards:export',
     'games:read', 'games:create', 'games:play', 'games:finish',
     'reports:read', 'reports:export',
-    'inventory:read', 'inventory:manage', 'inventory:assign', 'inventory:sell',
+    'inventory:read', 'inventory:manage',
     'dashboard:read',
   ],
   moderator: [
@@ -77,14 +77,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'cards:read', 'cards:sell',
     'games:read', 'games:create', 'games:play', 'games:finish',
     'reports:read',
-    'inventory:read', 'inventory:assign', 'inventory:sell',
+    'inventory:read', 'inventory:manage',
     'dashboard:read',
   ],
   seller: [
     'events:read',
     'cards:read', 'cards:sell',
     'games:read',
-    'inventory:read', 'inventory:sell',
+    'inventory:read',
     'dashboard:read',
   ],
   viewer: [
@@ -95,6 +95,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'inventory:read',
     'dashboard:read',
   ],
+  inventory: [
+    'inventory:read',
+    'inventory:manage',
+    'dashboard:read',
+  ],
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -102,4 +107,5 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   moderator: 'Moderador',
   seller: 'Vendedor',
   viewer: 'Visor',
+  inventory: 'Inventario',
 };

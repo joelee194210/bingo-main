@@ -2,8 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { initializeDatabase, getDatabase } from './database/init.js';
-import { ensureAdminExists } from './services/authService.js';
+import { initializeDatabase, getPool } from './database/init.js';
+import { ensureAdminExists, verifyToken } from './services/authService.js';
 import { authenticate, requireRole, requirePermission } from './middleware/auth.js';
 
 // Importar rutas
@@ -14,13 +14,14 @@ import gamesRouter from './routes/games.js';
 import dashboardRouter from './routes/dashboard.js';
 import exportRouter from './routes/export.js';
 import reportsRouter from './routes/reports.js';
-import inventoryRouter from './routes/inventory.js';
+import promoRouter from './routes/promo.js';
+import inventarioRouter from './routes/inventario.js';
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
+    origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'],
     methods: ['GET', 'POST'],
   },
 });
@@ -29,11 +30,11 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
 }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '5mb' }));
 
 // Logging middleware
 app.use((req, _res, next) => {
@@ -51,7 +52,8 @@ app.use('/api/games', authenticate, gamesRouter);
 app.use('/api/dashboard', authenticate, dashboardRouter);
 app.use('/api/export', authenticate, exportRouter);
 app.use('/api/reports', authenticate, reportsRouter);
-app.use('/api/inventory', authenticate, inventoryRouter);
+app.use('/api/promo', authenticate, promoRouter);
+app.use('/api/inventario', authenticate, inventarioRouter);
 
 // Ruta de salud
 app.get('/api/health', (_req, res) => {
@@ -64,7 +66,6 @@ io.use((socket, next) => {
   if (!token) {
     return next(new Error('Token de autenticación requerido'));
   }
-  const { verifyToken } = require('./services/authService.js');
   const payload = verifyToken(token as string);
   if (!payload) {
     return next(new Error('Token inválido o expirado'));
@@ -112,14 +113,13 @@ export function emitWinnerFound(gameId: number, data: unknown) {
 // Iniciar servidor
 async function start() {
   try {
-    // Inicializar base de datos
+    // Inicializar base de datos PostgreSQL
     console.log('🔧 Inicializando base de datos...');
-    initializeDatabase();
+    await initializeDatabase();
 
     // Crear usuario admin por defecto si no existe
-    const db = getDatabase();
-    await ensureAdminExists(db);
-    db.close();
+    const pool = getPool();
+    await ensureAdminExists(pool);
 
     httpServer.listen(PORT, () => {
       console.log(`

@@ -15,9 +15,10 @@ export default function CardGenerator() {
   const { eventId } = useParams<{ eventId: string }>();
   const queryClient = useQueryClient();
   const [quantity, setQuantity] = useState(1000);
+  const [lotesPorCaja, setLotesPorCaja] = useState(50);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState<{ total: number; generated: number; inserted?: number; status: string } | null>(null);
-  const [result, setResult] = useState<{ generated: number; duplicatesAvoided: number; generationTime: number } | null>(null);
+  const [result, setResult] = useState<{ generated: number; duplicatesAvoided: number; generationTime: number; lotes_creados?: number; cajas_creadas?: number; lotes_por_caja?: number; cartones_por_caja?: number } | null>(null);
 
   const { data: eventData, isLoading: eventLoading } = useQuery({
     queryKey: ['event-basic', eventId],
@@ -26,12 +27,14 @@ export default function CardGenerator() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: () => generateCards(Number(eventId), quantity),
+    mutationFn: () => generateCards(Number(eventId), quantity, lotesPorCaja),
     onSuccess: (data) => {
-      setIsGenerating(false);
+      // No setIsGenerating(false) aquí — el polling lo maneja al detectar status 'completed'
       if (data.success && data.data) {
         setResult(data.data);
+        queryClient.invalidateQueries({ queryKey: ['event-basic', eventId] });
         queryClient.invalidateQueries({ queryKey: ['event', eventId] });
+        queryClient.invalidateQueries({ queryKey: ['events'] });
         queryClient.invalidateQueries({ queryKey: ['cards'] });
       }
     },
@@ -156,7 +159,7 @@ export default function CardGenerator() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="quantity">Cantidad a Generar</Label>
+            <Label htmlFor="quantity">Cantidad de Cartones</Label>
             <Input
               id="quantity"
               type="number"
@@ -182,6 +185,38 @@ export default function CardGenerator() {
                 disabled={isGenerating}
               >
                 {q.toLocaleString()}
+              </Button>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="lotesPorCaja">Lotes (Libretas) por Caja</Label>
+            <Input
+              id="lotesPorCaja"
+              type="number"
+              value={lotesPorCaja}
+              onChange={(e) => setLotesPorCaja(Math.max(1, Math.min(500, parseInt(e.target.value) || 1)))}
+              min={1}
+              max={500}
+              disabled={isGenerating}
+            />
+            <p className="text-sm text-muted-foreground">
+              Cada lote = 50 cartones. Ej: {lotesPorCaja} lotes/caja = {(lotesPorCaja * 50).toLocaleString()} cartones/caja.
+              {' '}Se crearán {Math.ceil(Math.ceil(quantity / 50) / lotesPorCaja)} cajas ({Math.ceil(quantity / 50)} lotes).
+            </p>
+          </div>
+
+          {/* Quick Select Lotes/Caja */}
+          <div className="flex flex-wrap gap-2">
+            {[10, 20, 50, 100, 200].map((l) => (
+              <Button
+                key={l}
+                variant={lotesPorCaja === l ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setLotesPorCaja(l)}
+                disabled={isGenerating}
+              >
+                {l} lotes ({(l * 50).toLocaleString()} cart.)
               </Button>
             ))}
           </div>
@@ -218,6 +253,8 @@ export default function CardGenerator() {
                   <p className="font-semibold text-green-800 dark:text-green-400">¡Generación Completada!</p>
                   <ul className="text-sm text-green-700 dark:text-green-500 mt-2 space-y-1">
                     <li>✓ {result.generated.toLocaleString()} cartones generados</li>
+                    {result.lotes_creados && <li>✓ {result.lotes_creados} lotes (libretas de 50) creados</li>}
+                    {result.cajas_creadas && <li>✓ {result.cajas_creadas} cajas creadas ({result.lotes_por_caja} lotes/caja = {result.cartones_por_caja?.toLocaleString()} cartones/caja)</li>}
                     <li>✓ {result.duplicatesAvoided} duplicados evitados</li>
                     <li>✓ Tiempo: {(result.generationTime / 1000).toFixed(2)}s</li>
                   </ul>

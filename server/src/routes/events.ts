@@ -1,19 +1,18 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getDatabase } from '../database/init.js';
+import { getPool } from '../database/init.js';
 import { requirePermission } from '../middleware/auth.js';
 import type { BingoEvent, CreateEventRequest } from '../types/index.js';
 
 const router = Router();
 
 // GET /api/events - Listar todos los eventos
-router.get('/', (_req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response) => {
   try {
-    const db = getDatabase();
-    const events = db.prepare(`
+    const pool = getPool();
+    const { rows: events } = await pool.query(`
       SELECT * FROM events ORDER BY created_at DESC
-    `).all() as BingoEvent[];
-    db.close();
+    `);
     res.json({ success: true, data: events });
   } catch (error) {
     console.error('Error listando eventos:', error);
@@ -22,11 +21,11 @@ router.get('/', (_req: Request, res: Response) => {
 });
 
 // GET /api/events/:id - Obtener evento específico
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const db = getDatabase();
-    const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id) as BingoEvent | undefined;
-    db.close();
+    const pool = getPool();
+    const { rows } = await pool.query('SELECT * FROM events WHERE id = $1', [req.params.id]);
+    const event = rows[0] as BingoEvent | undefined;
 
     if (!event) {
       return res.status(404).json({ success: false, error: 'Evento no encontrado' });
@@ -39,7 +38,7 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 // POST /api/events - Crear evento (solo admin)
-router.post('/', requirePermission('events:create'), (req: Request, res: Response) => {
+router.post('/', requirePermission('events:create'), async (req: Request, res: Response) => {
   try {
     const { name, description, use_free_center } = req.body as CreateEventRequest & { use_free_center?: boolean };
 
@@ -47,14 +46,14 @@ router.post('/', requirePermission('events:create'), (req: Request, res: Respons
       return res.status(400).json({ success: false, error: 'El nombre es requerido' });
     }
 
-    const db = getDatabase();
-    const useFreeCenter = use_free_center !== false ? 1 : 0; // Por defecto true
-    const result = db.prepare(`
-      INSERT INTO events (name, description, use_free_center) VALUES (?, ?, ?)
-    `).run(name.trim(), description?.trim() || null, useFreeCenter);
+    const pool = getPool();
+    const useFreeCenter = use_free_center !== false;
+    const result = await pool.query(`
+      INSERT INTO events (name, description, use_free_center) VALUES ($1, $2, $3) RETURNING id
+    `, [name.trim(), description?.trim() || null, useFreeCenter]);
 
-    const event = db.prepare('SELECT * FROM events WHERE id = ?').get(result.lastInsertRowid) as BingoEvent;
-    db.close();
+    const { rows } = await pool.query('SELECT * FROM events WHERE id = $1', [result.rows[0].id]);
+    const event = rows[0] as BingoEvent;
 
     res.status(201).json({ success: true, data: event });
   } catch (error) {
@@ -64,53 +63,51 @@ router.post('/', requirePermission('events:create'), (req: Request, res: Respons
 });
 
 // PUT /api/events/:id - Actualizar evento (solo admin)
-router.put('/:id', requirePermission('events:update'), (req: Request, res: Response) => {
+router.put('/:id', requirePermission('events:update'), async (req: Request, res: Response) => {
   try {
     const { name, description, status, use_free_center } = req.body;
-    const db = getDatabase();
+    const pool = getPool();
 
-    const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id) as BingoEvent | undefined;
+    const { rows: existingRows } = await pool.query('SELECT * FROM events WHERE id = $1', [req.params.id]);
+    const existing = existingRows[0] as BingoEvent | undefined;
     if (!existing) {
-      db.close();
       return res.status(404).json({ success: false, error: 'Evento no encontrado' });
     }
 
     const updates: string[] = [];
     const values: unknown[] = [];
+    let paramIdx = 1;
 
     if (name !== undefined) {
       if (typeof name !== 'string' || !name.trim()) {
-        db.close();
         return res.status(400).json({ success: false, error: 'El nombre no puede estar vacío' });
       }
-      updates.push('name = ?'); values.push(name.trim());
+      updates.push(`name = $${paramIdx++}`); values.push(name.trim());
     }
-    if (description !== undefined) { updates.push('description = ?'); values.push(description?.trim() || null); }
+    if (description !== undefined) { updates.push(`description = $${paramIdx++}`); values.push(description?.trim() || null); }
     if (status !== undefined) {
       const validStatuses = ['draft', 'active', 'completed', 'cancelled'];
       if (!validStatuses.includes(status)) {
-        db.close();
         return res.status(400).json({ success: false, error: 'Estado inválido' });
       }
-      updates.push('status = ?'); values.push(status);
+      updates.push(`status = $${paramIdx++}`); values.push(status);
     }
     if (use_free_center !== undefined) {
       // Solo permitir cambiar si no hay cartones generados
       if (existing.total_cards > 0) {
-        db.close();
         return res.status(400).json({ success: false, error: 'No se puede cambiar use_free_center después de generar cartones' });
       }
-      updates.push('use_free_center = ?'); values.push(use_free_center ? 1 : 0);
+      updates.push(`use_free_center = $${paramIdx++}`); values.push(use_free_center ? true : false);
     }
 
     if (updates.length > 0) {
       updates.push('updated_at = CURRENT_TIMESTAMP');
       values.push(req.params.id);
-      db.prepare(`UPDATE events SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      await pool.query(`UPDATE events SET ${updates.join(', ')} WHERE id = $${paramIdx}`, values);
     }
 
-    const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id) as BingoEvent;
-    db.close();
+    const { rows } = await pool.query('SELECT * FROM events WHERE id = $1', [req.params.id]);
+    const event = rows[0] as BingoEvent;
     res.json({ success: true, data: event });
   } catch (error) {
     console.error('Error actualizando evento:', error);
@@ -119,18 +116,16 @@ router.put('/:id', requirePermission('events:update'), (req: Request, res: Respo
 });
 
 // DELETE /api/events/:id (solo admin)
-router.delete('/:id', requirePermission('events:delete'), (req: Request, res: Response) => {
+router.delete('/:id', requirePermission('events:delete'), async (req: Request, res: Response) => {
   try {
-    const db = getDatabase();
-    const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
+    const pool = getPool();
+    const { rows } = await pool.query('SELECT * FROM events WHERE id = $1', [req.params.id]);
 
-    if (!existing) {
-      db.close();
+    if (rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Evento no encontrado' });
     }
 
-    db.prepare('DELETE FROM events WHERE id = ?').run(req.params.id);
-    db.close();
+    await pool.query('DELETE FROM events WHERE id = $1', [req.params.id]);
     res.json({ success: true, message: 'Evento eliminado' });
   } catch (error) {
     console.error('Error eliminando evento:', error);
@@ -139,29 +134,28 @@ router.delete('/:id', requirePermission('events:delete'), (req: Request, res: Re
 });
 
 // GET /api/events/:id/stats
-router.get('/:id/stats', (req: Request, res: Response) => {
+router.get('/:id/stats', async (req: Request, res: Response) => {
   try {
-    const db = getDatabase();
-    const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id) as BingoEvent | undefined;
+    const pool = getPool();
+    const { rows: eventRows } = await pool.query('SELECT * FROM events WHERE id = $1', [req.params.id]);
+    const event = eventRows[0] as BingoEvent | undefined;
 
     if (!event) {
-      db.close();
       return res.status(404).json({ success: false, error: 'Evento no encontrado' });
     }
 
-    const cardStats = db.prepare(`
-      SELECT COUNT(*) as total, SUM(CASE WHEN is_sold = 1 THEN 1 ELSE 0 END) as sold
-      FROM cards WHERE event_id = ?
-    `).get(req.params.id) as { total: number; sold: number };
+    const cardStats = (await pool.query(`
+      SELECT COUNT(*) as total, SUM(CASE WHEN is_sold = true THEN 1 ELSE 0 END) as sold
+      FROM cards WHERE event_id = $1
+    `, [req.params.id])).rows[0] as { total: number; sold: number };
 
-    const gameStats = db.prepare(`
+    const gameStats = (await pool.query(`
       SELECT COUNT(*) as total,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
         SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as active
-      FROM games WHERE event_id = ?
-    `).get(req.params.id) as { total: number; completed: number; active: number };
+      FROM games WHERE event_id = $1
+    `, [req.params.id])).rows[0] as { total: number; completed: number; active: number };
 
-    db.close();
     res.json({
       success: true,
       data: {

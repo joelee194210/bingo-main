@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyToken, getUserById } from '../services/authService.js';
-import { getDatabase } from '../database/init.js';
+import { getPool } from '../database/init.js';
 import type { JWTPayload, UserRole, UserPublic } from '../types/auth.js';
 import { ROLE_PERMISSIONS } from '../types/auth.js';
 
@@ -17,7 +17,7 @@ declare global {
 /**
  * Middleware para autenticar token JWT
  */
-export function authenticate(req: Request, res: Response, next: NextFunction) {
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -38,9 +38,8 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   }
 
   // Obtener usuario actualizado de la BD
-  const db = getDatabase();
-  const user = getUserById(db, payload.userId);
-  db.close();
+  const pool = getPool();
+  const user = await getUserById(pool, payload.userId);
 
   if (!user || !user.is_active) {
     return res.status(401).json({
@@ -104,7 +103,7 @@ export function requirePermission(permission: string) {
 /**
  * Middleware opcional de autenticación (no falla si no hay token)
  */
-export function optionalAuth(req: Request, res: Response, next: NextFunction) {
+export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -115,9 +114,8 @@ export function optionalAuth(req: Request, res: Response, next: NextFunction) {
   const payload = verifyToken(token);
 
   if (payload) {
-    const db = getDatabase();
-    const user = getUserById(db, payload.userId);
-    db.close();
+    const pool = getPool();
+    const user = await getUserById(pool, payload.userId);
 
     if (user && user.is_active) {
       req.user = user;

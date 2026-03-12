@@ -1,10 +1,11 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CreditCard, Gamepad2, Play, Settings, Loader2, Download } from 'lucide-react';
+import { ArrowLeft, CreditCard, Gamepad2, Play, Settings, Loader2, Download, Gift } from 'lucide-react';
 import { toast } from 'sonner';
 import { getEventStats, updateEvent, createGame, downloadCardsCSV } from '@/services/api';
 import { EVENT_STATUS_LABELS, GAME_TYPE_LABELS, type GameType, type EventStatus } from '@/types';
 import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ export default function EventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
   const [showGameModal, setShowGameModal] = useState(false);
   const [downloadingCSV, setDownloadingCSV] = useState(false);
   const [gameConfig, setGameConfig] = useState<{
@@ -217,16 +219,16 @@ export default function EventDetail() {
       </div>
 
       {/* Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Link to={`/cards/generate/${event.id}`}>
-          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
             <CardContent className="flex items-center gap-4 p-6">
               <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-600">
                 <CreditCard className="h-6 w-6" />
               </div>
               <div>
                 <p className="font-semibold">Generar Cartones</p>
-                <p className="text-sm text-muted-foreground">Crear nuevos cartones para este evento</p>
+                <p className="text-sm text-muted-foreground">Crear nuevos cartones</p>
               </div>
             </CardContent>
           </Card>
@@ -247,6 +249,24 @@ export default function EventDetail() {
           </CardContent>
         </Card>
 
+        {hasPermission('cards:create') && (
+          <Link to={`/promo?event=${event.id}`}>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-600">
+                  <Gift className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="font-semibold">Raspadito</p>
+                  <p className="text-sm text-muted-foreground">Configurar premios promocionales</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card
           className={`hover:shadow-md transition-shadow ${cards.total > 0 ? 'cursor-pointer' : 'opacity-50'}`}
           onClick={async () => {

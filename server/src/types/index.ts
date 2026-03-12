@@ -35,7 +35,7 @@ export interface BingoEvent {
   description: string | null;
   total_cards: number;
   cards_sold: number;
-  use_free_center: number; // 1 = FREE en centro, 0 = número en centro
+  use_free_center: boolean; // true = FREE en centro, false = número en centro
   status: EventStatus;
   created_at: string;
   updated_at: string;
@@ -54,6 +54,7 @@ export interface BingoCard {
   sold_at: string | null;
   buyer_name: string | null;
   buyer_phone: string | null;
+  promo_text: string | null;
   created_at: string;
 }
 
@@ -196,14 +197,106 @@ export const WIN_PATTERNS: Record<string, WinPattern> = {
   },
 };
 
-// Blackout: todas las 24 posiciones (excluyendo el FREE)
+// Blackout: todas las 25 posiciones (el FREE center se evalúa en runtime)
 export const BLACKOUT_POSITIONS: Position[] = [
   [0, 0], [0, 1], [0, 2], [0, 3], [0, 4],
   [1, 0], [1, 1], [1, 2], [1, 3], [1, 4],
-  [2, 0], [2, 1],         [2, 3], [2, 4], // Fila 3 sin [2,2] que es FREE
+  [2, 0], [2, 1], [2, 2], [2, 3], [2, 4],
   [3, 0], [3, 1], [3, 2], [3, 3], [3, 4],
   [4, 0], [4, 1], [4, 2], [4, 3], [4, 4],
 ];
+
+// =====================================================
+// TIPOS PARA INVENTARIO
+// =====================================================
+
+export type CajaStatus = 'sellada' | 'abierta' | 'en_transito' | 'agotada';
+export type LoteStatus = 'en_caja' | 'disponible' | 'en_transito' | 'vendido_parcial' | 'vendido_completo' | 'devuelto';
+export type EnvioStatus = 'preparando' | 'enviado' | 'en_transito' | 'recibido' | 'recibido_parcial' | 'cancelado';
+export type AuditEntityType = 'caja' | 'lote' | 'card' | 'envio' | 'centro';
+
+export interface Centro {
+  id: number;
+  event_id: number;
+  parent_id: number | null;
+  name: string;
+  code: string;
+  address: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  is_active: boolean;
+  total_cajas: number;
+  total_lotes: number;
+  total_cards: number;
+  total_sold: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Caja {
+  id: number;
+  event_id: number;
+  caja_code: string;
+  centro_id: number | null;
+  total_lotes: number;
+  status: CajaStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Lote {
+  id: number;
+  event_id: number;
+  caja_id: number | null;
+  lote_code: string;
+  series_number: string;
+  centro_id: number | null;
+  status: LoteStatus;
+  cards_sold: number;
+  total_cards: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Envio {
+  id: number;
+  event_id: number;
+  envio_code: string;
+  from_centro_id: number;
+  to_centro_id: number;
+  status: EnvioStatus;
+  notes: string | null;
+  prepared_by: string | null;
+  sent_at: string | null;
+  received_at: string | null;
+  received_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EnvioItem {
+  id: number;
+  envio_id: number;
+  item_type: 'caja' | 'lote';
+  caja_id: number | null;
+  lote_id: number | null;
+  received: number;
+  received_at: string | null;
+  notes: string | null;
+}
+
+export interface AuditEntry {
+  id: number;
+  event_id: number;
+  action: string;
+  entity_type: AuditEntityType;
+  entity_id: number;
+  centro_id: number | null;
+  envio_id: number | null;
+  details: string | null;
+  performed_by: string | null;
+  created_at: string;
+}
 
 // =====================================================
 // TIPOS PARA EXPORTACIÓN
@@ -235,3 +328,93 @@ export interface DashboardStats {
   recent_events: BingoEvent[];
   recent_games: BingoGame[];
 }
+
+// =====================================================
+// MÓDULO DE INVENTARIO AISLADO
+// =====================================================
+
+export type AsignacionProposito = 'custodia' | 'venta';
+export type AsignacionEstado = 'asignado' | 'parcial' | 'completado' | 'devuelto' | 'cancelado';
+export type TipoEntidad = 'caja' | 'libreta' | 'carton';
+export type AlmacenRol = 'administrador' | 'operador' | 'vendedor';
+
+export interface Almacen {
+  id: number;
+  event_id: number;
+  parent_id: number | null;
+  name: string;
+  code: string;
+  address: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  children?: Almacen[];
+}
+
+export interface AlmacenUsuario {
+  id: number;
+  almacen_id: number;
+  user_id: number;
+  rol: AlmacenRol;
+  is_active: boolean;
+  created_at: string;
+  full_name?: string;
+  username?: string;
+}
+
+export interface InvAsignacion {
+  id: number;
+  event_id: number;
+  almacen_id: number;
+  tipo_entidad: TipoEntidad;
+  referencia: string;
+  cantidad_cartones: number;
+  persona_nombre: string;
+  persona_telefono: string | null;
+  persona_user_id: number | null;
+  proposito: AsignacionProposito;
+  estado: AsignacionEstado;
+  cartones_vendidos: number;
+  asignado_por: number;
+  asignado_por_nombre?: string;
+  almacen_name?: string;
+  created_at: string;
+  updated_at: string;
+  devuelto_at: string | null;
+  cartones?: InvAsignacionCarton[];
+}
+
+export interface InvAsignacionCarton {
+  id: number;
+  asignacion_id: number;
+  card_id: number;
+  card_code: string;
+  serial: string;
+  vendido: number;
+  vendido_at: string | null;
+  comprador_nombre: string | null;
+  comprador_telefono: string | null;
+}
+
+export interface InvMovimiento {
+  id: number;
+  event_id: number;
+  almacen_id: number | null;
+  asignacion_id: number | null;
+  tipo_entidad: TipoEntidad;
+  referencia: string;
+  accion: string;
+  de_persona: string | null;
+  a_persona: string | null;
+  cantidad_cartones: number;
+  detalles: string | null;
+  realizado_por: number;
+  realizado_por_nombre?: string;
+  pdf_path: string | null;
+  nombre_entrega: string | null;
+  nombre_recibe: string | null;
+  created_at: string;
+}
+

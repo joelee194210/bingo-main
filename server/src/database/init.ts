@@ -1,103 +1,215 @@
-import Database from 'better-sqlite3';
-import { readFileSync, existsSync, mkdirSync } from 'fs';
+import { Pool } from 'pg';
+import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 // @ts-expect-error import.meta works at runtime with tsx/ESM
-const __dirname = dirname((import.meta as { url: string }).url.replace('file://', ''));
+const __filename = fileURLToPath((import.meta as { url: string }).url);
+const __dirname = dirname(__filename);
 
-const DB_PATH = join(__dirname, '../../data/bingo.db');
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://slacker@localhost:5432/bingo';
 
-let dbInstance: Database.Database | null = null;
+let pool: Pool | null = null;
 
-export function initializeDatabase(): Database.Database {
-  // Crear directorio data si no existe
-  const dataDir = dirname(DB_PATH);
-  if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true });
+export function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    });
   }
+  return pool;
+}
 
-  const db = new Database(DB_PATH);
+export async function initializeDatabase(): Promise<Pool> {
+  const p = getPool();
 
-  // Habilitar WAL mode para mejor rendimiento con escrituras concurrentes
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
-  db.pragma('cache_size = -64000'); // 64MB cache
-  db.pragma('temp_store = MEMORY');
-  db.pragma('foreign_keys = ON');
-  db.pragma('mmap_size = 268435456'); // 256MB mmap
-
-  // Ejecutar schema
+  // Execute schema
   const schemaPath = join(__dirname, 'schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
-  db.exec(schema);
+  await p.query(schema);
 
-  // Migraciones para bases de datos existentes
-  runMigrations(db);
+  // Run migrations
+  await runMigrations(p);
 
-  // Crear índices que dependen de columnas migradas
-  db.exec("CREATE INDEX IF NOT EXISTS idx_cards_serial ON cards(serial)");
+  console.log('✅ Base de datos PostgreSQL inicializada correctamente');
+  console.log(`📍 Conexión: ${DATABASE_URL.replace(/\/\/.*@/, '//*****@')}`);
 
-  console.log('✅ Base de datos inicializada correctamente');
-  console.log(`📍 Ubicación: ${DB_PATH}`);
-
-  dbInstance = db;
-  return db;
+  return p;
 }
 
-export function getDatabase(): Database.Database {
-  // Crear directorio si no existe
-  const dataDir = dirname(DB_PATH);
-  if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true });
-  }
-
-  const db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
-  db.pragma('cache_size = -64000');
-  db.pragma('temp_store = MEMORY');
-  db.pragma('foreign_keys = ON');
-  return db;
-}
-
-export function closeDatabase(): void {
-  if (dbInstance) {
-    dbInstance.close();
-    dbInstance = null;
+export async function closeDatabase(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
   }
 }
 
-/**
- * Ejecuta migraciones para bases de datos existentes
- */
-function runMigrations(db: Database.Database): void {
-  // Migración: agregar columna use_free_center si no existe
-  const columns = db.prepare("PRAGMA table_info(events)").all() as Array<{ name: string }>;
-  const hasUseFreeCenter = columns.some(col => col.name === 'use_free_center');
+async function runMigrations(p: Pool): Promise<void> {
+  // Check if columns exist before adding them
+  const checkColumn = async (table: string, column: string): Promise<boolean> => {
+    const result = await p.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND column_name = $2`,
+      [table, column]
+    );
+    return result.rows.length > 0;
+  };
 
-  if (!hasUseFreeCenter) {
-    db.exec('ALTER TABLE events ADD COLUMN use_free_center INTEGER DEFAULT 1');
+  // Migration: use_free_center on events
+  if (!(await checkColumn('events', 'use_free_center'))) {
+    await p.query('ALTER TABLE events ADD COLUMN use_free_center BOOLEAN DEFAULT TRUE');
     console.log('✅ Migración aplicada: use_free_center agregado a events');
   }
 
-  // Migración: agregar columna serial si no existe
-  const cardColumns = db.prepare("PRAGMA table_info(cards)").all() as Array<{ name: string }>;
-  const hasSerial = cardColumns.some(col => col.name === 'serial');
-
-  if (!hasSerial) {
-    db.exec("ALTER TABLE cards ADD COLUMN serial TEXT NOT NULL DEFAULT ''");
-    // Computar seriales para cartones existentes
-    const allCards = db.prepare("SELECT id, card_number FROM cards ORDER BY event_id, card_number").all() as Array<{ id: number; card_number: number }>;
-    const updateStmt = db.prepare("UPDATE cards SET serial = ? WHERE id = ?");
-    const updateMany = db.transaction((cards: Array<{ id: number; card_number: number }>) => {
-      for (const card of cards) {
-        const series = Math.ceil(card.card_number / 50).toString().padStart(5, '0');
-        const seq = (((card.card_number - 1) % 50) + 1).toString().padStart(2, '0');
-        updateStmt.run(`${series}-${seq}`, card.id);
-      }
-    });
-    updateMany(allCards);
-    db.exec("CREATE INDEX IF NOT EXISTS idx_cards_serial ON cards(serial)");
+  // Migration: serial on cards
+  if (!(await checkColumn('cards', 'serial'))) {
+    await p.query("ALTER TABLE cards ADD COLUMN serial TEXT NOT NULL DEFAULT ''");
+    const allCards = (await p.query('SELECT id, card_number FROM cards ORDER BY event_id, card_number')).rows;
+    for (const card of allCards) {
+      const series = Math.ceil(card.card_number / 50).toString().padStart(5, '0');
+      const seq = (((card.card_number - 1) % 50) + 1).toString().padStart(2, '0');
+      await p.query('UPDATE cards SET serial = $1 WHERE id = $2', [`${series}-${seq}`, card.id]);
+    }
+    await p.query('CREATE INDEX IF NOT EXISTS idx_cards_serial ON cards(serial)');
     console.log('✅ Migración aplicada: serial agregado a cards');
   }
+
+  // Migration: promo_text on cards
+  if (!(await checkColumn('cards', 'promo_text'))) {
+    await p.query('ALTER TABLE cards ADD COLUMN promo_text TEXT');
+    console.log('✅ Migración aplicada: promo_text agregado a cards');
+  }
+
+  // Migration: lote_id on cards
+  if (!(await checkColumn('cards', 'lote_id'))) {
+    await p.query('ALTER TABLE cards ADD COLUMN lote_id INTEGER REFERENCES lotes(id)');
+    await p.query('CREATE INDEX IF NOT EXISTS idx_cards_lote ON cards(lote_id)');
+    console.log('✅ Migración aplicada: lote_id agregado a cards');
+  }
+
+  // Migration: firma/PDF fields on inv_movimientos
+  if (!(await checkColumn('inv_movimientos', 'pdf_path'))) {
+    await p.query('ALTER TABLE inv_movimientos ADD COLUMN pdf_path TEXT');
+    await p.query('ALTER TABLE inv_movimientos ADD COLUMN firma_entrega TEXT');
+    await p.query('ALTER TABLE inv_movimientos ADD COLUMN firma_recibe TEXT');
+    await p.query('ALTER TABLE inv_movimientos ADD COLUMN nombre_entrega TEXT');
+    await p.query('ALTER TABLE inv_movimientos ADD COLUMN nombre_recibe TEXT');
+    console.log('✅ Migración aplicada: campos de firma/PDF agregados a inv_movimientos');
+  }
+
+  // Migration: inv_documentos table and documento_id on inv_movimientos
+  const docTableExists = await p.query(`SELECT to_regclass('public.inv_documentos') as exists`);
+  if (!docTableExists.rows[0].exists) {
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS inv_documentos (
+        id SERIAL PRIMARY KEY,
+        event_id INTEGER NOT NULL,
+        accion TEXT NOT NULL,
+        de_almacen_id INTEGER,
+        a_almacen_id INTEGER,
+        de_nombre TEXT,
+        a_nombre TEXT,
+        total_items INTEGER DEFAULT 0,
+        total_cartones INTEGER DEFAULT 0,
+        pdf_path TEXT,
+        firma_entrega TEXT,
+        firma_recibe TEXT,
+        nombre_entrega TEXT,
+        nombre_recibe TEXT,
+        realizado_por INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+        FOREIGN KEY (de_almacen_id) REFERENCES almacenes(id) ON DELETE SET NULL,
+        FOREIGN KEY (a_almacen_id) REFERENCES almacenes(id) ON DELETE SET NULL,
+        FOREIGN KEY (realizado_por) REFERENCES users(id)
+      )
+    `);
+    console.log('✅ Migración aplicada: tabla inv_documentos creada');
+  }
+  if (!(await checkColumn('inv_movimientos', 'documento_id'))) {
+    await p.query('ALTER TABLE inv_movimientos ADD COLUMN documento_id INTEGER REFERENCES inv_documentos(id)');
+    await p.query('CREATE INDEX IF NOT EXISTS idx_inv_mov_documento ON inv_movimientos(documento_id)');
+    console.log('✅ Migración aplicada: documento_id agregado a inv_movimientos');
+  }
+
+  // Migration: almacen_id on cajas
+  if (!(await checkColumn('cajas', 'almacen_id'))) {
+    await p.query('ALTER TABLE cajas ADD COLUMN almacen_id INTEGER REFERENCES almacenes(id)');
+    await p.query('CREATE INDEX IF NOT EXISTS idx_cajas_almacen ON cajas(almacen_id)');
+    console.log('✅ Migración aplicada: almacen_id agregado a cajas');
+  }
+
+  // Migration: add 'inventory' to users role constraint
+  try {
+    await p.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
+    await p.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('admin', 'moderator', 'seller', 'viewer', 'inventory'))`);
+  } catch {
+    // constraint may already include 'inventory'
+  }
+
+  // Create serial index if not exists
+  await p.query('CREATE INDEX IF NOT EXISTS idx_cards_serial ON cards(serial)');
+
+  // Migration: almacen_id on lotes (ubicacion actual de cada libreta)
+  if (!(await checkColumn('lotes', 'almacen_id'))) {
+    await p.query('ALTER TABLE lotes ADD COLUMN almacen_id INTEGER REFERENCES almacenes(id)');
+    await p.query('CREATE INDEX IF NOT EXISTS idx_lotes_almacen ON lotes(almacen_id)');
+    // Backfill: heredar almacen de la caja
+    await p.query(`
+      UPDATE lotes SET almacen_id = c.almacen_id
+      FROM cajas c WHERE c.id = lotes.caja_id AND c.almacen_id IS NOT NULL AND lotes.almacen_id IS NULL
+    `);
+    console.log('✅ Migración aplicada: almacen_id agregado a lotes');
+  }
+
+  // Migration: almacen_id on cards (ubicacion actual de cada carton)
+  if (!(await checkColumn('cards', 'almacen_id'))) {
+    await p.query('ALTER TABLE cards ADD COLUMN almacen_id INTEGER REFERENCES almacenes(id)');
+    await p.query('CREATE INDEX IF NOT EXISTS idx_cards_almacen ON cards(almacen_id)');
+    // Backfill: heredar almacen del lote (que a su vez hereda de la caja)
+    await p.query(`
+      UPDATE cards SET almacen_id = l.almacen_id
+      FROM lotes l WHERE l.id = cards.lote_id AND l.almacen_id IS NOT NULL AND cards.almacen_id IS NULL
+    `);
+    console.log('✅ Migración aplicada: almacen_id agregado a cards');
+  }
+
+  // Migration: asignar cajas/lotes/cards huerfanos al almacen raiz de su evento
+  const orphanCajas = await p.query('SELECT c.id, c.event_id FROM cajas c WHERE c.almacen_id IS NULL');
+  if (orphanCajas.rows.length > 0) {
+    for (const caja of orphanCajas.rows) {
+      const rootAlm = await p.query(
+        'SELECT id FROM almacenes WHERE event_id = $1 AND parent_id IS NULL ORDER BY id LIMIT 1',
+        [caja.event_id]
+      );
+      if (rootAlm.rows.length > 0) {
+        const rootId = rootAlm.rows[0].id;
+        await p.query('UPDATE cajas SET almacen_id = $1 WHERE id = $2', [rootId, caja.id]);
+        await p.query('UPDATE lotes SET almacen_id = $1 WHERE caja_id = $2 AND almacen_id IS NULL', [rootId, caja.id]);
+        await p.query(`
+          UPDATE cards SET almacen_id = $1
+          FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2 AND cards.almacen_id IS NULL
+        `, [rootId, caja.id]);
+      }
+    }
+    console.log(`✅ Migración aplicada: ${orphanCajas.rows.length} cajas (y sus lotes/cartones) asignadas a su almacen raiz`);
+  }
+
+  // Migration: sold_by on cards (quien vendio el carton)
+  if (!(await checkColumn('cards', 'sold_by'))) {
+    await p.query('ALTER TABLE cards ADD COLUMN sold_by INTEGER REFERENCES users(id)');
+    console.log('✅ Migración aplicada: sold_by agregado a cards');
+  }
+
+  // Backfill: lotes/cards que tienen caja con almacen pero ellos no
+  await p.query(`
+    UPDATE lotes SET almacen_id = c.almacen_id
+    FROM cajas c WHERE c.id = lotes.caja_id AND c.almacen_id IS NOT NULL AND lotes.almacen_id IS NULL
+  `);
+  await p.query(`
+    UPDATE cards SET almacen_id = l.almacen_id
+    FROM lotes l WHERE l.id = cards.lote_id AND l.almacen_id IS NOT NULL AND cards.almacen_id IS NULL
+  `);
 }

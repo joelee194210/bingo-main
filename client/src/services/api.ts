@@ -12,14 +12,18 @@ import type {
   GameReport,
   GameWinner,
   FinishGameResult,
-  InventoryLevel,
-  InventoryNode,
-  InventorySummary,
-  ConsolidatedSummary,
-  CardSelection,
-  BatchResult,
-  MovementRecord,
-  EventInventoryOverview,
+  PromoData,
+  PromoConfig,
+  PromoPrize,
+  PromoDistributeResult,
+  PromoWinner,
+  Almacen,
+  AlmacenUsuario,
+  InvAsignacion,
+  InvAsignacionCarton,
+  InvMovimiento,
+  ResumenInventario,
+  CajaReal,
 } from '../types';
 
 const api = axios.create({
@@ -64,14 +68,14 @@ export const getEventStats = (id: number) =>
   api.get<ApiResponse<{ event: BingoEvent; cards: { total: number; sold: number; available: number }; games: { total: number; completed: number; active: number } }>>(`/events/${id}/stats`).then(r => r.data);
 
 // Cards
-export const getCards = (params: { event_id?: number; page?: number; limit?: number; is_sold?: boolean }) =>
-  api.get<ApiResponse<BingoCard[]>>('/cards', { params }).then(r => r.data);
+export const getCards = (params: { event_id?: number; page?: number; limit?: number; is_sold?: string; search?: string; caja?: string; lote?: string; almacen_id?: number }) =>
+  api.get<ApiResponse<(BingoCard & { lote_code?: string; caja_code?: string; almacen_name?: string })[]>>('/cards', { params }).then(r => r.data);
 
 export const getCard = (id: number) =>
   api.get<ApiResponse<BingoCard>>(`/cards/${id}`).then(r => r.data);
 
-export const generateCards = (eventId: number, quantity: number) =>
-  api.post<ApiResponse<{ generated: number; duplicatesAvoided: number; generationTime: number }>>('/cards/generate', { event_id: eventId, quantity }).then(r => r.data);
+export const generateCards = (eventId: number, quantity: number, lotesPorCaja: number = 50) =>
+  api.post<ApiResponse<{ generated: number; duplicatesAvoided: number; generationTime: number; lotes_creados: number; cajas_creadas: number; lotes_por_caja: number; cartones_por_caja: number }>>('/cards/generate', { event_id: eventId, quantity, lotes_por_caja: lotesPorCaja }).then(r => r.data);
 
 export const getGenerationProgress = (eventId: number) =>
   api.get<ApiResponse<{ total: number; generated: number; status: string } | null>>(`/cards/generate/progress/${eventId}`).then(r => r.data);
@@ -122,6 +126,9 @@ export const cancelGame = (id: number) =>
 export const resetGame = (id: number) =>
   api.post<ApiResponse<GameState>>(`/games/${id}/reset`).then(r => r.data);
 
+export const replayGame = (id: number) =>
+  api.post<ApiResponse<GameState>>(`/games/${id}/replay`).then(r => r.data);
+
 export const getGameWinners = (id: number) =>
   api.get<ApiResponse<Winner[]>>(`/games/${id}/winners`).then(r => r.data);
 
@@ -151,53 +158,195 @@ export const getRecentWinners = (limit?: number) =>
 export const downloadCardsCSV = (eventId: number) =>
   api.get(`/export/csv/${eventId}`, { responseType: 'blob' }).then(r => r.data);
 
+export const generateQRCodes = (data: {
+  event_id: number;
+  base_url: string;
+  size?: number;
+  from_card?: number;
+  to_card?: number;
+  from_series?: number;
+  to_series?: number;
+}) =>
+  api.post<ApiResponse<{
+    event_name: string;
+    cards_processed: number;
+    qr_size: string;
+    url_template: string;
+    zip_size_mb: string;
+    sample_url: string;
+  }>>('/export/qr', data).then(r => r.data);
+
+export const getQRProgress = (eventId: number) =>
+  api.get<ApiResponse<{ total: number; generated: number; status: string } | null>>(`/export/qr/progress/${eventId}`).then(r => r.data);
+
+export const downloadQRZip = (eventId: number) =>
+  api.get(`/export/qr/download/${eventId}`, { responseType: 'blob' }).then(r => r.data);
+
 // =====================================================
-// INVENTARIO
+// PROMOCIONES / RASPADITO
 // =====================================================
 
-export const getInventoryLevels = (eventId: number) =>
-  api.get<ApiResponse<InventoryLevel[]>>(`/inventory/events/${eventId}/levels`).then(r => r.data);
+export const getPromoConfig = (eventId: number) =>
+  api.get<ApiResponse<PromoData>>(`/promo/events/${eventId}`).then(r => r.data);
 
-export const setInventoryLevels = (eventId: number, levels: { level: number; name: string }[]) =>
-  api.post<ApiResponse<InventoryLevel[]>>(`/inventory/events/${eventId}/levels`, { levels }).then(r => r.data);
+export const savePromoConfig = (eventId: number, data: { is_enabled: boolean; no_prize_text: string }) =>
+  api.post<ApiResponse<PromoConfig>>(`/promo/events/${eventId}/config`, data).then(r => r.data);
 
-export const getInventoryNodes = (eventId: number, tree = false) =>
-  api.get<ApiResponse<InventoryNode[]>>(`/inventory/events/${eventId}/nodes`, { params: { tree } }).then(r => r.data);
+export const savePromoPrizes = (eventId: number, prizes: { name: string; quantity: number }[]) =>
+  api.post<ApiResponse<PromoPrize[]>>(`/promo/events/${eventId}/prizes`, { prizes }).then(r => r.data);
 
-export const getInventoryNode = (nodeId: number) =>
-  api.get<ApiResponse<InventoryNode>>(`/inventory/nodes/${nodeId}`).then(r => r.data);
+export const distributePromo = (eventId: number) =>
+  api.post<ApiResponse<PromoDistributeResult>>(`/promo/events/${eventId}/distribute`).then(r => r.data);
 
-export const createInventoryNode = (eventId: number, data: { parent_id?: number; name: string; code?: string; contact_name?: string; contact_phone?: string }) =>
-  api.post<ApiResponse<InventoryNode>>(`/inventory/events/${eventId}/nodes`, data).then(r => r.data);
+export const clearPromo = (eventId: number) =>
+  api.post<ApiResponse<{ message: string }>>(`/promo/events/${eventId}/clear`).then(r => r.data);
 
-export const updateInventoryNode = (nodeId: number, data: Partial<InventoryNode>) =>
-  api.put<ApiResponse<InventoryNode>>(`/inventory/nodes/${nodeId}`, data).then(r => r.data);
+export const getPromoWinners = (eventId: number, params?: { page?: number; limit?: number; prize?: string }) =>
+  api.get<ApiResponse<PromoWinner[]>>(`/promo/events/${eventId}/winners`, { params }).then(r => r.data);
 
-export const loadCardsToNode = (nodeId: number, selection: CardSelection) =>
-  api.post<ApiResponse<BatchResult>>(`/inventory/nodes/${nodeId}/load`, { selection }).then(r => r.data);
+// =====================================================
+// INVENTARIO - ALMACENES
+// =====================================================
 
-export const assignCardsToChild = (nodeId: number, target_node_id: number, selection: CardSelection, notes?: string) =>
-  api.post<ApiResponse<BatchResult>>(`/inventory/nodes/${nodeId}/assign`, { target_node_id, selection, notes }).then(r => r.data);
+export const getAlmacenes = (eventId: number) =>
+  api.get<ApiResponse<Almacen[]>>('/inventario/almacenes', { params: { event_id: eventId } }).then(r => r.data);
 
-export const returnCardsToParent = (nodeId: number, selection: CardSelection, notes?: string) =>
-  api.post<ApiResponse<BatchResult>>(`/inventory/nodes/${nodeId}/return`, { selection, notes }).then(r => r.data);
+export const getAlmacenTree = (eventId: number) =>
+  api.get<ApiResponse<Almacen[]>>(`/inventario/almacenes/tree/${eventId}`).then(r => r.data);
 
-export const sellCardsAtNode = (nodeId: number, selection: CardSelection, buyer_name?: string, buyer_phone?: string) =>
-  api.post<ApiResponse<BatchResult>>(`/inventory/nodes/${nodeId}/sell`, { selection, buyer_name, buyer_phone }).then(r => r.data);
+export const createAlmacen = (data: { event_id: number; name: string; code?: string; parent_id?: number; address?: string; contact_name?: string; contact_phone?: string }) =>
+  api.post<ApiResponse<Almacen>>('/inventario/almacenes', data).then(r => r.data);
 
-export const getNodeCards = (nodeId: number, params?: { status?: string; page?: number; limit?: number }) =>
-  api.get<ApiResponse<BingoCard[]>>(`/inventory/nodes/${nodeId}/cards`, { params }).then(r => r.data);
+export const updateAlmacen = (id: number, data: { name?: string; parent_id?: number | null; address?: string; contact_name?: string; contact_phone?: string; is_active?: boolean }) =>
+  api.put<ApiResponse<Almacen>>(`/inventario/almacenes/${id}`, data).then(r => r.data);
 
-export const getNodeSummary = (nodeId: number) =>
-  api.get<ApiResponse<InventorySummary>>(`/inventory/nodes/${nodeId}/summary`).then(r => r.data);
+export const getAlmacen = (id: number) =>
+  api.get<ApiResponse<Almacen>>(`/inventario/almacenes/${id}`).then(r => r.data);
 
-export const getNodeConsolidated = (nodeId: number) =>
-  api.get<ApiResponse<ConsolidatedSummary>>(`/inventory/nodes/${nodeId}/consolidated`).then(r => r.data);
+export const getAlmacenUsuarios = (almacenId: number) =>
+  api.get<ApiResponse<AlmacenUsuario[]>>(`/inventario/almacenes/${almacenId}/usuarios`).then(r => r.data);
 
-export const getEventInventoryOverview = (eventId: number) =>
-  api.get<ApiResponse<EventInventoryOverview>>(`/inventory/events/${eventId}/overview`).then(r => r.data);
+export const getInventarioUsuarios = (eventId: number) =>
+  api.get<ApiResponse<(AlmacenUsuario & { almacen_name: string; almacen_code: string })[]>>(`/inventario/usuarios/${eventId}`).then(r => r.data);
 
-export const getInventoryMovements = (eventId: number, params?: { node_id?: number; movement_type?: string; page?: number; limit?: number }) =>
-  api.get<ApiResponse<MovementRecord[]>>(`/inventory/events/${eventId}/movements`, { params }).then(r => r.data);
+export const getMisAlmacenes = () =>
+  api.get<ApiResponse<{ almacen_id: number; almacen_name: string; almacen_code: string; event_id: number; event_name: string; rol: string }[]>>('/inventario/mis-almacenes').then(r => r.data);
+
+export const addUsuarioToAlmacen = (almacenId: number, data: { user_id: number; rol: string }) =>
+  api.post<ApiResponse<AlmacenUsuario>>(`/inventario/almacenes/${almacenId}/usuarios`, data).then(r => r.data);
+
+export const removeUsuarioFromAlmacen = (almacenId: number, userId: number) =>
+  api.delete<ApiResponse<void>>(`/inventario/almacenes/${almacenId}/usuarios/${userId}`).then(r => r.data);
+
+export const updateUsuarioAlmacen = (almacenId: number, userId: number, data: { rol?: string; new_almacen_id?: number }) =>
+  api.put<ApiResponse<AlmacenUsuario>>(`/inventario/almacenes/${almacenId}/usuarios/${userId}`, data).then(r => r.data);
+
+// =====================================================
+// INVENTARIO - RESUMEN
+// =====================================================
+
+export const getResumenInventario = (eventId: number, almacenId?: number) =>
+  api.get<ApiResponse<ResumenInventario>>(`/inventario/resumen/${eventId}`, { params: almacenId ? { almacen_id: almacenId } : undefined }).then(r => r.data);
+
+export const getCajas = (eventId: number, almacenId?: number) =>
+  api.get<ApiResponse<CajaReal[]>>(`/inventario/cajas/${eventId}`, { params: almacenId ? { almacen_id: almacenId } : undefined }).then(r => r.data);
+
+export const getCajasDisponibles = (eventId: number) =>
+  api.get<ApiResponse<{ id: number; caja_code: string; total_lotes: number; total_cartones: number; almacen_id: number | null; almacen_name: string | null }[]>>(`/inventario/cajas-disponibles/${eventId}`).then(r => r.data);
+
+export const cargarInventario = (data: { event_id: number; almacen_id: number; caja_ids: number[] }) =>
+  api.post<ApiResponse<{ cargadas: number }>>('/inventario/cargar-inventario', data).then(r => r.data);
+
+export const crearInventarioInicial = (eventId: number) =>
+  api.post<ApiResponse<{ cajasAsignadas: number; almacen: string; message?: string }>>(`/inventario/inventario-inicial/${eventId}`).then(r => r.data);
+
+export const cargarPorReferencia = (data: { event_id: number; almacen_id: number; tipo_entidad: string; referencia: string; firma_entrega?: string; firma_recibe?: string; nombre_entrega?: string; nombre_recibe?: string }) =>
+  api.post<ApiResponse<{ tipo: string; referencia: string; cartones: number; movimientoId?: number }>>('/inventario/cargar-por-referencia', data).then(r => r.data);
+
+// =====================================================
+// INVENTARIO - ASIGNACIONES
+// =====================================================
+
+export const getAsignaciones = (eventId: number, params?: { almacen_id?: number; estado?: string; proposito?: string; persona?: string; page?: number; limit?: number }) =>
+  api.get<ApiResponse<InvAsignacion[]>>(`/inventario/asignaciones/${eventId}`, { params }).then(r => r.data);
+
+export const getAsignacion = (id: number) =>
+  api.get<ApiResponse<InvAsignacion>>(`/inventario/asignaciones/detalle/${id}`).then(r => r.data);
+
+export const createAsignacion = (data: {
+  event_id: number; almacen_id: number; tipo_entidad: string; referencia: string;
+  persona_nombre: string; persona_telefono?: string; persona_user_id?: number; proposito: string;
+  firma_entrega?: string; firma_recibe?: string; nombre_entrega?: string; nombre_recibe?: string;
+}) =>
+  api.post<ApiResponse<InvAsignacion>>('/inventario/asignaciones', data).then(r => r.data);
+
+export const devolverAsignacion = (id: number, firmas?: { firma_entrega?: string; firma_recibe?: string; nombre_entrega?: string; nombre_recibe?: string }) =>
+  api.post<ApiResponse<InvAsignacion>>(`/inventario/asignaciones/${id}/devolver`, firmas).then(r => r.data);
+
+export const cancelarAsignacion = (id: number, firmas?: { firma_entrega?: string; nombre_entrega?: string }) =>
+  api.post<ApiResponse<InvAsignacion>>(`/inventario/asignaciones/${id}/cancelar`, firmas).then(r => r.data);
+
+export const getMovimientoPdf = (movimientoId: number) =>
+  api.get(`/inventario/movimientos/pdf/${movimientoId}`, { responseType: 'blob' }).then(r => r.data);
+
+// =====================================================
+// INVENTARIO - VENTAS
+// =====================================================
+
+export const venderCarton = (cartonId: number, data?: { comprador_nombre?: string; comprador_telefono?: string }) =>
+  api.post<ApiResponse<InvAsignacionCarton>>(`/inventario/vender/carton/${cartonId}`, data).then(r => r.data);
+
+export const venderTodos = (asignacionId: number, data?: { comprador_nombre?: string; comprador_telefono?: string }) =>
+  api.post<ApiResponse<{ vendidos: number }>>(`/inventario/vender/todos/${asignacionId}`, data).then(r => r.data);
+
+export const validarReferencia = (eventId: number, referencia: string, almacenId?: number) =>
+  api.get<ApiResponse<{
+    tipo: string | null; referencia: string; existe: boolean; enMiAlmacen?: boolean;
+    almacen?: string; totalCartones?: number; vendidos?: number; disponibles?: number;
+  }>>(`/inventario/validar-referencia/${eventId}/${encodeURIComponent(referencia)}`, {
+    params: almacenId ? { almacen_id: almacenId } : undefined,
+  }).then(r => r.data);
+
+export const ejecutarVenta = (data: {
+  event_id: number; almacen_id: number;
+  items: { tipo: string; referencia: string }[];
+  buyer_name?: string; buyer_phone?: string;
+  firma_entrega?: string; firma_recibe?: string; nombre_entrega?: string; nombre_recibe?: string;
+}) =>
+  api.post<ApiResponse<{ documentoId: number; exitosos: number; totalCartones: number; errores: string[] }>>('/inventario/venta', data).then(r => r.data);
+
+// =====================================================
+// INVENTARIO - MOVIMIENTOS
+// =====================================================
+
+export const getMovimientos = (eventId: number, params?: { almacen_id?: number; tipo_entidad?: string; accion?: string; referencia?: string; page?: number; limit?: number }) =>
+  api.get<ApiResponse<InvMovimiento[]>>(`/inventario/movimientos/${eventId}`, { params }).then(r => r.data);
+
+export const getTrazabilidad = (eventId: number, referencia: string) =>
+  api.get<ApiResponse<InvMovimiento[]>>(`/inventario/trazabilidad/${eventId}/${referencia}`).then(r => r.data);
+
+// Documentos de movimiento (agrupados)
+export const ejecutarMovimientoBulk = (data: {
+  event_id: number; accion: string; almacen_destino_id: number; almacen_origen_id?: number;
+  items: { tipo: string; referencia: string }[];
+  firma_entrega?: string; firma_recibe?: string; nombre_entrega?: string; nombre_recibe?: string;
+}) =>
+  api.post<ApiResponse<{ documentoId: number; exitosos: number; errores: string[] }>>('/inventario/movimiento-bulk', data).then(r => r.data);
+
+export const getDocumentos = (eventId: number, params?: { almacen_id?: number; accion?: string; page?: number; limit?: number }) =>
+  api.get<ApiResponse<any[]>>(`/inventario/documentos/${eventId}`, { params }).then(r => r.data);
+
+export const getDocumento = (documentoId: number) =>
+  api.get<ApiResponse<{ documento: any; movimientos: InvMovimiento[] }>>(`/inventario/documentos/detalle/${documentoId}`).then(r => r.data);
+
+export const getDocumentoPdf = (documentoId: number) =>
+  api.get(`/inventario/documentos/pdf/${documentoId}`, { responseType: 'blob' }).then(r => r.data);
+
+// =====================================================
+// INVENTARIO - ESCANEO
+// =====================================================
+
+export const escanearCodigo = (eventId: number, codigo: string) =>
+  api.get<ApiResponse<{ tipo: string; entidad: unknown; asignacion: InvAsignacion | null }>>(`/inventario/escanear/${eventId}/${codigo}`).then(r => r.data);
 
 export default api;

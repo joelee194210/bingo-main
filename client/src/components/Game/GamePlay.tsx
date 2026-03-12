@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -23,6 +23,7 @@ import {
   callRandomBall,
   finishGame,
   resetGame,
+  replayGame,
   downloadGameReportPDF,
 } from '@/services/api';
 import { toast } from 'sonner';
@@ -60,8 +61,9 @@ export default function GamePlay() {
   const [gameReport, setGameReport] = useState<GameReport | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<'finish' | 'reset' | 'reset-finished' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'finish' | 'reset' | null>(null);
 
+  const navigate = useNavigate();
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
@@ -80,6 +82,9 @@ export default function GamePlay() {
   });
 
   const gameState = data?.data;
+
+  // Derivar última balota del estado del servidor como fallback
+  const displayedLastBall = lastCalledBall ?? (gameState?.calledBalls?.length ? gameState.calledBalls[gameState.calledBalls.length - 1] : null);
 
   // Mutations
   const startMutation = useMutation({
@@ -133,6 +138,19 @@ export default function GamePlay() {
       setLastCalledBall(null);
       setWinners([]);
       refetch();
+    },
+  });
+
+  const replayMutation = useMutation({
+    mutationFn: () => replayGame(Number(id)),
+    onSuccess: (response) => {
+      if (response.success && response.data) {
+        toast.success('Nuevo juego creado');
+        navigate(`/games/${response.data.id}`);
+      }
+    },
+    onError: () => {
+      toast.error('Error al crear nuevo juego');
     },
   });
 
@@ -319,16 +337,16 @@ export default function GamePlay() {
       </div>
 
       {/* Last Called Ball */}
-      {lastCalledBall && (
+      {displayedLastBall && (
         <Card>
           <CardContent className="py-8 flex items-center justify-center">
             <div className="text-center">
               <p className="text-sm text-muted-foreground mb-2">Última balota</p>
-              <div className={`bingo-ball bingo-ball-${getColumn(lastCalledBall)} w-24 h-24 text-4xl animate-bounce-slow`}>
-                {lastCalledBall}
+              <div className={`bingo-ball bingo-ball-${getColumn(displayedLastBall)} w-24 h-24 text-4xl animate-bounce-slow`}>
+                {displayedLastBall}
               </div>
               <p className="mt-2 text-lg font-semibold">
-                {getColumn(lastCalledBall)}-{lastCalledBall}
+                {getColumn(displayedLastBall)}-{displayedLastBall}
               </p>
             </div>
           </CardContent>
@@ -392,12 +410,31 @@ export default function GamePlay() {
             )}
 
             {isFinished && (
-              <Button
-                onClick={() => setConfirmAction('reset-finished')}
-                disabled={resetMutation.isPending}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" /> Jugar de Nuevo
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadPdf}
+                  disabled={downloadingPdf}
+                >
+                  {downloadingPdf ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="mr-2 h-4 w-4" />
+                  )}
+                  Descargar Reporte
+                </Button>
+                <Button
+                  onClick={() => replayMutation.mutate()}
+                  disabled={replayMutation.isPending}
+                >
+                  {replayMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="mr-2 h-4 w-4" />
+                  )}
+                  Jugar de Nuevo
+                </Button>
+              </>
             )}
           </div>
         </CardContent>
@@ -497,7 +534,20 @@ export default function GamePlay() {
               </div>
             ))}
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              variant="outline"
+              onClick={handleDownloadPdf}
+              disabled={downloadingPdf}
+              className="w-full"
+            >
+              {downloadingPdf ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="mr-2 h-4 w-4" />
+              )}
+              {downloadingPdf ? 'Descargando...' : 'Descargar Reporte PDF'}
+            </Button>
             <Button onClick={() => setShowWinnerModal(false)} className="w-full">
               Continuar
             </Button>

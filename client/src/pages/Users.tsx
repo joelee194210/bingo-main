@@ -174,9 +174,11 @@ export default function Users() {
   // Filtrar usuarios por búsqueda
   const filteredUsers = users?.filter(
     (user) =>
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase()))
+      user.role !== 'inventory' && (
+        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
   );
 
   const formatDate = (dateStr: string | null) => {

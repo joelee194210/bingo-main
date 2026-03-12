@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { Pool } from 'pg';
 import PDFDocument from 'pdfkit';
 import { createWriteStream, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
@@ -62,12 +62,12 @@ const GAME_TYPE_LABELS: Record<string, string> = {
 /**
  * Registra una balota llamada en el historial
  */
-export function recordBallCall(
-  db: Database.Database,
+export async function recordBallCall(
+  pool: Pool,
   gameId: number,
   ballNumber: number,
   callOrder: number
-): void {
+): Promise<void> {
   let column: string;
   if (ballNumber <= 15) column = 'B';
   else if (ballNumber <= 30) column = 'I';
@@ -75,38 +75,39 @@ export function recordBallCall(
   else if (ballNumber <= 60) column = 'G';
   else column = 'O';
 
-  db.prepare(`
+  await pool.query(`
     INSERT INTO ball_history (game_id, ball_number, ball_column, call_order)
-    VALUES (?, ?, ?, ?)
-  `).run(gameId, ballNumber, column, callOrder);
+    VALUES ($1, $2, $3, $4)
+  `, [gameId, ballNumber, column, callOrder]);
 }
 
 /**
  * Registra un ganador del juego
  */
-export function recordWinner(
-  db: Database.Database,
+export async function recordWinner(
+  pool: Pool,
   gameId: number,
   cardId: number,
   winningPattern: string,
   ballsToWin: number
-): void {
-  const card = db.prepare(`
+): Promise<void> {
+  const cardResult = await pool.query(`
     SELECT card_number, card_code, validation_code, buyer_name, buyer_phone
-    FROM cards WHERE id = ?
-  `).get(cardId) as {
+    FROM cards WHERE id = $1
+  `, [cardId]);
+  const card = cardResult.rows[0] as {
     card_number: number;
     card_code: string;
     validation_code: string;
     buyer_name: string | null;
     buyer_phone: string | null;
-  };
+  } | undefined;
 
   if (card) {
-    db.prepare(`
+    await pool.query(`
       INSERT INTO game_winners (game_id, card_id, card_number, card_code, validation_code, buyer_name, buyer_phone, winning_pattern, balls_to_win)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
       gameId,
       cardId,
       card.card_number,
@@ -116,41 +117,44 @@ export function recordWinner(
       card.buyer_phone,
       winningPattern,
       ballsToWin
-    );
+    ]);
   }
 }
 
 /**
  * Genera el reporte completo de un juego
  */
-export function generateGameReport(db: Database.Database, gameId: number): GameReport | null {
+export async function generateGameReport(pool: Pool, gameId: number): Promise<GameReport | null> {
   // Obtener datos del juego
-  const game = db.prepare(`
+  const gameResult = await pool.query(`
     SELECT g.*, e.name as event_name
     FROM games g
     JOIN events e ON g.event_id = e.id
-    WHERE g.id = ?
-  `).get(gameId) as (BingoGame & { event_name: string }) | undefined;
+    WHERE g.id = $1
+  `, [gameId]);
+  const game = gameResult.rows[0] as (BingoGame & { event_name: string }) | undefined;
 
   if (!game) {
     return null;
   }
 
   // Obtener historial de balotas
-  const ballHistory = db.prepare(`
+  const ballHistoryResult = await pool.query(`
     SELECT ball_number, ball_column, call_order, called_at
     FROM ball_history
-    WHERE game_id = ?
+    WHERE game_id = $1
     ORDER BY call_order ASC
-  `).all(gameId) as BallHistoryEntry[];
+  `, [gameId]);
+  const ballHistory = ballHistoryResult.rows as BallHistoryEntry[];
 
   // Obtener ganadores
-  const winners = db.prepare(`
+  const winnersResult = await pool.query(`
     SELECT *
     FROM game_winners
-    WHERE game_id = ?
+    WHERE game_id = $1
     ORDER BY won_at ASC
-  `).all(gameId) as WinnerEntry[];
+  `, [gameId]);
+  const winners = winnersResult.rows as WinnerEntry[];
 
   // Calcular duración
   let durationSeconds: number | null = null;
@@ -167,7 +171,7 @@ export function generateGameReport(db: Database.Database, gameId: number): GameR
     game_name: game.name,
     game_type: game.game_type,
     game_type_label: GAME_TYPE_LABELS[game.game_type] || game.game_type,
-    is_practice_mode: game.is_practice_mode === 1,
+    is_practice_mode: !!game.is_practice_mode,
     status: game.status,
     total_balls_called: ballHistory.length,
     started_at: game.started_at,
@@ -179,10 +183,21 @@ export function generateGameReport(db: Database.Database, gameId: number): GameR
   };
 
   // Guardar reporte en la BD
-  db.prepare(`
-    INSERT OR REPLACE INTO game_reports (game_id, event_name, game_name, game_type, is_practice_mode, total_balls_called, total_winners, started_at, finished_at, report_data)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  // PostgreSQL uses ON CONFLICT instead of INSERT OR REPLACE
+  await pool.query(`
+    INSERT INTO game_reports (game_id, event_name, game_name, game_type, is_practice_mode, total_balls_called, total_winners, started_at, finished_at, report_data)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    ON CONFLICT (game_id) DO UPDATE SET
+      event_name = EXCLUDED.event_name,
+      game_name = EXCLUDED.game_name,
+      game_type = EXCLUDED.game_type,
+      is_practice_mode = EXCLUDED.is_practice_mode,
+      total_balls_called = EXCLUDED.total_balls_called,
+      total_winners = EXCLUDED.total_winners,
+      started_at = EXCLUDED.started_at,
+      finished_at = EXCLUDED.finished_at,
+      report_data = EXCLUDED.report_data
+  `, [
     gameId,
     game.event_name,
     game.name,
@@ -193,7 +208,7 @@ export function generateGameReport(db: Database.Database, gameId: number): GameR
     game.started_at,
     game.finished_at,
     JSON.stringify(report)
-  );
+  ]);
 
   return report;
 }
@@ -326,31 +341,34 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
 /**
  * Obtiene los ganadores de un juego específico
  */
-export function getGameWinners(db: Database.Database, gameId: number): WinnerEntry[] {
-  return db.prepare(`
-    SELECT * FROM game_winners WHERE game_id = ? ORDER BY won_at ASC
-  `).all(gameId) as WinnerEntry[];
+export async function getGameWinners(pool: Pool, gameId: number): Promise<WinnerEntry[]> {
+  const result = await pool.query(`
+    SELECT * FROM game_winners WHERE game_id = $1 ORDER BY won_at ASC
+  `, [gameId]);
+  return result.rows as WinnerEntry[];
 }
 
 /**
  * Obtiene el historial de balotas de un juego
  */
-export function getBallHistory(db: Database.Database, gameId: number): BallHistoryEntry[] {
-  return db.prepare(`
-    SELECT * FROM ball_history WHERE game_id = ? ORDER BY call_order ASC
-  `).all(gameId) as BallHistoryEntry[];
+export async function getBallHistory(pool: Pool, gameId: number): Promise<BallHistoryEntry[]> {
+  const result = await pool.query(`
+    SELECT * FROM ball_history WHERE game_id = $1 ORDER BY call_order ASC
+  `, [gameId]);
+  return result.rows as BallHistoryEntry[];
 }
 
 /**
  * Obtiene todos los juegos donde un cartón fue ganador
  */
-export function getCardWins(db: Database.Database, cardId: number): Array<WinnerEntry & { game_name: string; event_name: string }> {
-  return db.prepare(`
+export async function getCardWins(pool: Pool, cardId: number): Promise<Array<WinnerEntry & { game_name: string; event_name: string }>> {
+  const result = await pool.query(`
     SELECT gw.*, g.name as game_name, e.name as event_name
     FROM game_winners gw
     JOIN games g ON gw.game_id = g.id
     JOIN events e ON g.event_id = e.id
-    WHERE gw.card_id = ?
+    WHERE gw.card_id = $1
     ORDER BY gw.won_at DESC
-  `).all(cardId) as Array<WinnerEntry & { game_name: string; event_name: string }>;
+  `, [cardId]);
+  return result.rows as Array<WinnerEntry & { game_name: string; event_name: string }>;
 }

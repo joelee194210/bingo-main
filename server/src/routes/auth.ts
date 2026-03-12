@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getDatabase } from '../database/init.js';
+import { getPool } from '../database/init.js';
 import {
   loginUser,
   getAllUsers,
@@ -28,9 +28,8 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
-    const db = getDatabase();
-    const result = await loginUser(db, username, password);
-    db.close();
+    const pool = getPool();
+    const result = await loginUser(pool, username, password);
 
     if (!result) {
       return res.status(401).json({
@@ -80,9 +79,8 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
       });
     }
 
-    const db = getDatabase();
-    const success = await changePassword(db, req.user!.id, current_password, new_password);
-    db.close();
+    const pool = getPool();
+    const success = await changePassword(pool, req.user!.id, current_password, new_password);
 
     if (!success) {
       return res.status(400).json({
@@ -106,11 +104,10 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
 // =====================================================
 
 // GET /api/auth/users - Listar usuarios
-router.get('/users', authenticate, requireRole('admin'), (req: Request, res: Response) => {
+router.get('/users', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const db = getDatabase();
-    const users = getAllUsers(db);
-    db.close();
+    const pool = getPool();
+    const users = await getAllUsers(pool);
 
     res.json({ success: true, data: users });
   } catch (error) {
@@ -120,11 +117,10 @@ router.get('/users', authenticate, requireRole('admin'), (req: Request, res: Res
 });
 
 // GET /api/auth/users/:id - Obtener usuario
-router.get('/users/:id', authenticate, requireRole('admin'), (req: Request, res: Response) => {
+router.get('/users/:id', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const db = getDatabase();
-    const user = getUserById(db, parseInt(req.params.id as string, 10));
-    db.close();
+    const pool = getPool();
+    const user = await getUserById(pool, parseInt(req.params.id as string, 10));
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
@@ -156,7 +152,7 @@ router.post('/users', authenticate, requireRole('admin'), async (req: Request, r
       });
     }
 
-    const validRoles: UserRole[] = ['admin', 'moderator', 'seller', 'viewer'];
+    const validRoles: UserRole[] = ['admin', 'moderator', 'seller', 'viewer', 'inventory'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,
@@ -164,9 +160,8 @@ router.post('/users', authenticate, requireRole('admin'), async (req: Request, r
       });
     }
 
-    const db = getDatabase();
-    const user = await createUser(db, { username, password, email, full_name, role });
-    db.close();
+    const pool = getPool();
+    const user = await createUser(pool, { username, password, email, full_name, role });
 
     res.status(201).json({ success: true, data: user });
   } catch (error) {
@@ -194,7 +189,7 @@ router.put('/users/:id', authenticate, requireRole('admin'), async (req: Request
     }
 
     if (role) {
-      const validRoles: UserRole[] = ['admin', 'moderator', 'seller', 'viewer'];
+      const validRoles: UserRole[] = ['admin', 'moderator', 'seller', 'viewer', 'inventory'];
       if (!validRoles.includes(role)) {
         return res.status(400).json({
           success: false,
@@ -210,9 +205,8 @@ router.put('/users/:id', authenticate, requireRole('admin'), async (req: Request
       });
     }
 
-    const db = getDatabase();
-    const user = await updateUser(db, userId, { email, full_name, role, is_active, password });
-    db.close();
+    const pool = getPool();
+    const user = await updateUser(pool, userId, { email, full_name, role, is_active, password });
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
@@ -230,7 +224,7 @@ router.put('/users/:id', authenticate, requireRole('admin'), async (req: Request
 });
 
 // DELETE /api/auth/users/:id - Eliminar usuario
-router.delete('/users/:id', authenticate, requireRole('admin'), (req: Request, res: Response) => {
+router.delete('/users/:id', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const userId = parseInt(req.params.id as string, 10);
 
@@ -242,9 +236,8 @@ router.delete('/users/:id', authenticate, requireRole('admin'), (req: Request, r
       });
     }
 
-    const db = getDatabase();
-    const success = deleteUser(db, userId);
-    db.close();
+    const pool = getPool();
+    const success = await deleteUser(pool, userId);
 
     if (!success) {
       return res.status(404).json({ success: false, error: 'Usuario no encontrado' });

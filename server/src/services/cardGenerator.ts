@@ -92,16 +92,9 @@ export function generateUniqueCode(length: number = 5): string {
  * Este hash se usa para detectar duplicados rápidamente
  */
 export function calculateCardHash(numbers: CardNumbers): string {
-  // Normalizar: ordenar números dentro de cada columna para comparación consistente
-  const normalized = {
-    B: [...numbers.B].sort((a, b) => a - b),
-    I: [...numbers.I].sort((a, b) => a - b),
-    N: [...numbers.N].sort((a, b) => a - b),
-    G: [...numbers.G].sort((a, b) => a - b),
-    O: [...numbers.O].sort((a, b) => a - b),
-  };
-
-  const hashInput = JSON.stringify(normalized);
+  // No ordenar: el orden de filas importa para patrones horizontales
+  // Dos cartones con los mismos números en diferente orden son cartones distintos
+  const hashInput = JSON.stringify(numbers);
   return createHash('sha256').update(hashInput).digest('hex').substring(0, 32);
 }
 

@@ -34,7 +34,11 @@ export default function Login() {
       const success = await login(username, password);
 
       if (success) {
-        navigate(from, { replace: true });
+        // Usuarios de inventario van directo a la página de inventario
+        const userStr = localStorage.getItem('bingo_auth_user');
+        const userData = userStr ? JSON.parse(userStr) : null;
+        const destination = userData?.role === 'inventory' ? '/inventory' : from;
+        navigate(destination, { replace: true });
       } else {
         setError('Usuario o contrasena incorrectos');
       }

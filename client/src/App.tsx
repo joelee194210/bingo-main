@@ -10,9 +10,15 @@ import CardGenerator from './components/Cards/CardGenerator';
 import GameList from './components/Game/GameList';
 import GamePlay from './components/Game/GamePlay';
 import CardValidator from './components/Cards/CardValidator';
+import CardActivation from './components/Cards/CardActivation';
 import Users from './pages/Users';
+import QRExport from './components/Export/QRExport';
+import PromoPage from './components/Promo/PromoPage';
 import InventoryPage from './components/Inventory/InventoryPage';
-import MovementHistory from './components/Inventory/MovementHistory';
+import AsignacionDetail from './components/Inventory/AsignacionDetail';
+import InventarioUsuarios from './components/Inventory/InventarioUsuarios';
+import MiInventario from './components/Inventory/MiInventario';
+import VentaPage from './components/Inventory/VentaPage';
 
 function App() {
   return (
@@ -48,6 +54,16 @@ function App() {
           }
         />
 
+        {/* Activar/Vender cartones */}
+        <Route
+          path="cards/activate"
+          element={
+            <ProtectedRoute permission="cards:sell">
+              <CardActivation />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Validar cartones - todos pueden validar */}
         <Route path="cards/validate" element={<CardValidator />} />
 
@@ -74,6 +90,16 @@ function App() {
           }
         />
 
+        {/* Promocion / Raspadito */}
+        <Route
+          path="promo"
+          element={
+            <ProtectedRoute permission="cards:create">
+              <PromoPage />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Inventario */}
         <Route
           path="inventory"
@@ -84,10 +110,52 @@ function App() {
           }
         />
         <Route
-          path="inventory/movements/:eventId"
+          path="inventory/:eventId"
           element={
             <ProtectedRoute permission="inventory:read">
-              <MovementHistory />
+              <InventoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="inventory/:eventId/asignacion/:id"
+          element={
+            <ProtectedRoute permission="inventory:read">
+              <AsignacionDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="inventory/usuarios"
+          element={
+            <ProtectedRoute permission="inventory:manage">
+              <InventarioUsuarios />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="inventory/mi-inventario"
+          element={
+            <ProtectedRoute permission="inventory:read">
+              <MiInventario />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="inventory/venta"
+          element={
+            <ProtectedRoute permission="inventory:read">
+              <VentaPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Exportar QR Codes */}
+        <Route
+          path="export/qr"
+          element={
+            <ProtectedRoute permission="cards:export">
+              <QRExport />
             </ProtectedRoute>
           }
         />
