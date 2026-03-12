@@ -79,15 +79,15 @@
      ======================================== */
   .sidebar {
     background: linear-gradient(180deg,
-      hsl(222 47% 11%) 0%,
-      hsl(222 50% 7%) 100%
+      hsl(215 50% 18%) 0%,
+      hsl(215 55% 13%) 100%
     );
   }
 
   .dark .sidebar {
     background: linear-gradient(180deg,
-      hsl(222 47% 5%) 0%,
-      hsl(222 50% 3%) 100%
+      hsl(215 50% 14%) 0%,
+      hsl(215 55% 9%) 100%
     );
   }
 

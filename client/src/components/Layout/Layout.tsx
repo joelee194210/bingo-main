@@ -35,21 +35,46 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:read' },
-  { to: '/events', icon: CalendarDays, label: 'Eventos', permission: 'events:read' },
-  { to: '/cards', icon: CreditCard, label: 'Cartones', permission: 'cards:read' },
-  { to: '/games', icon: Gamepad2, label: 'Juegos', permission: 'games:read' },
-  { to: '/inventory', icon: Warehouse, label: 'Inventario', permission: 'inventory:read' },
-  { to: '/cards/activate', icon: ScanLine, label: 'Activacion', permission: 'cards:sell' },
-  { to: '/promo', icon: Gift, label: 'Raspadito', permission: 'cards:create' },
-  { to: '/export/qr', icon: QrCode, label: 'QR Codes', permission: 'cards:export' },
-  { to: '/export/barcode', icon: Barcode, label: 'Cod. Barras', permission: 'cards:export' },
-  { to: '/cards/validate', icon: CheckCircle, label: 'Validar', permission: 'cards:read' },
-  { to: '/inventory/mi-inventario', icon: PackageOpen, label: 'Mi Inventario', permission: 'inventory:read' },
-  { to: '/inventory/venta', icon: ShoppingCart, label: 'Punto de Venta', permission: 'inventory:read' },
-  { to: '/inventory/usuarios', icon: UserCog, label: 'Usuarios Inventario', permission: 'inventory:manage' },
-  { to: '/users', icon: Users, label: 'Usuarios', permission: 'users:read' },
+const navGroups = [
+  {
+    label: 'Principal',
+    items: [
+      { to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:read' },
+      { to: '/events', icon: CalendarDays, label: 'Eventos', permission: 'events:read' },
+      { to: '/games', icon: Gamepad2, label: 'Juegos', permission: 'games:read' },
+    ],
+  },
+  {
+    label: 'Cartones',
+    items: [
+      { to: '/cards', icon: CreditCard, label: 'Cartones', permission: 'cards:read' },
+      { to: '/cards/activate', icon: ScanLine, label: 'Activacion', permission: 'cards:sell' },
+      { to: '/cards/validate', icon: CheckCircle, label: 'Validar', permission: 'cards:read' },
+      { to: '/promo', icon: Gift, label: 'Raspadito', permission: 'cards:create' },
+    ],
+  },
+  {
+    label: 'Inventario',
+    items: [
+      { to: '/inventory', icon: Warehouse, label: 'Inventario', permission: 'inventory:read' },
+      { to: '/inventory/mi-inventario', icon: PackageOpen, label: 'Mi Inventario', permission: 'inventory:read' },
+      { to: '/inventory/venta', icon: ShoppingCart, label: 'Punto de Venta', permission: 'inventory:read' },
+      { to: '/inventory/usuarios', icon: UserCog, label: 'Usuarios Inv.', permission: 'inventory:manage' },
+    ],
+  },
+  {
+    label: 'Exportar',
+    items: [
+      { to: '/export/qr', icon: QrCode, label: 'QR Codes', permission: 'cards:export' },
+      { to: '/export/barcode', icon: Barcode, label: 'Cod. Barras', permission: 'cards:export' },
+    ],
+  },
+  {
+    label: 'Sistema',
+    items: [
+      { to: '/users', icon: Users, label: 'Usuarios', permission: 'users:read' },
+    ],
+  },
 ];
 
 export default function Layout() {
@@ -62,7 +87,12 @@ export default function Layout() {
     navigate('/login');
   };
 
-  const visibleNavItems = navItems.filter((item) => hasPermission(item.permission));
+  const visibleGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => hasPermission(item.permission)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
@@ -85,7 +115,7 @@ export default function Layout() {
 
       {/* Sidebar */}
       <aside
-        className={`sidebar fixed top-0 left-0 z-50 h-full w-64 transform transition-transform duration-300 lg:translate-x-0 ${
+        className={`sidebar fixed top-0 left-0 z-50 h-full w-64 flex flex-col transform transition-transform duration-300 lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -112,30 +142,34 @@ export default function Layout() {
 
         <Separator className="bg-white/[0.06] mx-5" />
 
-        {/* Navigation */}
-        <nav className="p-3 mt-2 space-y-0.5">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest px-4 mb-2">
-            Menu
-          </p>
-          {visibleNavItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                isActive ? 'sidebar-item sidebar-item-active' : 'sidebar-item'
-              }
-              onClick={() => setSidebarOpen(false)}
-            >
-              <item.icon className="h-[18px] w-[18px] sidebar-icon" />
-              <span className="text-[13px] flex-1">{item.label}</span>
-              <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </NavLink>
+        {/* Navigation — scrollable */}
+        <nav className="flex-1 overflow-y-auto p-3 mt-2 space-y-3">
+          {visibleGroups.map((group) => (
+            <div key={group.label} className="space-y-0.5">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest px-4 mb-1">
+                {group.label}
+              </p>
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={({ isActive }) =>
+                    isActive ? 'sidebar-item sidebar-item-active' : 'sidebar-item'
+                  }
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <item.icon className="h-[18px] w-[18px] sidebar-icon" />
+                  <span className="text-[13px] flex-1">{item.label}</span>
+                  <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 
-        {/* User section at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-4">
+        {/* User section at bottom — fixed */}
+        <div className="flex-shrink-0 p-4">
           <Separator className="bg-white/[0.06] mb-4" />
           <div className="flex items-center gap-3 px-2">
             <Avatar className="h-8 w-8 ring-2 ring-blue-500/20">
@@ -208,6 +242,12 @@ export default function Layout() {
         <main className="p-4 lg:p-8 animate-fade-in-up">
           <Outlet />
         </main>
+
+        {/* Footer */}
+        <footer className="border-t px-4 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>Bingo Pro Manager &copy; 2026</span>
+          <span>v2.0</span>
+        </footer>
       </div>
     </div>
   );
