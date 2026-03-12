@@ -260,7 +260,7 @@ export default function MiInventario() {
                           <div className="flex flex-wrap items-center gap-3 ml-auto text-xs text-muted-foreground">
                             <span>{caja.total_lotes} libretas</span>
                             <span>{caja.total_cartones} cartones</span>
-                            <span className="text-orange-600">{vendidosCaja} vendidos</span>
+                            <span className="text-blue-600">{vendidosCaja} vendidos</span>
                             <span className="text-green-600 font-medium">{caja.total_cartones - vendidosCaja} disp.</span>
                             <Badge variant="outline" className="capitalize text-xs">{caja.status}</Badge>
                           </div>
@@ -294,7 +294,7 @@ export default function MiInventario() {
                                     <span className="text-xs text-muted-foreground">Serie: {lote.series_number}</span>
                                     <div className="flex flex-wrap items-center gap-3 ml-auto text-xs text-muted-foreground">
                                       <span>{lote.total_cards} cartones</span>
-                                      <span className="text-orange-600">{lote.cards_sold} vendidos</span>
+                                      <span className="text-blue-600">{lote.cards_sold} vendidos</span>
                                       <span className="text-green-600 font-medium">{disponibles} disp.</span>
                                     </div>
                                   </button>
@@ -308,7 +308,7 @@ export default function MiInventario() {
                                             key={c.id}
                                             className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs border ${
                                               c.is_sold
-                                                ? 'bg-orange-50 border-orange-200 text-orange-700'
+                                                ? 'bg-blue-50 border-blue-200 text-blue-700'
                                                 : 'bg-green-50 border-green-200 text-green-700'
                                             }`}
                                           >

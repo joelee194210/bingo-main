@@ -59,7 +59,7 @@ export default function GameList() {
     switch (status) {
       case 'in_progress': return <Play className="text-green-500 h-4 w-4" />;
       case 'completed': return <Trophy className="text-yellow-500 h-4 w-4" />;
-      case 'paused': return <Clock className="text-orange-500 h-4 w-4" />;
+      case 'paused': return <Clock className="text-yellow-500 h-4 w-4" />;
       default: return <Gamepad2 className="text-muted-foreground h-4 w-4" />;
     }
   };

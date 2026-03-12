@@ -78,7 +78,7 @@ export default function Dashboard() {
   const stats = data.data!;
 
   const statCards = [
-    { label: 'Total Eventos', value: stats.total_events, icon: CalendarDays, variant: 'amber' as const },
+    { label: 'Total Eventos', value: stats.total_events, icon: CalendarDays, variant: 'blue' as const },
     { label: 'Eventos Activos', value: stats.active_events, icon: TrendingUp, variant: 'emerald' as const },
     { label: 'Total Cartones', value: stats.total_cards.toLocaleString(), icon: CreditCard, variant: 'violet' as const },
     { label: 'Cartones Vendidos', value: stats.total_cards_sold.toLocaleString(), icon: ShoppingCart, variant: 'rose' as const },
@@ -210,7 +210,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
                         {game.status === 'completed' ? (
-                          <Trophy className="h-4 w-4 text-amber-500" />
+                          <Trophy className="h-4 w-4 text-blue-500" />
                         ) : (
                           <Gamepad2 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                         )}
@@ -239,7 +239,7 @@ export default function Dashboard() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link to="/events" className="action-card">
-            <div className="stat-icon-amber p-2.5 rounded-xl">
+            <div className="stat-icon-blue p-2.5 rounded-xl">
               <CalendarDays className="h-5 w-5" />
             </div>
             <div>

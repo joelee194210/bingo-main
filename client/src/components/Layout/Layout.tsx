@@ -138,8 +138,8 @@ export default function Layout() {
         <div className="absolute bottom-0 left-0 right-0 p-4">
           <Separator className="bg-white/[0.06] mb-4" />
           <div className="flex items-center gap-3 px-2">
-            <Avatar className="h-8 w-8 ring-2 ring-amber-500/20">
-              <AvatarFallback className="bg-amber-500/10 text-amber-400 text-xs font-bold">
+            <Avatar className="h-8 w-8 ring-2 ring-blue-500/20">
+              <AvatarFallback className="bg-blue-500/10 text-blue-400 text-xs font-bold">
                 {user?.full_name?.charAt(0).toUpperCase() || 'U'}
               </AvatarFallback>
             </Avatar>

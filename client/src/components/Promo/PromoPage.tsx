@@ -345,7 +345,7 @@ export default function PromoPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {hasDistributed && (
-                <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-sm text-yellow-600 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg p-3">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   Ya se distribuyeron premios. Limpie la promocion antes de cambiar premios.
                 </div>

@@ -253,7 +253,7 @@ export default function EventDetail() {
           <Link to={`/promo?event=${event.id}`}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
               <CardContent className="flex items-center gap-4 p-6">
-                <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-600">
+                <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600">
                   <Gift className="h-6 w-6" />
                 </div>
                 <div>
@@ -303,7 +303,7 @@ export default function EventDetail() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-lg text-orange-600">
+              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600">
                 <Settings className="h-6 w-6" />
               </div>
               <div>

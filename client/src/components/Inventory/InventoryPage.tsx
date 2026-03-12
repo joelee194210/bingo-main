@@ -675,7 +675,7 @@ export default function InventoryPage() {
           </CardHeader>
           <CardContent>
             {resumenLoading ? <Skeleton className="h-8 w-20" /> : (
-              <div className="text-2xl font-bold text-orange-600">{resumen?.cartonesAsignados ?? 0}</div>
+              <div className="text-2xl font-bold text-blue-600">{resumen?.cartonesAsignados ?? 0}</div>
             )}
           </CardContent>
         </Card>
@@ -1478,7 +1478,7 @@ export default function InventoryPage() {
                               <TableCell className="text-sm">{c.total_lotes}</TableCell>
                               <TableCell className="text-sm">{c.total_cartones}</TableCell>
                               <TableCell className="text-xs text-muted-foreground">
-                                {c.almacen_name || <span className="text-orange-500">Sin asignar</span>}
+                                {c.almacen_name || <span className="text-muted-foreground">Sin asignar</span>}
                               </TableCell>
                             </TableRow>
                           );

@@ -64,7 +64,7 @@ export default function Login() {
       />
 
       {/* Ambient glow */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-amber-500/[0.07] blur-[120px] rounded-full" />
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-blue-500/[0.07] blur-[120px] rounded-full" />
 
       <div className="max-w-[400px] w-full mx-4 relative z-10 animate-fade-in-up">
         {/* Logo */}
@@ -102,7 +102,7 @@ export default function Login() {
                   required
                   autoComplete="username"
                   autoFocus
-                  className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-slate-500 focus:border-amber-500/50 focus:ring-amber-500/20"
+                  className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-slate-500 focus:border-blue-500/50 focus:ring-blue-500/20"
                 />
               </div>
 
@@ -116,14 +116,14 @@ export default function Login() {
                   placeholder="Ingrese su contrasena"
                   required
                   autoComplete="current-password"
-                  className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-slate-500 focus:border-amber-500/50 focus:ring-amber-500/20"
+                  className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-slate-500 focus:border-blue-500/50 focus:ring-blue-500/20"
                 />
               </div>
 
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg shadow-amber-500/20 border-0"
+                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/20 border-0"
                 size="lg"
               >
                 {isLoading ? (
@@ -141,9 +141,9 @@ export default function Login() {
               <div className="mt-6 pt-5 border-t border-white/[0.06]">
                 <p className="text-xs text-slate-500 text-center">
                   Demo:{' '}
-                  <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-amber-400/70 text-[11px]">admin</code>
+                  <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-blue-400/70 text-[11px]">admin</code>
                   {' / '}
-                  <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-amber-400/70 text-[11px]">admin123</code>
+                  <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-blue-400/70 text-[11px]">admin123</code>
                 </p>
               </div>
             )}

@@ -20,7 +20,7 @@ function ScratchReveal({ text }: { text: string }) {
     <div className={`rounded-xl border-2 p-5 text-center space-y-3 transition-all ${
       revealed
         ? isWinner
-          ? 'border-amber-400 bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/30'
+          ? 'border-blue-400 bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-950/40 dark:to-sky-950/30'
           : 'border-border bg-muted/30'
         : 'border-dashed border-muted-foreground/30 bg-muted/20'
     }`}>
@@ -43,8 +43,8 @@ function ScratchReveal({ text }: { text: string }) {
         <div className="animate-fade-in-up">
           {isWinner ? (
             <>
-              <PartyPopper className="h-10 w-10 text-amber-500 mx-auto mb-2" />
-              <p className="text-2xl font-black text-amber-600 dark:text-amber-400">{text}</p>
+              <PartyPopper className="h-10 w-10 text-blue-500 mx-auto mb-2" />
+              <p className="text-2xl font-black text-blue-600 dark:text-blue-400">{text}</p>
               <Badge variant="success" className="mt-2">GANADOR</Badge>
             </>
           ) : (
