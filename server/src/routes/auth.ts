@@ -38,12 +38,21 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
+    // M10: setear token en httpOnly cookie
+    res.cookie('bingo_token', result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 24 horas
+      path: '/',
+    });
+
     res.json({
       success: true,
       data: {
-        token: result.token,
+        token: result.token, // mantener en response para Socket.IO auth
         user: result.user,
-        expiresIn: 24 * 60 * 60, // 24 horas en segundos
+        expiresIn: 24 * 60 * 60,
       },
     });
   } catch (error) {
@@ -58,6 +67,12 @@ router.get('/me', authenticate, (req: Request, res: Response) => {
     success: true,
     data: req.user,
   });
+});
+
+// POST /api/auth/logout - Cerrar sesión (limpiar cookie)
+router.post('/logout', (_req: Request, res: Response) => {
+  res.clearCookie('bingo_token', { path: '/' });
+  res.json({ success: true, message: 'Sesión cerrada' });
 });
 
 // POST /api/auth/change-password - Cambiar contraseña propia

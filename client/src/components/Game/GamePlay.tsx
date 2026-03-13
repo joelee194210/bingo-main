@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Play,
@@ -27,6 +27,7 @@ import {
   downloadGameReportPDF,
 } from '@/services/api';
 import { toast } from 'sonner';
+import { useGameSocket } from '@/hooks/useGameSocket';
 import { GAME_TYPE_LABELS, STATUS_LABELS, type Winner, type GameReport } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,6 +65,7 @@ export default function GamePlay() {
   const [confirmAction, setConfirmAction] = useState<'finish' | 'reset' | null>(null);
 
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
@@ -74,14 +76,42 @@ export default function GamePlay() {
     };
   }, []);
 
+  // A3: Socket.IO reemplaza polling — actualizaciones en tiempo real
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['game', id],
     queryFn: () => getGame(Number(id)),
-    refetchInterval: 2000,
     enabled: !!id,
+    // Sin refetchInterval — el socket maneja las actualizaciones
   });
 
   const gameState = data?.data;
+
+  const handleSocketGameUpdate = useCallback((socketData: unknown) => {
+    queryClient.setQueryData(['game', id], { success: true, data: socketData });
+  }, [id, queryClient]);
+
+  const handleSocketBallCalled = useCallback((result: any) => {
+    if (result?.ball) {
+      setLastCalledBall(result.ball);
+      playSound(result.ball);
+    }
+    // Refetch para tener el estado completo actualizado
+    refetch();
+  }, [refetch]);
+
+  const handleSocketWinnerFound = useCallback((socketWinners: any[]) => {
+    if (socketWinners?.length > 0) {
+      setWinners(socketWinners);
+      setShowWinnerModal(true);
+    }
+  }, []);
+
+  useGameSocket({
+    gameId: id ? Number(id) : undefined,
+    onGameUpdate: handleSocketGameUpdate,
+    onBallCalled: handleSocketBallCalled,
+    onWinnerFound: handleSocketWinnerFound,
+  });
 
   // Derivar última balota del estado del servidor como fallback
   const displayedLastBall = lastCalledBall ?? (gameState?.calledBalls?.length ? gameState.calledBalls[gameState.calledBalls.length - 1] : null);

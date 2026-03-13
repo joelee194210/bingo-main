@@ -22,7 +22,6 @@ import {
 } from '@/components/ui/select';
 import {
   getAlmacenTree,
-  getAlmacenes,
   createAlmacen,
   updateAlmacen,
   getCajas,
@@ -222,11 +221,7 @@ export default function InventoryPage() {
     enabled: !!eventId,
   });
 
-  const { data: almacenesData } = useQuery({
-    queryKey: ['almacenes', eventId],
-    queryFn: () => getAlmacenes(eventId),
-    enabled: !!eventId,
-  });
+  // B4: almacenes flat list derivada del tree (elimina query duplicada)
 
   const { data: resumenData, isLoading: resumenLoading } = useQuery({
     queryKey: ['resumen-inventario', eventId, miAlmacenId],
@@ -272,7 +267,18 @@ export default function InventoryPage() {
   });
 
   const tree = treeData?.data ?? [];
-  const almacenes = almacenesData?.data ?? [];
+  // B4: derivar lista plana del tree en lugar de query separada
+  const almacenes = useMemo(() => {
+    const flat: typeof tree = [];
+    const walk = (nodes: typeof tree) => {
+      for (const n of nodes) {
+        flat.push(n);
+        if ((n as any).children?.length) walk((n as any).children);
+      }
+    };
+    walk(tree);
+    return flat;
+  }, [tree]);
   const resumen = resumenData?.data;
   const cajas = cajasData?.data ?? [];
   const movimientos = movimientosData?.data ?? [];
@@ -498,7 +504,7 @@ export default function InventoryPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['almacen-tree', eventId] });
-      queryClient.invalidateQueries({ queryKey: ['almacenes', eventId] });
+
       toast.success('Almacen creado exitosamente');
       setShowAlmacenDialog(false);
     },
@@ -518,7 +524,7 @@ export default function InventoryPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['almacen-tree', eventId] });
-      queryClient.invalidateQueries({ queryKey: ['almacenes', eventId] });
+
       toast.success('Almacen actualizado');
       setShowAlmacenDialog(false);
       setEditingAlmacen(null);

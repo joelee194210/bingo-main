@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 import { createServer as createHttpServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import { readFileSync } from 'fs';
@@ -73,6 +74,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '5mb' }));
+app.use(cookieParser());
 app.use(helmet({ contentSecurityPolicy: false }));
 
 // Rate limiting en login

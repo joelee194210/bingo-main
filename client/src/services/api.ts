@@ -29,6 +29,7 @@ import type {
 const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true, // M10: enviar httpOnly cookies automáticamente
 });
 
 // Interceptor: redirigir a login en 401
@@ -36,8 +37,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && !error.config?.url?.includes('/auth/')) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('bingo_auth_user');
       window.location.href = '/login';
     }
     return Promise.reject(error);

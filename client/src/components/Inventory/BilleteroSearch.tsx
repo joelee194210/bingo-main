@@ -32,7 +32,9 @@ export default function BilleteroSearch({ onSelect, selectedNombre, selectedCedu
   const [query, setQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [data, setData] = useState<Billetero[]>(cachedData || []);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Cargar datos lazy al montar
   useEffect(() => {
@@ -65,6 +67,32 @@ export default function BilleteroSearch({ onSelect, selectedNombre, selectedCedu
     onSelect({ libreta: b.n, cedula: b.c, nombre: b.nm });
     setQuery('');
     setShowResults(false);
+    setHighlightedIndex(-1);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showResults || results.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(prev => {
+        const next = prev < results.length - 1 ? prev + 1 : 0;
+        listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => {
+        const next = prev > 0 ? prev - 1 : results.length - 1;
+        listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
+        return next;
+      });
+    } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+      e.preventDefault();
+      handleSelect(results[highlightedIndex]);
+    } else if (e.key === 'Escape') {
+      setShowResults(false);
+      setHighlightedIndex(-1);
+    }
   };
 
   const handleClear = () => {
@@ -123,20 +151,36 @@ export default function BilleteroSearch({ onSelect, selectedNombre, selectedCedu
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={query}
-            onChange={(e) => { setQuery(e.target.value); setShowResults(true); }}
+            onChange={(e) => { setQuery(e.target.value); setShowResults(true); setHighlightedIndex(-1); }}
             onFocus={() => setShowResults(true)}
+            onKeyDown={handleKeyDown}
             placeholder="Buscar por cedula, nombre o No. de billetero..."
             className="pl-9"
+            role="combobox"
+            aria-expanded={showResults && results.length > 0}
+            aria-controls="billetero-listbox"
+            aria-activedescendant={highlightedIndex >= 0 ? `billetero-option-${highlightedIndex}` : undefined}
           />
         </div>
 
         {showResults && results.length > 0 && (
-          <div className="absolute z-50 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-            {results.map((b) => (
+          <div
+            ref={listRef}
+            id="billetero-listbox"
+            role="listbox"
+            className="absolute z-50 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-60 overflow-y-auto"
+          >
+            {results.map((b, idx) => (
               <button
                 key={`${b.n}-${b.c}`}
+                id={`billetero-option-${idx}`}
+                role="option"
+                aria-selected={idx === highlightedIndex}
                 onClick={() => handleSelect(b)}
-                className="w-full text-left px-3 py-2 hover:bg-muted/60 transition-colors border-b last:border-b-0"
+                onMouseEnter={() => setHighlightedIndex(idx)}
+                className={`w-full text-left px-3 py-2 transition-colors border-b last:border-b-0 ${
+                  idx === highlightedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60'
+                }`}
               >
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm truncate flex-1">{b.nm}</span>

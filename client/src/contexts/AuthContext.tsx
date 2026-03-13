@@ -12,8 +12,14 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const TOKEN_KEY = 'bingo_auth_token';
+// M10: token ahora en httpOnly cookie, solo guardamos user en localStorage
 const USER_KEY = 'bingo_auth_user';
+// Token en memoria solo para Socket.IO (no persiste en localStorage)
+let memoryToken: string | null = null;
+
+export function getAuthToken(): string | null {
+  return memoryToken;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -23,31 +29,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: true,
   });
 
-  // Cargar token y usuario del localStorage al iniciar
+  // Al iniciar, verificar si la cookie httpOnly es válida
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY);
     const userStr = localStorage.getItem(USER_KEY);
 
-    if (token && userStr) {
+    if (userStr) {
       try {
         const user = JSON.parse(userStr) as User;
-        // Configurar token en axios
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         setState({
           user,
-          token,
+          token: null,
           isAuthenticated: true,
           isLoading: true,
         });
-
-        // Verificar token con el servidor
         verifyToken();
       } catch {
-        // Token o usuario inválido
         clearAuth();
       }
     } else {
-      setState(s => ({ ...s, isLoading: false }));
+      // Intentar verificar por si hay cookie válida
+      verifyToken();
     }
   }, []);
 
@@ -67,9 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const clearAuth = () => {
-    localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
-    delete api.defaults.headers.common['Authorization'];
+    memoryToken = null;
     setState({
       user: null,
       token: null,
@@ -85,12 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.data.success) {
         const { token, user } = response.data.data;
 
-        // Guardar en localStorage
-        localStorage.setItem(TOKEN_KEY, token);
+        // M10: cookie httpOnly se setea automáticamente por el server
+        // Guardar solo user en localStorage, token en memoria para Socket.IO
         localStorage.setItem(USER_KEY, JSON.stringify(user));
-
-        // Configurar token en axios
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        memoryToken = token;
 
         setState({
           user,
@@ -109,6 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    // M10: limpiar cookie httpOnly en el server
+    api.post('/auth/logout').catch(() => {});
     clearAuth();
   };
 

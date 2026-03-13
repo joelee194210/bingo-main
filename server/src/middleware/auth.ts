@@ -20,14 +20,20 @@ declare global {
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  // M10: leer token de cookie httpOnly o header Authorization
+  let token: string | undefined;
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else if (req.cookies?.bingo_token) {
+    token = req.cookies.bingo_token;
+  }
+
+  if (!token) {
     return res.status(401).json({
       success: false,
       error: 'Token de autenticación requerido',
     });
   }
-
-  const token = authHeader.substring(7);
   const payload = verifyToken(token);
 
   if (!payload) {
@@ -106,11 +112,17 @@ export function requirePermission(permission: string) {
 export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  let token: string | undefined;
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else if (req.cookies?.bingo_token) {
+    token = req.cookies.bingo_token;
+  }
+
+  if (!token) {
     return next();
   }
 
-  const token = authHeader.substring(7);
   const payload = verifyToken(token);
 
   if (payload) {

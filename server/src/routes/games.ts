@@ -18,6 +18,7 @@ import {
 } from '../services/gameEngine.js';
 import { findWinners } from '../services/cardVerifier.js';
 import { requirePermission } from '../middleware/auth.js';
+import { emitGameUpdate, emitBallCalled, emitWinnerFound } from '../app.js';
 import type { GameType, StartGameRequest } from '../types/index.js';
 
 const router = Router();
@@ -132,7 +133,9 @@ router.post('/', requirePermission('games:create'), async (req: Request, res: Re
 router.post('/:id/start', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const state = await startGame(pool, parseInt(req.params.id as string, 10));
+    const gameId = parseInt(req.params.id as string, 10);
+    const state = await startGame(pool, gameId);
+    emitGameUpdate(gameId, state);
 
     res.json({ success: true, data: state });
   } catch (error) {
@@ -146,7 +149,9 @@ router.post('/:id/start', requirePermission('games:play'), async (req: Request, 
 router.post('/:id/pause', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const state = await pauseGame(pool, parseInt(req.params.id as string, 10));
+    const gameId = parseInt(req.params.id as string, 10);
+    const state = await pauseGame(pool, gameId);
+    emitGameUpdate(gameId, state);
 
     res.json({ success: true, data: state });
   } catch (error) {
@@ -160,7 +165,9 @@ router.post('/:id/pause', requirePermission('games:play'), async (req: Request, 
 router.post('/:id/resume', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const state = await resumeGame(pool, parseInt(req.params.id as string, 10));
+    const gameId = parseInt(req.params.id as string, 10);
+    const state = await resumeGame(pool, gameId);
+    emitGameUpdate(gameId, state);
 
     res.json({ success: true, data: state });
   } catch (error) {
@@ -180,7 +187,12 @@ router.post('/:id/call', requirePermission('games:play'), async (req: Request, r
       return res.status(400).json({ success: false, error: 'Balota inválida (1-75, entero)' });
     }
 
-    const result = await callBall(pool, parseInt(req.params.id as string, 10), ball);
+    const gameId = parseInt(req.params.id as string, 10);
+    const result = await callBall(pool, gameId, ball);
+    emitBallCalled(gameId, result);
+    if (result.winners?.length > 0) {
+      emitWinnerFound(gameId, result.winners);
+    }
 
     res.json({ success: true, data: result });
   } catch (error) {
@@ -194,7 +206,12 @@ router.post('/:id/call', requirePermission('games:play'), async (req: Request, r
 router.post('/:id/call-random', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const result = await callRandomBall(pool, parseInt(req.params.id as string, 10));
+    const gameId = parseInt(req.params.id as string, 10);
+    const result = await callRandomBall(pool, gameId);
+    emitBallCalled(gameId, result);
+    if (result.winners?.length > 0) {
+      emitWinnerFound(gameId, result.winners);
+    }
 
     res.json({ success: true, data: result });
   } catch (error) {
@@ -208,7 +225,9 @@ router.post('/:id/call-random', requirePermission('games:play'), async (req: Req
 router.post('/:id/finish', requirePermission('games:finish'), async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const { gameState, report } = await finishGame(pool, parseInt(req.params.id as string, 10));
+    const gameId = parseInt(req.params.id as string, 10);
+    const { gameState, report } = await finishGame(pool, gameId);
+    emitGameUpdate(gameId, gameState);
 
     res.json({
       success: true,
@@ -228,7 +247,9 @@ router.post('/:id/finish', requirePermission('games:finish'), async (req: Reques
 router.post('/:id/cancel', requirePermission('games:finish'), async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const state = await cancelGame(pool, parseInt(req.params.id as string, 10));
+    const gameId = parseInt(req.params.id as string, 10);
+    const state = await cancelGame(pool, gameId);
+    emitGameUpdate(gameId, state);
 
     res.json({ success: true, data: state });
   } catch (error) {
@@ -242,7 +263,9 @@ router.post('/:id/cancel', requirePermission('games:finish'), async (req: Reques
 router.post('/:id/reset', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
     const pool = getPool();
-    const state = await resetGame(pool, parseInt(req.params.id as string, 10));
+    const gameId = parseInt(req.params.id as string, 10);
+    const state = await resetGame(pool, gameId);
+    emitGameUpdate(gameId, state);
 
     res.json({ success: true, data: state });
   } catch (error) {

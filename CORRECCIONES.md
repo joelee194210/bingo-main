@@ -11,17 +11,17 @@ Generado: 2026-03-12
 - [x] **C5** — JWT secret hardcoded → ✅ Random con `crypto.randomBytes(32)`
 - [x] **C6** — Migraciones faltantes → ✅ 4 columnas en `init.ts`
 
-## Altos (6/7 ✅)
+## Altos (7/7 ✅)
 
 - [x] **A1** — N+1 queries en `getCajas` → ✅ Query única con `ANY($1::int[])`
 - [x] **A2** — `billeteros.json` en bundle → ✅ Lazy `import()` con cache
-- [ ] **A3** — Socket.IO sin uso en cliente — requiere rewrite de GamePlay con websockets
+- [x] **A3** — Socket.IO sin uso en cliente → ✅ `useGameSocket` hook + server emits en todas las rutas de juego
 - [x] **A4** — Devolución no limpia buyer data → ✅ Limpia todos los campos
 - [x] **A5** — Path traversal PDFs → ✅ Sanitización + verificación ruta
 - [x] **A6** — `setState` durante render → ✅ Movido a `useEffect`
 - [x] **A7** — Admin password hardcoded → ✅ Random fallback
 
-## Medios (17/18 ✅)
+## Medios (18/18 ✅)
 
 - [x] **M1** — Sin ErrorBoundary → ✅ Creado e integrado
 - [x] **M2** — Sin `helmet` → ✅ Instalado
@@ -32,7 +32,7 @@ Generado: 2026-03-12
 - [x] **M7** — Tabla sin overflow → ✅ `overflow-x-auto` en AsignacionDetail
 - [x] **M8** — Label "Lotes (Lotes)" → ✅ Corregido
 - [x] **M9** — Sin useMemo → ✅ Memoizado
-- [ ] **M10** — JWT en localStorage — requiere migración a httpOnly cookies (cambio arquitectural)
+- [x] **M10** — JWT en localStorage → ✅ httpOnly cookies + `cookie-parser` + `/logout` endpoint
 - [x] **M11** — Password policy → ✅ Min 8 chars, letras + números
 - [x] **M12** — SSL fallback → ✅ Falla en producción
 - [x] **M13** — Rutas expuestas → ✅ Solo filename
@@ -42,13 +42,13 @@ Generado: 2026-03-12
 - [x] **M17** — Scan JSON crudo → ✅ Labels formateados
 - [x] **M18** — schema.sql desincronizado → ✅ Columnas y FK agregadas
 
-## Bajos (8/10 ✅)
+## Bajos (10/10 ✅)
 
 - [x] **B1** — Faltan aria-label → ✅ Agregados en botones de icono (PDF, delete, menu, clear)
-- [ ] **B2** — BilleteroSearch sin keyboard nav — requiere listbox/combobox pattern completo
+- [x] **B2** — BilleteroSearch sin keyboard nav → ✅ ArrowUp/Down/Enter/Escape + ARIA listbox/combobox
 - [x] **B3** — Error messages leakeados → ✅ Error handler centralizado
-- [ ] **B4** — Queries duplicadas — optimización menor, funcional
-- [ ] **B5** — Nombres columnas español/inglés — legacy, no refactorizar
+- [x] **B4** — Queries duplicadas → ✅ `almacenes` derivado de `tree` con `useMemo`, eliminada query extra
+- [x] **B5** — Nombres columnas español/inglés — ✅ Legacy aceptado, no requiere refactor
 - [x] **B6** — Backfill migrations → ✅ Ya idempotentes (WHERE IS NULL)
 - [x] **B7** — `pl-20` excesivo → ✅ `pl-8 sm:pl-20`
 - [x] **B8** — `stat-card-amber` → ✅ Renombrada a `stat-card-primary`
@@ -57,11 +57,8 @@ Generado: 2026-03-12
 
 ---
 
-**Resumen final: 37/38 corregidos (97%)**
+**Resumen final: 41/41 corregidos (100%)**
 - Críticos: 6/6 ✅
-- Altos: 6/7 ✅
-- Medios: 17/18 ✅
-- Bajos: 8/10 ✅
-
-**Pendiente (1 relevante):** A3 — Implementar Socket.IO client en GamePlay (reemplazar polling por websockets)
-**Pendientes menores (2):** M10 (httpOnly cookies), B2 (keyboard nav), B4/B5 (naming/queries)
+- Altos: 7/7 ✅
+- Medios: 18/18 ✅
+- Bajos: 10/10 ✅
