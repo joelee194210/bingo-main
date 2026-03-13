@@ -1,5 +1,3 @@
-import * as XLSX from 'xlsx';
-
 export interface ExportColumn {
   key: string;
   label: string;
@@ -41,10 +39,10 @@ export function exportToCSV(data: Record<string, unknown>[], columns: ExportColu
   downloadBlob(blob, `${filename}.csv`);
 }
 
-export function exportToExcel(data: Record<string, unknown>[], columns: ExportColumn[], filename: string) {
+export async function exportToExcel(data: Record<string, unknown>[], columns: ExportColumn[], filename: string) {
+  const XLSX = await import('xlsx');
   const rows = buildRows(data, columns);
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  // Auto-width columns
   ws['!cols'] = columns.map((_, i) => ({
     wch: Math.max(
       columns[i].label.length,

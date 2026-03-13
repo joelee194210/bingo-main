@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -156,9 +156,11 @@ export default function InventoryPage() {
   const eventId = selectedEventId || (eventIdParam ? Number(eventIdParam) : 0);
 
   // Auto-select first event if none selected and no URL param
-  if (!eventId && eventsList.length > 0 && !selectedEventId) {
-    setSelectedEventId(eventsList[0].id);
-  }
+  useEffect(() => {
+    if (!eventId && eventsList.length > 0 && !selectedEventId) {
+      setSelectedEventId(eventsList[0].id);
+    }
+  }, [eventId, eventsList, selectedEventId]);
 
   const defaultTab = searchParams.get('tab') || 'almacenes';
 
@@ -397,11 +399,10 @@ export default function InventoryPage() {
   ];
 
   // Agrupar movimientos legacy (sin documento) por timestamp+accion+almacen
-  const movimientosAgrupados = (() => {
+  const movimientosAgrupados = useMemo(() => {
     const sinDoc = movimientos.filter((m: any) => !m.documento_id);
     const groups: Record<string, typeof sinDoc> = {};
     for (const m of sinDoc) {
-      // Agrupar por segundo exacto + accion + almacen destino
       const key = `${new Date(m.created_at).toISOString().slice(0, 19)}_${m.accion}_${m.a_persona || ''}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(m);
@@ -419,7 +420,7 @@ export default function InventoryPage() {
       has_pdf: items.some(m => m.pdf_path),
       pdf_mov_id: items.find(m => m.pdf_path)?.id,
     }));
-  })();
+  }, [movimientos]);
 
   const filteredMovAgrupados = useMemo(() => {
     let result = movimientosAgrupados;
@@ -864,7 +865,7 @@ export default function InventoryPage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between w-full">
-                  <CardTitle className="text-base">Lotes (Lotes)</CardTitle>
+                  <CardTitle className="text-base">Lotes</CardTitle>
                   <DataExportMenu data={filteredLotes as unknown as Record<string, unknown>[]} columns={LOTES_EXPORT_COLUMNS} filename="lotes" />
                 </div>
               </CardHeader>
@@ -1036,6 +1037,7 @@ export default function InventoryPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label="Descargar PDF"
                             onClick={(e) => { e.stopPropagation(); handleDownloadDocPdf(d.id); }}
                           >
                             <FileDown className="h-4 w-4" />
@@ -1069,6 +1071,7 @@ export default function InventoryPage() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              aria-label="Descargar PDF"
                               onClick={(e) => { e.stopPropagation(); handleDownloadMovPdf(g.pdf_mov_id!); }}
                             >
                               <FileDown className="h-4 w-4" />
@@ -1301,10 +1304,15 @@ export default function InventoryPage() {
                   <Badge variant="outline" className="capitalize">{scanResult.tipo}</Badge>
                 </div>
                 {scanResult.entidad && (
-                  <div className="bg-muted p-4 rounded-md">
-                    <pre className="text-sm whitespace-pre-wrap">
-                      {JSON.stringify(scanResult.entidad, null, 2)}
-                    </pre>
+                  <div className="bg-muted p-4 rounded-md space-y-1">
+                    {Object.entries(scanResult.entidad as Record<string, unknown>)
+                      .filter(([, v]) => v !== null && v !== undefined && v !== '')
+                      .map(([k, v]) => (
+                        <p key={k} className="text-sm">
+                          <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}:</span>{' '}
+                          <span className="font-medium">{String(v)}</span>
+                        </p>
+                      ))}
                   </div>
                 )}
                 {scanResult.asignacion && (

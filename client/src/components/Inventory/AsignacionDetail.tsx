@@ -25,16 +25,9 @@ import {
   venderCarton,
   venderTodos,
 } from '@/services/api';
-import { ESTADO_LABELS, PROPOSITO_LABELS, type AsignacionEstado } from '@/types';
+import { ESTADO_LABELS, PROPOSITO_LABELS } from '@/types';
+import { getStatusColor } from '@/lib/badge-variants';
 import SignaturePad from './SignaturePad';
-
-const estadoColor: Record<AsignacionEstado, string> = {
-  asignado: 'bg-blue-100 text-blue-800',
-  parcial: 'bg-yellow-100 text-yellow-800',
-  completado: 'bg-green-100 text-green-800',
-  devuelto: 'bg-gray-100 text-gray-800',
-  cancelado: 'bg-red-100 text-red-800',
-};
 
 export default function AsignacionDetail() {
   const { eventId, id } = useParams<{ eventId: string; id: string }>();
@@ -185,7 +178,7 @@ export default function AsignacionDetail() {
             {asignacion.tipo_entidad === 'caja' ? 'Caja' : asignacion.tipo_entidad === 'libreta' ? 'Lote' : 'Carton'} asignada a {asignacion.persona_nombre}
           </p>
         </div>
-        <Badge className={`text-sm ${estadoColor[asignacion.estado]}`}>
+        <Badge className={`text-sm ${getStatusColor(asignacion.estado)}`}>
           {ESTADO_LABELS[asignacion.estado]}
         </Badge>
       </div>
@@ -304,6 +297,7 @@ export default function AsignacionDetail() {
               No hay cartones detallados para esta asignacion
             </p>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -357,6 +351,7 @@ export default function AsignacionDetail() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

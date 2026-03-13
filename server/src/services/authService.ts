@@ -11,7 +11,7 @@ if (!JWT_SECRET) {
   }
   console.warn('⚠️  JWT_SECRET no configurado. Usando clave por defecto (NO usar en producción).');
 }
-const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'bingo-dev-secret-local-only';
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
 const JWT_EXPIRES_IN = '24h';
 const SALT_ROUNDS = 10;
 
@@ -279,7 +279,7 @@ export async function ensureAdminExists(pool: Pool): Promise<void> {
     console.log('🔐 Creando usuario administrador por defecto...');
     await createUser(pool, {
       username: 'admin',
-      password: adminPassword || 'admin123',
+      password: adminPassword || require('crypto').randomBytes(12).toString('base64url'),
       full_name: 'Administrador',
       role: 'admin',
     });

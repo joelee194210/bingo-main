@@ -306,15 +306,15 @@ export default function MiInventario() {
 
                                   {/* Cartones del lote */}
                                   {isLoteExpanded && cartones && (
-                                    <div className="bg-muted/50 px-4 py-2 pl-20">
+                                    <div className="bg-muted/50 px-4 py-2 pl-8 sm:pl-20">
                                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
                                         {cartones.map((c) => (
                                           <div
                                             key={c.id}
                                             className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs border ${
                                               c.is_sold
-                                                ? 'bg-blue-50 border-blue-200 text-blue-700'
-                                                : 'bg-green-50 border-green-200 text-green-700'
+                                                ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400'
+                                                : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400'
                                             }`}
                                           >
                                             <CreditCard className="h-3 w-3 shrink-0" />

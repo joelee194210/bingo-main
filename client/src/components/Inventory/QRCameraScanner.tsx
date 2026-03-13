@@ -71,8 +71,11 @@ export default function QRCameraScanner({ onScan, active }: QRCameraScannerProps
     setScanning(false);
   };
 
-  // Cleanup al desmontar o cuando active cambia a false
+  // Auto-start cuando active cambia a true, cleanup cuando false
   useEffect(() => {
+    if (active && !scanning) {
+      startScanner();
+    }
     if (!active && scanning) {
       stopScanner();
     }

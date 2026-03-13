@@ -519,7 +519,7 @@ export async function ejecutarMovimientoBulk(
 
         if (isDevolucion) {
           // Devolucion: desmarcar vendidos y mover TODOS los cartones
-          await pool.query(`UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2`, [data.almacen_destino_id, caja.id]);
+          await pool.query(`UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2`, [data.almacen_destino_id, caja.id]);
           await pool.query(`UPDATE lotes SET status = 'disponible', cards_sold = 0 WHERE caja_id = $1`, [caja.id]);
           cartones = Number(total);
         } else {
@@ -541,7 +541,7 @@ export async function ejecutarMovimientoBulk(
         await pool.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [data.almacen_destino_id, lote.id]);
 
         if (isDevolucion) {
-          await pool.query('UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL WHERE lote_id = $2', [data.almacen_destino_id, lote.id]);
+          await pool.query('UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL WHERE lote_id = $2', [data.almacen_destino_id, lote.id]);
           await pool.query(`UPDATE lotes SET status = 'disponible', cards_sold = 0 WHERE id = $1`, [lote.id]);
           cartones = Number(soldCheck.rows[0].total);
         } else {
@@ -558,7 +558,7 @@ export async function ejecutarMovimientoBulk(
           itemOrigenName = r.rows[0]?.name || null;
         }
         if (isDevolucion) {
-          await pool.query('UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL WHERE id = $2', [data.almacen_destino_id, card.id]);
+          await pool.query('UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL WHERE id = $2', [data.almacen_destino_id, card.id]);
         } else {
           await pool.query('UPDATE cards SET almacen_id = $1 WHERE id = $2', [data.almacen_destino_id, card.id]);
         }
@@ -692,8 +692,13 @@ export async function ejecutarVenta(
   const eventResult = await pool.query('SELECT name FROM events WHERE id = $1', [eventId]);
   const userResult = await pool.query('SELECT full_name FROM users WHERE id = $1', [userId]);
 
+  // Usar transacción para garantizar integridad
+  const client = await pool.connect();
+  try {
+  await client.query('BEGIN');
+
   // Crear documento
-  const docResult = await pool.query(
+  const docResult = await client.query(
     `INSERT INTO inv_documentos (event_id, accion, de_almacen_id, de_nombre, a_nombre, a_cedula, a_libreta, total_items, total_cartones, realizado_por)
      VALUES ($1, 'venta', $2, $3, $4, $5, $6, $7, 0, $8) RETURNING id, created_at`,
     [eventId, data.almacen_id, almacenName, data.buyer_name || 'Comprador', data.buyer_cedula || null, data.buyer_libreta || null, data.items.length, userId]
@@ -712,7 +717,7 @@ export async function ejecutarVenta(
       };
 
       if (item.tipo === 'caja') {
-        const cajaRes = await pool.query(
+        const cajaRes = await client.query(
           'SELECT id, almacen_id FROM cajas WHERE caja_code = $1 AND event_id = $2',
           [item.referencia, eventId]
         );
@@ -720,8 +725,7 @@ export async function ejecutarVenta(
         const caja = cajaRes.rows[0];
         if (caja.almacen_id !== data.almacen_id) throw new Error(`Caja "${item.referencia}" no esta en tu almacen`);
 
-        // Marcar todos los cartones como vendidos
-        const updateResult = await pool.query(
+        const updateResult = await client.query(
           `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, buyer_cedula = $3, buyer_libreta = $4, sold_by = $5
            FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $6 AND cards.is_sold = false
            RETURNING cards.id`,
@@ -731,14 +735,12 @@ export async function ejecutarVenta(
         totalCartones += vendidos;
         detalle.cartones = vendidos;
 
-        // Actualizar lotes
-        await pool.query(
+        await client.query(
           `UPDATE lotes SET cards_sold = (SELECT COUNT(*) FROM cards WHERE lote_id = lotes.id AND is_sold = true) WHERE caja_id = $1`,
           [caja.id]
         );
 
-        // Detalle para PDF
-        const lotesInfo = await pool.query(
+        const lotesInfo = await client.query(
           `SELECT l.lote_code, l.total_cards, l.cards_sold,
             (l.total_cards - l.cards_sold) as disponibles
            FROM lotes l WHERE l.caja_id = $1 ORDER BY l.lote_code`,
@@ -750,7 +752,7 @@ export async function ejecutarVenta(
         }));
 
       } else if (item.tipo === 'libreta') {
-        const loteRes = await pool.query(
+        const loteRes = await client.query(
           'SELECT id, almacen_id, caja_id FROM lotes WHERE lote_code = $1 AND event_id = $2',
           [item.referencia, eventId]
         );
@@ -758,7 +760,7 @@ export async function ejecutarVenta(
         const lote = loteRes.rows[0];
         if (lote.almacen_id !== data.almacen_id) throw new Error(`Libreta "${item.referencia}" no esta en tu almacen`);
 
-        const updateResult = await pool.query(
+        const updateResult = await client.query(
           `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, buyer_cedula = $3, buyer_libreta = $4, sold_by = $5
            WHERE lote_id = $6 AND is_sold = false RETURNING id`,
           [data.buyer_name || null, data.buyer_phone || null, data.buyer_cedula || null, data.buyer_libreta || null, userId, lote.id]
@@ -767,25 +769,24 @@ export async function ejecutarVenta(
         totalCartones += vendidos;
         detalle.cartones = vendidos;
 
-        await pool.query(
+        await client.query(
           `UPDATE lotes SET cards_sold = (SELECT COUNT(*) FROM cards WHERE lote_id = $1 AND is_sold = true) WHERE id = $1`,
           [lote.id]
         );
 
-        const totalInfo = await pool.query('SELECT total_cards, cards_sold FROM lotes WHERE id = $1', [lote.id]);
+        const totalInfo = await client.query('SELECT total_cards, cards_sold FROM lotes WHERE id = $1', [lote.id]);
         detalle.cartonesDetalle = [{
           card_code: '', serial: item.referencia, is_sold: true,
           total_cards: totalInfo.rows[0].total_cards, cards_sold: totalInfo.rows[0].cards_sold,
         }];
 
       } else if (item.tipo === 'carton') {
-        // Buscar por card_code o serial (formato 203-21 → 00203-21)
         let serialSearch = item.referencia;
         const serialMatch = item.referencia.match(/^(\d+)-(\d+)$/);
         if (serialMatch) {
           serialSearch = serialMatch[1].padStart(5, '0') + '-' + serialMatch[2].padStart(2, '0');
         }
-        const cardRes = await pool.query(
+        const cardRes = await client.query(
           'SELECT id, lote_id, is_sold, almacen_id FROM cards WHERE (card_code = $1 OR serial = $3) AND event_id = $2',
           [item.referencia, eventId, serialSearch]
         );
@@ -794,7 +795,7 @@ export async function ejecutarVenta(
         if (card.almacen_id !== data.almacen_id) throw new Error(`Carton "${item.referencia}" no esta en tu almacen`);
         if (card.is_sold) throw new Error(`Carton "${item.referencia}" ya fue vendido`);
 
-        await pool.query(
+        await client.query(
           `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, buyer_cedula = $3, buyer_libreta = $4, sold_by = $5 WHERE id = $6`,
           [data.buyer_name || null, data.buyer_phone || null, data.buyer_cedula || null, data.buyer_libreta || null, userId, card.id]
         );
@@ -802,7 +803,7 @@ export async function ejecutarVenta(
         detalle.cartones = 1;
 
         if (card.lote_id) {
-          await pool.query(
+          await client.query(
             `UPDATE lotes SET cards_sold = (SELECT COUNT(*) FROM cards WHERE lote_id = $1 AND is_sold = true) WHERE id = $1`,
             [card.lote_id]
           );
@@ -810,7 +811,7 @@ export async function ejecutarVenta(
       }
 
       // Registrar movimiento
-      await pool.query(
+      await client.query(
         `INSERT INTO inv_movimientos (event_id, almacen_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, detalles, realizado_por, documento_id)
          VALUES ($1, $2, $3, $4, 'venta', $5, $6, $7, $8, $9, $10)`,
         [eventId, data.almacen_id, item.tipo, item.referencia, almacenName, data.buyer_name || 'Comprador',
@@ -825,12 +826,14 @@ export async function ejecutarVenta(
   }
 
   // Actualizar documento
-  await pool.query(
+  await client.query(
     'UPDATE inv_documentos SET total_items = $1, total_cartones = $2 WHERE id = $3',
     [exitosos, totalCartones, documentoId]
   );
 
-  // Generar PDF
+  await client.query('COMMIT');
+
+  // Generar PDF (fuera de la transacción — no es crítico)
   if (exitosos > 0) {
     try {
       const pdfPath = await generateDocumentoPdf({
@@ -857,6 +860,13 @@ export async function ejecutarVenta(
   }
 
   return { documentoId, exitosos, totalCartones, errores };
+
+  } catch (txError) {
+    await client.query('ROLLBACK');
+    throw txError;
+  } finally {
+    client.release();
+  }
 }
 
 // Obtener documento con sus movimientos
@@ -909,7 +919,7 @@ export async function getDocumentos(
     LEFT JOIN users u ON u.id = d.realizado_por
     WHERE ${where}
     ORDER BY d.created_at DESC
-    LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
   `, [...values, limit, offset]);
 
   return { data: dataResult.rows, total };
@@ -982,27 +992,31 @@ export async function getCajas(pool: Pool, eventId: number, almacenId?: number):
     ORDER BY c.caja_code
   `, params);
 
-  const cajas = [];
-  for (const caja of cajasResult.rows) {
+  // Obtener todos los lotes en una sola query (evita N+1)
+  const cajaIds = cajasResult.rows.map((c: any) => c.id);
+  let lotesMap: Record<number, any[]> = {};
+  if (cajaIds.length > 0) {
     const lotesResult = await pool.query(`
-      SELECT id, lote_code, series_number, total_cards, cards_sold, status
-      FROM lotes WHERE caja_id = $1 ORDER BY lote_code
-    `, [caja.id]);
-
-    cajas.push({
-      id: caja.id as number,
-      caja_code: caja.caja_code as string,
-      total_lotes: caja.total_lotes as number,
-      status: caja.status as string,
-      total_cartones: Number(caja.total_cartones),
-      asignados: Number(caja.asignados),
-      almacen_id: caja.almacen_id as number | null,
-      almacen_name: caja.almacen_name as string | null,
-      lotes: lotesResult.rows as { id: number; lote_code: string; series_number: string; total_cards: number; cards_sold: number; status: string }[],
-    });
+      SELECT id, caja_id, lote_code, series_number, total_cards, cards_sold, status
+      FROM lotes WHERE caja_id = ANY($1::int[]) ORDER BY lote_code
+    `, [cajaIds]);
+    for (const l of lotesResult.rows) {
+      if (!lotesMap[l.caja_id]) lotesMap[l.caja_id] = [];
+      lotesMap[l.caja_id].push({ id: l.id, lote_code: l.lote_code, series_number: l.series_number, total_cards: l.total_cards, cards_sold: l.cards_sold, status: l.status });
+    }
   }
 
-  return cajas;
+  return cajasResult.rows.map((caja: any) => ({
+    id: caja.id as number,
+    caja_code: caja.caja_code as string,
+    total_lotes: caja.total_lotes as number,
+    status: caja.status as string,
+    total_cartones: Number(caja.total_cartones),
+    asignados: Number(caja.asignados),
+    almacen_id: caja.almacen_id as number | null,
+    almacen_name: caja.almacen_name as string | null,
+    lotes: lotesMap[caja.id] || [],
+  }));
 }
 
 export async function getLotes(pool: Pool, eventId: number): Promise<{
@@ -1221,7 +1235,7 @@ export async function getAsignaciones(
     LEFT JOIN users u ON u.id = ia.asignado_por
     WHERE ${where}
     ORDER BY ia.created_at DESC
-    LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
   `, [...values, limit, offset]);
   const data = dataResult.rows as (InvAsignacion & { almacen_name: string; asignado_por_nombre: string })[];
 
@@ -1535,7 +1549,7 @@ export async function getMovimientos(
     LEFT JOIN users u ON u.id = im.realizado_por
     WHERE ${where}
     ORDER BY im.created_at DESC
-    LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
   `, [...values, limit, offset]);
   const data = dataResult.rows as (InvMovimiento & { realizado_por_nombre: string })[];
 

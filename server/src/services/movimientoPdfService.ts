@@ -450,5 +450,10 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
 }
 
 export function getMovimientoPdfPath(filename: string): string {
-  return join(MOVIMIENTOS_DIR, filename);
+  const sanitized = filename.replace(/[\/\\]/g, '').replace(/\.\./g, '');
+  const resolved = join(MOVIMIENTOS_DIR, sanitized);
+  if (!resolved.startsWith(MOVIMIENTOS_DIR)) {
+    throw new Error('Ruta de archivo no permitida');
+  }
+  return resolved;
 }

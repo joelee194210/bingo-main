@@ -72,10 +72,10 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
       });
     }
 
-    if (new_password.length < 6) {
+    if (new_password.length < 8 || !/\d/.test(new_password) || !/[a-zA-Z]/.test(new_password)) {
       return res.status(400).json({
         success: false,
-        error: 'La nueva contraseña debe tener al menos 6 caracteres',
+        error: 'La contraseña debe tener al menos 8 caracteres, incluir letras y numeros',
       });
     }
 

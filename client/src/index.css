@@ -136,14 +136,14 @@
     @apply shadow-lg -translate-y-0.5;
   }
 
-  .stat-card-amber::before { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+  .stat-card-primary::before { background: linear-gradient(90deg, #3b82f6, #2563eb); }
   .stat-card-emerald::before { background: linear-gradient(90deg, #10b981, #059669); }
   .stat-card-violet::before { background: linear-gradient(90deg, #8b5cf6, #7c3aed); }
   .stat-card-rose::before { background: linear-gradient(90deg, #f43f5e, #e11d48); }
   .stat-card-sky::before { background: linear-gradient(90deg, #3b82f6, #2563eb); }
   .stat-card-blue::before { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
 
-  .stat-icon-amber { @apply bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400; }
+  .stat-icon-primary { @apply bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400; }
   .stat-icon-emerald { @apply bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400; }
   .stat-icon-violet { @apply bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400; }
   .stat-icon-rose { @apply bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400; }

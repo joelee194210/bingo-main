@@ -185,6 +185,8 @@ export default function VentaPage() {
   const handleVenta = async () => {
     if (!currentAlmacen || items.length === 0) return;
 
+    if (!confirm(`¿Confirmar venta de ${validItems.length} item(s) a ${buyerName || 'Comprador'}?`)) return;
+
     setProcessing(true);
     try {
       const result = await ejecutarVenta({
@@ -390,7 +392,7 @@ export default function VentaPage() {
                     onKeyDown={(e) => { if (e.key === 'Enter') addItem(); }}
                   />
                 </div>
-                <Button onClick={addItem} size="icon" disabled={validating}>
+                <Button onClick={addItem} size="icon" disabled={validating} aria-label="Agregar item">
                   {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 </Button>
               </div>
@@ -421,7 +423,7 @@ export default function VentaPage() {
                     </TableHeader>
                     <TableBody>
                       {items.map((item, idx) => (
-                        <TableRow key={idx} className={item.error ? 'bg-red-50' : ''}>
+                        <TableRow key={idx} className={item.error ? 'bg-destructive/10' : ''}>
                           <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                           <TableCell>
                             <Badge className={getStatusColor(item.tipo) + ' text-xs'}>{TIPO_ENTIDAD_LABELS[item.tipo]}</Badge>
@@ -437,7 +439,7 @@ export default function VentaPage() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => removeItem(idx)}>
+                            <Button variant="ghost" size="icon" onClick={() => removeItem(idx)} aria-label="Eliminar item">
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           </TableCell>

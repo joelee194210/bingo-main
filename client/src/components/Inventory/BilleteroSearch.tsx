@@ -3,10 +3,9 @@ import { Search, User, CreditCard, X, BookOpen } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import billeteros from '@/data/billeteros.json';
 
 interface Billetero {
-  n: string;   // numero libreta
+  n: string;   // numero billetero
   c: string;   // cedula
   nm: string;  // nombre
 }
@@ -18,16 +17,33 @@ interface BilleteroSearchProps {
   selectedLibreta?: string;
 }
 
-const data = billeteros as Billetero[];
+// Lazy load: se carga solo cuando se monta el componente
+let cachedData: Billetero[] | null = null;
+
+function loadBilleteros(): Promise<Billetero[]> {
+  if (cachedData) return Promise.resolve(cachedData);
+  return import('@/data/billeteros.json').then(mod => {
+    cachedData = mod.default as Billetero[];
+    return cachedData;
+  });
+}
 
 export default function BilleteroSearch({ onSelect, selectedNombre, selectedCedula, selectedLibreta }: BilleteroSearchProps) {
   const [query, setQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
+  const [data, setData] = useState<Billetero[]>(cachedData || []);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Cargar datos lazy al montar
+  useEffect(() => {
+    if (!cachedData) {
+      loadBilleteros().then(setData);
+    }
+  }, []);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return [];
+    if (!q || data.length === 0) return [];
     const isNumeric = /^\d+$/.test(q);
     if (!isNumeric && q.length < 2) return [];
     if (isNumeric) {
@@ -43,7 +59,7 @@ export default function BilleteroSearch({ onSelect, selectedNombre, selectedCedu
         b.nm.toLowerCase().includes(q)
       )
       .slice(0, 15);
-  }, [query]);
+  }, [query, data]);
 
   const handleSelect = (b: Billetero) => {
     onSelect({ libreta: b.n, cedula: b.c, nombre: b.nm });
@@ -95,6 +111,7 @@ export default function BilleteroSearch({ onSelect, selectedNombre, selectedCedu
           <button
             onClick={handleClear}
             className="shrink-0 p-1 rounded hover:bg-muted transition-colors"
+            aria-label="Limpiar billetero"
           >
             <X className="h-4 w-4 text-muted-foreground" />
           </button>
@@ -135,7 +152,7 @@ export default function BilleteroSearch({ onSelect, selectedNombre, selectedCedu
           </div>
         )}
 
-        {showResults && query.length >= 1 && results.length === 0 && (
+        {showResults && query.length >= 2 && results.length === 0 && (
           <div className="absolute z-50 w-full mt-1 bg-popover border rounded-lg shadow-lg p-4 text-center">
             <p className="text-sm text-muted-foreground">No se encontro billetero</p>
           </div>

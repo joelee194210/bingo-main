@@ -4,21 +4,25 @@ import { Eraser } from 'lucide-react';
 
 interface SignaturePadProps {
   label: string;
-  width?: number;
   height?: number;
   onSignatureChange: (dataUrl: string | null) => void;
 }
 
-export default function SignaturePad({ label, width = 340, height = 150, onSignatureChange }: SignaturePadProps) {
+export default function SignaturePad({ label, height = 150, onSignatureChange }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasContent, setHasContent] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // Medir ancho del contenedor para ser responsivo
+    const width = container.clientWidth;
 
     // Set up canvas for high DPI
     const dpr = window.devicePixelRatio || 1;
@@ -50,7 +54,7 @@ export default function SignaturePad({ label, width = 340, height = 150, onSigna
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-  }, [width, height, label]);
+  }, [height, label]);
 
   const getPos = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
@@ -103,9 +107,11 @@ export default function SignaturePad({ label, width = 340, height = 150, onSigna
 
   const clear = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const w = container.clientWidth;
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -113,23 +119,23 @@ export default function SignaturePad({ label, width = 340, height = 150, onSigna
     ctx.restore();
 
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, w, height);
 
     ctx.strokeStyle = '#d1d5db';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(10, height - 30);
-    ctx.lineTo(width - 10, height - 30);
+    ctx.lineTo(w - 10, height - 30);
     ctx.stroke();
 
     ctx.fillStyle = '#9ca3af';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(label, width / 2, height - 12);
+    ctx.fillText(label, w / 2, height - 12);
 
     setHasContent(false);
     onSignatureChange(null);
-  }, [width, height, label, onSignatureChange]);
+  }, [height, label, onSignatureChange]);
 
   return (
     <div className="space-y-1">
@@ -142,9 +148,10 @@ export default function SignaturePad({ label, width = 340, height = 150, onSigna
           </Button>
         )}
       </div>
+      <div ref={containerRef} className="w-full">
       <canvas
         ref={canvasRef}
-        className="border rounded-md cursor-crosshair touch-none"
+        className="border rounded-md cursor-crosshair touch-none w-full"
         onMouseDown={startDrawing}
         onMouseMove={draw}
         onMouseUp={stopDrawing}
@@ -153,6 +160,7 @@ export default function SignaturePad({ label, width = 340, height = 150, onSigna
         onTouchMove={draw}
         onTouchEnd={stopDrawing}
       />
+      </div>
     </div>
   );
 }

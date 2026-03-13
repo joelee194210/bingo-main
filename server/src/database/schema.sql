@@ -65,9 +65,13 @@ CREATE TABLE IF NOT EXISTS cards (
     buyer_phone TEXT,
     buyer_cedula TEXT,
     buyer_libreta TEXT,
+    sold_by INTEGER,
+    almacen_id INTEGER,
     lote_id INTEGER,
     created_at TIMESTAMP DEFAULT NOW(),
-    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    FOREIGN KEY (sold_by) REFERENCES users(id),
+    FOREIGN KEY (almacen_id) REFERENCES almacenes(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS games (
@@ -276,15 +280,18 @@ CREATE TABLE IF NOT EXISTS cajas (
     event_id INTEGER NOT NULL,
     caja_code TEXT NOT NULL UNIQUE,
     centro_id INTEGER,
+    almacen_id INTEGER,
     total_lotes INTEGER DEFAULT 0,
     status TEXT DEFAULT 'sellada' CHECK(status IN ('sellada', 'abierta', 'en_transito', 'agotada')),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-    FOREIGN KEY (centro_id) REFERENCES centros(id) ON DELETE SET NULL
+    FOREIGN KEY (centro_id) REFERENCES centros(id) ON DELETE SET NULL,
+    FOREIGN KEY (almacen_id) REFERENCES almacenes(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cajas_event ON cajas(event_id);
 CREATE INDEX IF NOT EXISTS idx_cajas_centro ON cajas(centro_id);
+CREATE INDEX IF NOT EXISTS idx_cajas_almacen ON cajas(almacen_id);
 CREATE INDEX IF NOT EXISTS idx_cajas_status ON cajas(event_id, status);
 
 CREATE TABLE IF NOT EXISTS lotes (
@@ -294,6 +301,7 @@ CREATE TABLE IF NOT EXISTS lotes (
     lote_code TEXT NOT NULL UNIQUE,
     series_number TEXT NOT NULL,
     centro_id INTEGER,
+    almacen_id INTEGER,
     status TEXT DEFAULT 'disponible' CHECK(status IN ('en_caja', 'disponible', 'en_transito', 'vendido_parcial', 'vendido_completo', 'devuelto')),
     cards_sold INTEGER DEFAULT 0,
     total_cards INTEGER DEFAULT 50,
@@ -301,7 +309,8 @@ CREATE TABLE IF NOT EXISTS lotes (
     updated_at TIMESTAMP DEFAULT NOW(),
     FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
     FOREIGN KEY (caja_id) REFERENCES cajas(id) ON DELETE SET NULL,
-    FOREIGN KEY (centro_id) REFERENCES centros(id) ON DELETE SET NULL
+    FOREIGN KEY (centro_id) REFERENCES centros(id) ON DELETE SET NULL,
+    FOREIGN KEY (almacen_id) REFERENCES almacenes(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_lotes_event ON lotes(event_id);
 CREATE INDEX IF NOT EXISTS idx_lotes_caja ON lotes(caja_id);
@@ -491,12 +500,15 @@ CREATE TABLE IF NOT EXISTS inv_movimientos (
     firma_recibe TEXT,
     nombre_entrega TEXT,
     nombre_recibe TEXT,
+    documento_id INTEGER,
     FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
     FOREIGN KEY (almacen_id) REFERENCES almacenes(id) ON DELETE SET NULL,
     FOREIGN KEY (asignacion_id) REFERENCES inv_asignaciones(id) ON DELETE SET NULL,
+    FOREIGN KEY (documento_id) REFERENCES inv_documentos(id) ON DELETE SET NULL,
     FOREIGN KEY (realizado_por) REFERENCES users(id)
 );
 CREATE INDEX IF NOT EXISTS idx_inv_mov_event ON inv_movimientos(event_id);
 CREATE INDEX IF NOT EXISTS idx_inv_mov_almacen ON inv_movimientos(almacen_id);
 CREATE INDEX IF NOT EXISTS idx_inv_mov_referencia ON inv_movimientos(referencia);
 CREATE INDEX IF NOT EXISTS idx_inv_mov_created ON inv_movimientos(created_at);
+CREATE INDEX IF NOT EXISTS idx_inv_mov_documento ON inv_movimientos(documento_id);

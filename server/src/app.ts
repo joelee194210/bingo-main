@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { createServer as createHttpServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import { readFileSync } from 'fs';
@@ -33,13 +35,30 @@ try {
   httpServer = createHttpsServer({ key: sslKey, cert: sslCert }, app);
   console.log('🔒 HTTPS habilitado');
 } catch {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('❌ HTTPS requerido en producción. Configure certificados SSL en server/certs/');
+    process.exit(1);
+  }
   httpServer = createHttpServer(app);
-  console.log('⚠️  Sin certificados SSL, usando HTTP');
+  console.warn('⚠️  Sin certificados SSL, usando HTTP (solo desarrollo)');
+}
+
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean);
+
+function corsOrigin(origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) {
+  // Permitir requests sin origin (mobile apps, curl, same-origin)
+  if (!origin) return cb(null, true);
+  // En desarrollo o si no hay origins configurados, permitir LAN (192.168.x.x, localhost)
+  if (ALLOWED_ORIGINS.length === 0) {
+    const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
+    return cb(null, isLocal);
+  }
+  return cb(null, ALLOWED_ORIGINS.includes(origin));
 }
 
 const io = new Server(httpServer, {
   cors: {
-    origin: (_origin, cb) => cb(null, true),
+    origin: corsOrigin,
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -49,11 +68,31 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: (_origin, cb) => cb(null, true),
+  origin: corsOrigin,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
 }));
 app.use(express.json({ limit: '5mb' }));
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// Rate limiting en login
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 20, // max 20 intentos por IP
+  message: { success: false, error: 'Demasiados intentos de login. Intente en 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login', loginLimiter);
+
+// Rate limiting general
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 200, // 200 requests por minuto por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api', generalLimiter);
 
 // Logging middleware
 app.use((req, _res, next) => {
@@ -77,6 +116,16 @@ app.use('/api/inventario', authenticate, inventarioRouter);
 // Ruta de salud
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Error handler centralizado — no leakear detalles internos
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled error:', err);
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.status(500).json({
+    success: false,
+    error: isProduction ? 'Error interno del servidor' : err.message,
+  });
 });
 
 // Socket.IO con autenticación

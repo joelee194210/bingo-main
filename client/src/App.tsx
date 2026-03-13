@@ -1,28 +1,41 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Suspense, lazy } from 'react';
 import Layout from './components/Layout/Layout';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Login from './pages/Login';
 import Dashboard from './components/Dashboard/Dashboard';
-import EventList from './components/Events/EventList';
-import EventDetail from './components/Events/EventDetail';
-import CardList from './components/Cards/CardList';
-import CardGenerator from './components/Cards/CardGenerator';
-import GameList from './components/Game/GameList';
-import GamePlay from './components/Game/GamePlay';
-import CardValidator from './components/Cards/CardValidator';
-import CardActivation from './components/Cards/CardActivation';
-import Users from './pages/Users';
-import QRExport from './components/Export/QRExport';
-import BarcodeExport from './components/Export/BarcodeExport';
-import PromoPage from './components/Promo/PromoPage';
-import InventoryPage from './components/Inventory/InventoryPage';
-import AsignacionDetail from './components/Inventory/AsignacionDetail';
-import InventarioUsuarios from './components/Inventory/InventarioUsuarios';
-import MiInventario from './components/Inventory/MiInventario';
-import VentaPage from './components/Inventory/VentaPage';
+import { Loader2 } from 'lucide-react';
+
+// Lazy load heavy pages
+const EventList = lazy(() => import('./components/Events/EventList'));
+const EventDetail = lazy(() => import('./components/Events/EventDetail'));
+const CardList = lazy(() => import('./components/Cards/CardList'));
+const CardGenerator = lazy(() => import('./components/Cards/CardGenerator'));
+const GameList = lazy(() => import('./components/Game/GameList'));
+const GamePlay = lazy(() => import('./components/Game/GamePlay'));
+const CardValidator = lazy(() => import('./components/Cards/CardValidator'));
+const CardActivation = lazy(() => import('./components/Cards/CardActivation'));
+const Users = lazy(() => import('./pages/Users'));
+const QRExport = lazy(() => import('./components/Export/QRExport'));
+const BarcodeExport = lazy(() => import('./components/Export/BarcodeExport'));
+const PromoPage = lazy(() => import('./components/Promo/PromoPage'));
+const InventoryPage = lazy(() => import('./components/Inventory/InventoryPage'));
+const AsignacionDetail = lazy(() => import('./components/Inventory/AsignacionDetail'));
+const InventarioUsuarios = lazy(() => import('./components/Inventory/InventarioUsuarios'));
+const MiInventario = lazy(() => import('./components/Inventory/MiInventario'));
+const VentaPage = lazy(() => import('./components/Inventory/VentaPage'));
+
+function LazyFallback() {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 function App() {
   return (
+    <Suspense fallback={<LazyFallback />}>
     <Routes>
       {/* Ruta pública - Login */}
       <Route path="/login" element={<Login />} />
@@ -175,6 +188,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    </Suspense>
   );
 }
 

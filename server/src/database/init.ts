@@ -203,6 +203,26 @@ async function runMigrations(p: Pool): Promise<void> {
     console.log('✅ Migración aplicada: sold_by agregado a cards');
   }
 
+  // Migration: buyer_cedula, buyer_libreta on cards
+  if (!(await checkColumn('cards', 'buyer_cedula'))) {
+    await p.query('ALTER TABLE cards ADD COLUMN buyer_cedula TEXT');
+    console.log('✅ Migración aplicada: buyer_cedula agregado a cards');
+  }
+  if (!(await checkColumn('cards', 'buyer_libreta'))) {
+    await p.query('ALTER TABLE cards ADD COLUMN buyer_libreta TEXT');
+    console.log('✅ Migración aplicada: buyer_libreta agregado a cards');
+  }
+
+  // Migration: a_cedula, a_libreta on inv_documentos
+  if (!(await checkColumn('inv_documentos', 'a_cedula'))) {
+    await p.query('ALTER TABLE inv_documentos ADD COLUMN a_cedula TEXT');
+    console.log('✅ Migración aplicada: a_cedula agregado a inv_documentos');
+  }
+  if (!(await checkColumn('inv_documentos', 'a_libreta'))) {
+    await p.query('ALTER TABLE inv_documentos ADD COLUMN a_libreta TEXT');
+    console.log('✅ Migración aplicada: a_libreta agregado a inv_documentos');
+  }
+
   // Backfill: lotes/cards que tienen caja con almacen pero ellos no
   await p.query(`
     UPDATE lotes SET almacen_id = c.almacen_id

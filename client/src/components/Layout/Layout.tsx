@@ -135,6 +135,7 @@ export default function Layout() {
             size="icon"
             className="lg:hidden text-slate-400 hover:text-white hover:bg-white/5 h-8 w-8"
             onClick={() => setSidebarOpen(false)}
+            aria-label="Cerrar menu"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -197,6 +198,7 @@ export default function Layout() {
               size="icon"
               className="lg:hidden h-9 w-9"
               onClick={() => setSidebarOpen(true)}
+              aria-label="Abrir menu"
             >
               <Menu className="h-5 w-5" />
             </Button>
