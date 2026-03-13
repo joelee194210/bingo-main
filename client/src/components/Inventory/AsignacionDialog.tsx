@@ -32,7 +32,7 @@ interface AsignacionDialogProps {
 
 const TIPO_ENTIDAD_LABELS: Record<TipoEntidad, string> = {
   caja: 'Caja',
-  libreta: 'Libreta',
+  libreta: 'Lote',
   carton: 'Carton',
 };
 

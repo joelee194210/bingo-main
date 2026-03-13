@@ -334,7 +334,7 @@ export const validarReferencia = (eventId: number, referencia: string, almacenId
 export const ejecutarVenta = (data: {
   event_id: number; almacen_id: number;
   items: { tipo: string; referencia: string }[];
-  buyer_name?: string; buyer_phone?: string;
+  buyer_name?: string; buyer_cedula?: string; buyer_libreta?: string; buyer_phone?: string;
   firma_entrega?: string; firma_recibe?: string; nombre_entrega?: string; nombre_recibe?: string;
 }) =>
   api.post<ApiResponse<{ documentoId: number; exitosos: number; totalCartones: number; errores: string[] }>>('/inventario/venta', data).then(r => r.data);

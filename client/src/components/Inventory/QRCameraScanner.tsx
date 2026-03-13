@@ -115,7 +115,7 @@ export default function QRCameraScanner({ onScan, active }: QRCameraScannerProps
 
       {scanning && (
         <p className="text-xs text-muted-foreground text-center">
-          Apunta la camara al codigo QR de la caja, libreta o carton
+          Apunta la camara al codigo QR de la caja, lote o carton
         </p>
       )}
     </div>

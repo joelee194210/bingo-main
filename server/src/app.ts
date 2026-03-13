@@ -1,10 +1,16 @@
 import express from 'express';
 import cors from 'cors';
-import { createServer } from 'http';
+import { createServer as createHttpServer } from 'http';
+import { createServer as createHttpsServer } from 'https';
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
 import { initializeDatabase, getPool } from './database/init.js';
 import { ensureAdminExists, verifyToken } from './services/authService.js';
 import { authenticate, requireRole, requirePermission } from './middleware/auth.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Importar rutas
 import authRouter from './routes/auth.js';
@@ -18,11 +24,24 @@ import promoRouter from './routes/promo.js';
 import inventarioRouter from './routes/inventario.js';
 
 const app = express();
-const httpServer = createServer(app);
+
+// SSL certs for HTTPS
+let httpServer;
+try {
+  const sslKey = readFileSync(resolve(__dirname, '../certs/key.pem'));
+  const sslCert = readFileSync(resolve(__dirname, '../certs/cert.pem'));
+  httpServer = createHttpsServer({ key: sslKey, cert: sslCert }, app);
+  console.log('🔒 HTTPS habilitado');
+} catch {
+  httpServer = createHttpServer(app);
+  console.log('⚠️  Sin certificados SSL, usando HTTP');
+}
+
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'],
+    origin: (_origin, cb) => cb(null, true),
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
@@ -30,7 +49,7 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'],
+  origin: (_origin, cb) => cb(null, true),
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
 }));
@@ -121,21 +140,17 @@ async function start() {
     const pool = getPool();
     await ensureAdminExists(pool);
 
-    httpServer.listen(PORT, () => {
+    const protocol = httpServer instanceof (await import('https')).Server ? 'https' : 'http';
+    const wsProtocol = protocol === 'https' ? 'wss' : 'ws';
+    httpServer.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`
 ╔══════════════════════════════════════════════════════════╗
 ║                                                          ║
 ║   🎱  BINGO SERVER INICIADO                              ║
 ║                                                          ║
-║   API:        http://localhost:${PORT}/api                 ║
-║   WebSocket:  ws://localhost:${PORT}                       ║
-║   Health:     http://localhost:${PORT}/api/health          ║
-║                                                          ║
-║   Endpoints disponibles:                                 ║
-║   • GET  /api/dashboard      - Estadísticas generales    ║
-║   • CRUD /api/events         - Gestión de eventos        ║
-║   • CRUD /api/cards          - Gestión de cartones       ║
-║   • CRUD /api/games          - Gestión de juegos         ║
+║   API:        ${protocol}://0.0.0.0:${PORT}/api                ║
+║   WebSocket:  ${wsProtocol}://0.0.0.0:${PORT}                  ║
+║   Health:     ${protocol}://localhost:${PORT}/api/health        ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
       `);

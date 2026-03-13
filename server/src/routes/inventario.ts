@@ -439,7 +439,7 @@ router.post('/venta', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
     const userId = (req as unknown as { user: { id: number } }).user.id;
-    const { event_id, almacen_id, items, buyer_name, buyer_phone, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body;
+    const { event_id, almacen_id, items, buyer_name, buyer_cedula, buyer_libreta, buyer_phone, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body;
     if (!event_id || !almacen_id || !items?.length) {
       return res.status(400).json({ success: false, error: 'event_id, almacen_id e items son requeridos' });
     }
@@ -448,6 +448,8 @@ router.post('/venta', requirePermission('inventory:read'), async (req, res) => {
       almacen_id,
       items,
       buyer_name,
+      buyer_cedula,
+      buyer_libreta,
       buyer_phone,
       firmas,
     }, userId);
@@ -499,17 +501,24 @@ router.get('/validar-referencia/:eventId/:referencia', requirePermission('invent
       }});
     }
 
-    // Buscar como carton
+    // Buscar como carton por card_code o serial
+    // Si el formato es tipo "203-21", convertir a serial con padding: "00203-21"
+    let serialSearch = ref;
+    const serialMatch = ref.match(/^(\d+)-(\d+)$/);
+    if (serialMatch) {
+      serialSearch = serialMatch[1].padStart(5, '0') + '-' + serialMatch[2].padStart(2, '0');
+    }
     const cardRes = await pool.query(
-      `SELECT c.id, c.card_code, c.is_sold, c.almacen_id, a.name as almacen_name
+      `SELECT c.id, c.card_code, c.serial, c.is_sold, c.almacen_id, a.name as almacen_name
        FROM cards c LEFT JOIN almacenes a ON a.id = c.almacen_id
-       WHERE c.card_code = $1 AND c.event_id = $2`, [ref, eventId]
+       WHERE (c.card_code = $1 OR c.serial = $3) AND c.event_id = $2`, [ref, eventId, serialSearch]
     );
     if (cardRes.rows.length > 0) {
       const card = cardRes.rows[0];
       const enMiAlmacen = !almacenId || card.almacen_id === almacenId;
+      const displayRef = card.serial.replace(/^0+/, '').replace(/-0+/, '-');
       return res.json({ success: true, data: {
-        tipo: 'carton', referencia: card.card_code, existe: true, enMiAlmacen,
+        tipo: 'carton', referencia: displayRef, existe: true, enMiAlmacen,
         almacen: card.almacen_name, totalCartones: 1,
         vendidos: card.is_sold ? 1 : 0, disponibles: card.is_sold ? 0 : 1,
       }});

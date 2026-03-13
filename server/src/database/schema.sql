@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS cards (
     sold_at TIMESTAMP,
     buyer_name TEXT,
     buyer_phone TEXT,
+    buyer_cedula TEXT,
+    buyer_libreta TEXT,
     lote_id INTEGER,
     created_at TIMESTAMP DEFAULT NOW(),
     FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
@@ -452,6 +454,8 @@ CREATE TABLE IF NOT EXISTS inv_documentos (
     a_almacen_id INTEGER,
     de_nombre TEXT,
     a_nombre TEXT,
+    a_cedula TEXT,
+    a_libreta TEXT,
     total_items INTEGER DEFAULT 0,
     total_cartones INTEGER DEFAULT 0,
     pdf_path TEXT,

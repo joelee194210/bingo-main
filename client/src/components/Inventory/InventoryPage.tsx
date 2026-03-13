@@ -71,19 +71,35 @@ function AlmacenNode({
   return (
     <div>
       <div
-        className="flex items-center gap-2 py-2 px-3 rounded-md hover:bg-muted/50 cursor-pointer"
+        className="py-2 px-3 rounded-md hover:bg-muted/50 cursor-pointer"
         style={{ paddingLeft: `${level * 24 + 12}px` }}
         onClick={() => hasChildren && setExpanded(!expanded)}
       >
-        {hasChildren ? (
-          <ChevronRight className={`h-4 w-4 transition-transform ${expanded ? 'rotate-90' : ''}`} />
-        ) : (
-          <div className="w-4" />
-        )}
-        <Building2 className="h-4 w-4 text-muted-foreground" />
-        <span className="font-medium">{almacen.name}</span>
-        <span className="text-xs text-muted-foreground font-mono">{almacen.code}</span>
-        <div className="flex items-center gap-2 ml-auto mr-2">
+        <div className="flex items-center gap-2">
+          {hasChildren ? (
+            <ChevronRight className={`h-4 w-4 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          ) : (
+            <div className="w-4 shrink-0" />
+          )}
+          <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="font-medium truncate">{almacen.name}</span>
+          <span className="text-xs text-muted-foreground font-mono shrink-0">{almacen.code}</span>
+          {!almacen.is_active && (
+            <Badge variant="outline" className="text-xs shrink-0">Inactivo</Badge>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs ml-auto shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(almacen);
+            }}
+          >
+            Editar
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mt-1" style={{ marginLeft: `${20 + 16 + 8}px` }}>
           {(almacen.inv_cajas ?? 0) > 0 && (
             <Badge variant="outline" className="text-xs gap-1">
               <Package className="h-3 w-3" />
@@ -93,7 +109,7 @@ function AlmacenNode({
           {(almacen.inv_libretas ?? 0) > 0 && (
             <Badge variant="outline" className="text-xs gap-1">
               <ClipboardList className="h-3 w-3" />
-              {almacen.inv_libretas} libretas
+              {almacen.inv_libretas} lotes
             </Badge>
           )}
           {(almacen.inv_cartones ?? 0) > 0 && (
@@ -105,20 +121,6 @@ function AlmacenNode({
             <span className="text-xs text-muted-foreground">Sin inventario</span>
           )}
         </div>
-        {!almacen.is_active && (
-          <Badge variant="outline" className="text-xs">Inactivo</Badge>
-        )}
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 text-xs"
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(almacen);
-          }}
-        >
-          Editar
-        </Button>
       </div>
       {expanded && hasChildren && (
         <div>
@@ -195,8 +197,11 @@ export default function InventoryPage() {
   const [invSearch, setInvSearch] = useState('');
   const [cajasSort, setCajasSort] = useState<{ column: string | null; direction: 'asc' | 'desc' | null }>({ column: null, direction: null });
   const [lotesSort, setLotesSort] = useState<{ column: string | null; direction: 'asc' | 'desc' | null }>({ column: null, direction: null });
-  // Movimientos search
+  // Movimientos search & filters
   const [movSearch, setMovSearch] = useState('');
+  const [movAccionFilter, setMovAccionFilter] = useState('__all__');
+  const [movFechaDesde, setMovFechaDesde] = useState('');
+  const [movFechaHasta, setMovFechaHasta] = useState('');
 
   // ---- Queries ----
 
@@ -338,16 +343,30 @@ export default function InventoryPage() {
   }, [allLotes, invSearch, lotesSort]);
 
   const filteredDocumentos = useMemo(() => {
-    if (!movSearch.trim()) return documentos;
-    const q = movSearch.toLowerCase();
-    return documentos.filter((d: any) =>
-      d.accion?.toLowerCase().includes(q) ||
-      d.de_nombre?.toLowerCase().includes(q) ||
-      d.a_nombre?.toLowerCase().includes(q) ||
-      d.realizado_por_nombre?.toLowerCase().includes(q) ||
-      `DOC-${d.id.toString().padStart(6, '0')}`.toLowerCase().includes(q)
-    );
-  }, [documentos, movSearch]);
+    let result = documentos as any[];
+    if (movAccionFilter !== '__all__') {
+      result = result.filter((d: any) => d.accion === movAccionFilter);
+    }
+    if (movFechaDesde) {
+      const desde = new Date(movFechaDesde);
+      result = result.filter((d: any) => new Date(d.created_at) >= desde);
+    }
+    if (movFechaHasta) {
+      const hasta = new Date(movFechaHasta + 'T23:59:59');
+      result = result.filter((d: any) => new Date(d.created_at) <= hasta);
+    }
+    if (movSearch.trim()) {
+      const q = movSearch.toLowerCase();
+      result = result.filter((d: any) =>
+        d.accion?.toLowerCase().includes(q) ||
+        d.de_nombre?.toLowerCase().includes(q) ||
+        d.a_nombre?.toLowerCase().includes(q) ||
+        d.realizado_por_nombre?.toLowerCase().includes(q) ||
+        `DOC-${d.id.toString().padStart(6, '0')}`.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [documentos, movSearch, movAccionFilter, movFechaDesde, movFechaHasta]);
 
   const CAJAS_EXPORT_COLUMNS = [
     { key: 'caja_code', label: 'Caja' },
@@ -403,15 +422,29 @@ export default function InventoryPage() {
   })();
 
   const filteredMovAgrupados = useMemo(() => {
-    if (!movSearch.trim()) return movimientosAgrupados;
-    const q = movSearch.toLowerCase();
-    return movimientosAgrupados.filter((g: any) =>
-      g.accion?.toLowerCase().includes(q) ||
-      g.de_persona?.toLowerCase().includes(q) ||
-      g.a_persona?.toLowerCase().includes(q) ||
-      g.realizado_por_nombre?.toLowerCase().includes(q)
-    );
-  }, [movimientosAgrupados, movSearch]);
+    let result = movimientosAgrupados;
+    if (movAccionFilter !== '__all__') {
+      result = result.filter((g: any) => g.accion === movAccionFilter);
+    }
+    if (movFechaDesde) {
+      const desde = new Date(movFechaDesde);
+      result = result.filter((g: any) => new Date(g.created_at) >= desde);
+    }
+    if (movFechaHasta) {
+      const hasta = new Date(movFechaHasta + 'T23:59:59');
+      result = result.filter((g: any) => new Date(g.created_at) <= hasta);
+    }
+    if (movSearch.trim()) {
+      const q = movSearch.toLowerCase();
+      result = result.filter((g: any) =>
+        g.accion?.toLowerCase().includes(q) ||
+        g.de_persona?.toLowerCase().includes(q) ||
+        g.a_persona?.toLowerCase().includes(q) ||
+        g.realizado_por_nombre?.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [movimientosAgrupados, movSearch, movAccionFilter, movFechaDesde, movFechaHasta]);
 
   const handleDownloadDocPdf = async (docId: number) => {
     try {
@@ -648,7 +681,7 @@ export default function InventoryPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Libretas</CardTitle>
+            <CardTitle className="text-sm font-medium">Lotes</CardTitle>
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -715,30 +748,31 @@ export default function InventoryPage() {
 
         {/* ============ ALMACENES TAB ============ */}
         <TabsContent value="almacenes" className="space-y-4">
-          <div className="flex flex-wrap justify-between items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h2 className="text-lg font-semibold">Almacenes</h2>
             <div className="flex flex-wrap gap-2">
               {isAdmin && (
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => inventarioInicialMutation.mutate()}
                   disabled={inventarioInicialMutation.isPending}
                 >
                   {inventarioInicialMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                   ) : (
-                    <Package className="mr-2 h-4 w-4" />
+                    <Package className="mr-1 h-4 w-4" />
                   )}
-                  Crear Inventario Inicial
+                  <span className="hidden sm:inline">Crear </span>Inventario
                 </Button>
               )}
-              <Button variant="outline" onClick={() => setShowMovimientoDialog(true)}>
-                <Upload className="mr-2 h-4 w-4" />
-                Nuevo Movimiento
+              <Button variant="outline" size="sm" onClick={() => setShowMovimientoDialog(true)}>
+                <Upload className="mr-1 h-4 w-4" />
+                Movimiento
               </Button>
-              <Button onClick={openCreateAlmacen}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nuevo Almacen
+              <Button size="sm" onClick={openCreateAlmacen}>
+                <Plus className="mr-1 h-4 w-4" />
+                Almacen
               </Button>
             </div>
           </div>
@@ -768,10 +802,10 @@ export default function InventoryPage() {
 
         {/* ============ INVENTARIO TAB ============ */}
         <TabsContent value="inventario" className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Cajas y Libretas</h2>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative w-full sm:w-64">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h2 className="text-lg font-semibold">Cajas y Lotes</h2>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-none sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input className="pl-9 h-9" placeholder="Buscar caja, lote, serie..." value={invSearch} onChange={(e) => setInvSearch(e.target.value)} />
               </div>
@@ -830,7 +864,7 @@ export default function InventoryPage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between w-full">
-                  <CardTitle className="text-base">Lotes (Libretas)</CardTitle>
+                  <CardTitle className="text-base">Lotes (Lotes)</CardTitle>
                   <DataExportMenu data={filteredLotes as unknown as Record<string, unknown>[]} columns={LOTES_EXPORT_COLUMNS} filename="lotes" />
                 </div>
               </CardHeader>
@@ -870,24 +904,24 @@ export default function InventoryPage() {
 
         {/* ============ MOVIMIENTOS TAB ============ */}
         <TabsContent value="movimientos" className="space-y-4">
-          <div className="flex flex-wrap justify-between items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h2 className="text-lg font-semibold">Movimientos</h2>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative w-full sm:w-64">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-none sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input className="pl-9 h-9" placeholder="Buscar movimiento..." value={movSearch} onChange={(e) => setMovSearch(e.target.value)} />
               </div>
               <DataExportMenu data={documentos as unknown as Record<string, unknown>[]} columns={MOVIMIENTOS_EXPORT_COLUMNS} filename="movimientos" />
-              <Button onClick={() => setShowMovimientoDialog(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nuevo Movimiento
+              <Button size="sm" onClick={() => setShowMovimientoDialog(true)}>
+                <Plus className="mr-1 h-4 w-4" />
+                <span className="hidden sm:inline">Nuevo </span>Movimiento
               </Button>
             </div>
           </div>
 
           {/* Filters */}
           <div className="flex flex-wrap gap-3">
-            <div className="w-48">
+            <div className="w-full sm:w-48">
               <Select value={asignacionAlmacenFilter} onValueChange={setAsignacionAlmacenFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Todos los almacenes" />
@@ -901,6 +935,43 @@ export default function InventoryPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="w-full sm:w-48">
+              <Select value={movAccionFilter} onValueChange={setMovAccionFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tipo de movimiento" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos los tipos</SelectItem>
+                  <SelectItem value="venta">Venta</SelectItem>
+                  <SelectItem value="traslado">Traslado</SelectItem>
+                  <SelectItem value="carga_inventario">Carga inventario</SelectItem>
+                  <SelectItem value="consignacion">Consignacion</SelectItem>
+                  <SelectItem value="devolucion">Devolucion</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                className="h-9 w-36"
+                value={movFechaDesde}
+                onChange={(e) => setMovFechaDesde(e.target.value)}
+                placeholder="Desde"
+              />
+              <span className="text-sm text-muted-foreground">a</span>
+              <Input
+                type="date"
+                className="h-9 w-36"
+                value={movFechaHasta}
+                onChange={(e) => setMovFechaHasta(e.target.value)}
+                placeholder="Hasta"
+              />
+              {(movFechaDesde || movFechaHasta) && (
+                <Button variant="ghost" size="sm" onClick={() => { setMovFechaDesde(''); setMovFechaHasta(''); }}>
+                  Limpiar
+                </Button>
+              )}
             </div>
           </div>
 
@@ -919,14 +990,14 @@ export default function InventoryPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-28">No. Doc</TableHead>
-                      <TableHead>Fecha</TableHead>
+                      <TableHead>No. Doc</TableHead>
+                      <TableHead className="hidden sm:table-cell">Fecha</TableHead>
                       <TableHead>Accion</TableHead>
-                      <TableHead>De</TableHead>
-                      <TableHead>A</TableHead>
-                      <TableHead>Items</TableHead>
+                      <TableHead className="hidden md:table-cell">De</TableHead>
+                      <TableHead className="hidden md:table-cell">A</TableHead>
+                      <TableHead className="hidden sm:table-cell">Items</TableHead>
                       <TableHead>Cartones</TableHead>
-                      <TableHead>Realizado por</TableHead>
+                      <TableHead className="hidden lg:table-cell">Realizado por</TableHead>
                       <TableHead>Acta</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -941,17 +1012,26 @@ export default function InventoryPage() {
                         <TableCell className="font-mono text-xs font-semibold text-primary">
                           DOC-{d.id.toString().padStart(6, '0')}
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground whitespace-nowrap">
                           {new Date(d.created_at).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <Badge className={getStatusColor(d.accion) + ' text-xs capitalize'}>{(d.accion || '').replace(/_/g, ' ')}</Badge>
                         </TableCell>
-                        <TableCell className="text-sm">{d.de_nombre || '-'}</TableCell>
-                        <TableCell className="text-sm">{d.a_nombre || '-'}</TableCell>
-                        <TableCell className="text-sm">{d.total_items}</TableCell>
+                        <TableCell className="hidden md:table-cell text-sm">{d.de_nombre || '-'}</TableCell>
+                        <TableCell className="hidden md:table-cell text-sm">
+                          {d.a_nombre || '-'}
+                          {(d.a_libreta || d.a_cedula) && (
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {d.a_libreta && <span>Lib: {d.a_libreta}</span>}
+                              {d.a_libreta && d.a_cedula && <span> · </span>}
+                              {d.a_cedula && <span>CI: {d.a_cedula}</span>}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm">{d.total_items}</TableCell>
                         <TableCell>{d.total_cartones?.toLocaleString()}</TableCell>
-                        <TableCell className="text-sm">{d.realizado_por_nombre}</TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm">{d.realizado_por_nombre}</TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -973,17 +1053,17 @@ export default function InventoryPage() {
                         <TableCell className="font-mono text-xs text-muted-foreground">
                           MOV-{g.id.toString().padStart(6, '0')}
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground whitespace-nowrap">
                           {new Date(g.created_at).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <Badge className={getStatusColor(g.accion) + ' text-xs capitalize'}>{g.accion.replace(/_/g, ' ')}</Badge>
                         </TableCell>
-                        <TableCell className="text-sm">{g.de_persona || '-'}</TableCell>
-                        <TableCell className="text-sm">{g.a_persona || '-'}</TableCell>
-                        <TableCell className="text-sm">{g.total_items}</TableCell>
+                        <TableCell className="hidden md:table-cell text-sm">{g.de_persona || '-'}</TableCell>
+                        <TableCell className="hidden md:table-cell text-sm">{g.a_persona || '-'}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm">{g.total_items}</TableCell>
                         <TableCell>{g.total_cartones.toLocaleString()}</TableCell>
-                        <TableCell className="text-sm">{g.realizado_por_nombre}</TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm">{g.realizado_por_nombre}</TableCell>
                         <TableCell>
                           {g.has_pdf && g.pdf_mov_id ? (
                             <Button
@@ -1018,6 +1098,13 @@ export default function InventoryPage() {
                     <>
                       {(documentoDetalle.data.documento.accion || '').replace(/_/g, ' ')} — {' '}
                       {documentoDetalle.data.documento.de_nombre || '-'} → {documentoDetalle.data.documento.a_nombre || '-'}
+                      {(documentoDetalle.data.documento.a_libreta || documentoDetalle.data.documento.a_cedula) && (
+                        <span className="ml-1 text-xs">
+                          ({documentoDetalle.data.documento.a_libreta && `Lib: ${documentoDetalle.data.documento.a_libreta}`}
+                          {documentoDetalle.data.documento.a_libreta && documentoDetalle.data.documento.a_cedula && ' · '}
+                          {documentoDetalle.data.documento.a_cedula && `CI: ${documentoDetalle.data.documento.a_cedula}`})
+                        </span>
+                      )}
                     </>
                   )}
                 </DialogDescription>
@@ -1042,6 +1129,18 @@ export default function InventoryPage() {
                       <span className="font-medium">Total cartones: </span>
                       {documentoDetalle.data.documento.total_cartones?.toLocaleString()}
                     </div>
+                    {documentoDetalle.data.documento.a_libreta && (
+                      <div>
+                        <span className="font-medium">Libreta: </span>
+                        {documentoDetalle.data.documento.a_libreta}
+                      </div>
+                    )}
+                    {documentoDetalle.data.documento.a_cedula && (
+                      <div>
+                        <span className="font-medium">Cedula: </span>
+                        {documentoDetalle.data.documento.a_cedula}
+                      </div>
+                    )}
                   </div>
 
                   <div className="overflow-x-auto">
@@ -1383,17 +1482,17 @@ export default function InventoryPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="caja">Caja</SelectItem>
-                  <SelectItem value="libreta">Libreta</SelectItem>
+                  <SelectItem value="libreta">Lote</SelectItem>
                   <SelectItem value="carton">Carton</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Por Referencia (libreta/carton) */}
+            {/* Por Referencia (lote/carton) */}
             {(cargarTipo === 'libreta' || cargarTipo === 'carton') && (
               <div className="space-y-2">
                 <Label>
-                  {cargarTipo === 'libreta' ? 'Codigo de libreta (ej: L00001)' : 'Codigo de carton'}
+                  {cargarTipo === 'libreta' ? 'Codigo de lote (ej: L00001)' : 'Codigo de carton'}
                 </Label>
                 <div className="flex gap-2">
                   <Input

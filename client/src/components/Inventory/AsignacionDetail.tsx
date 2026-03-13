@@ -182,7 +182,7 @@ export default function AsignacionDetail() {
             Asignacion: {asignacion.referencia}
           </h1>
           <p className="text-muted-foreground">
-            {asignacion.tipo_entidad === 'caja' ? 'Caja' : asignacion.tipo_entidad === 'libreta' ? 'Libreta' : 'Carton'} asignada a {asignacion.persona_nombre}
+            {asignacion.tipo_entidad === 'caja' ? 'Caja' : asignacion.tipo_entidad === 'libreta' ? 'Lote' : 'Carton'} asignada a {asignacion.persona_nombre}
           </p>
         </div>
         <Badge className={`text-sm ${estadoColor[asignacion.estado]}`}>
@@ -307,8 +307,7 @@ export default function AsignacionDetail() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Codigo</TableHead>
-                  <TableHead>Serie</TableHead>
+                  <TableHead>Numero</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Comprador</TableHead>
                   <TableHead>Fecha Venta</TableHead>
@@ -318,8 +317,7 @@ export default function AsignacionDetail() {
               <TableBody>
                 {cartones.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-mono">{c.card_code}</TableCell>
-                    <TableCell className="font-mono">{c.serial}</TableCell>
+                    <TableCell className="font-mono">{c.serial.replace(/^0+/, '').replace(/-0+/, '-')}</TableCell>
                     <TableCell>
                       {c.vendido ? (
                         <Badge className="bg-green-100 text-green-800">

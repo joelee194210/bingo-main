@@ -105,7 +105,7 @@ export default function MiInventario() {
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-10 w-full" />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}
         </div>
       </div>
@@ -164,14 +164,14 @@ export default function MiInventario() {
       {currentAlmacen && (
         <>
           {/* Info del almacen */}
-          <div className="flex flex-wrap items-center gap-3 px-1">
-            <Warehouse className="h-5 w-5 text-primary" />
-            <div>
-              <span className="font-semibold">{currentAlmacen.almacen_name}</span>
-              <span className="text-muted-foreground text-sm ml-2">({currentAlmacen.almacen_code})</span>
+          <div className="flex flex-wrap items-center gap-2 px-1">
+            <Warehouse className="h-5 w-5 text-primary shrink-0" />
+            <div className="min-w-0">
+              <span className="font-semibold truncate">{currentAlmacen.almacen_name}</span>
+              <span className="text-muted-foreground text-sm ml-1">({currentAlmacen.almacen_code})</span>
             </div>
-            <Badge variant="outline" className="capitalize ml-2">{currentAlmacen.rol}</Badge>
-            <span className="text-sm text-muted-foreground sm:ml-auto">{currentAlmacen.event_name}</span>
+            <Badge variant="outline" className="capitalize shrink-0">{currentAlmacen.rol}</Badge>
+            <span className="text-sm text-muted-foreground w-full sm:w-auto sm:ml-auto">{currentAlmacen.event_name}</span>
           </div>
 
           {/* Resumen */}
@@ -190,7 +190,7 @@ export default function MiInventario() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <ClipboardList className="h-4 w-4" /> Libretas
+                    <ClipboardList className="h-4 w-4" /> Lotes
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -224,7 +224,7 @@ export default function MiInventario() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar caja, libreta o serie..."
+              placeholder="Buscar caja, lote o serie..."
               className="pl-9"
             />
           </div>
@@ -252,21 +252,23 @@ export default function MiInventario() {
                         {/* Fila de Caja */}
                         <button
                           onClick={() => toggleCaja(caja.id)}
-                          className="w-full flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
+                          className="w-full px-4 py-3 hover:bg-muted/50 transition-colors text-left"
                         >
-                          {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
-                          <Package className="h-4 w-4 text-blue-600 shrink-0" />
-                          <span className="font-mono font-bold text-sm">{caja.caja_code}</span>
-                          <div className="flex flex-wrap items-center gap-3 ml-auto text-xs text-muted-foreground">
-                            <span>{caja.total_lotes} libretas</span>
+                          <div className="flex items-center gap-2">
+                            {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+                            <Package className="h-4 w-4 text-blue-600 shrink-0" />
+                            <span className="font-mono font-bold text-sm">{caja.caja_code}</span>
+                            <Badge variant="outline" className="capitalize text-xs ml-auto shrink-0">{caja.status}</Badge>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 ml-10 text-xs text-muted-foreground">
+                            <span>{caja.total_lotes} lotes</span>
                             <span>{caja.total_cartones} cartones</span>
                             <span className="text-blue-600">{vendidosCaja} vendidos</span>
                             <span className="text-green-600 font-medium">{caja.total_cartones - vendidosCaja} disp.</span>
-                            <Badge variant="outline" className="capitalize text-xs">{caja.status}</Badge>
                           </div>
                         </button>
 
-                        {/* Libretas de la caja */}
+                        {/* Lotes de la caja */}
                         {isExpanded && (
                           <div className="bg-muted/30">
                             {caja.lotes.map((lote) => {
@@ -280,19 +282,22 @@ export default function MiInventario() {
                                   {/* Fila de Libreta */}
                                   <button
                                     onClick={() => toggleLote(lote.id)}
-                                    className="w-full flex items-center gap-3 px-4 py-2 pl-12 hover:bg-muted/60 transition-colors text-left"
+                                    className="w-full px-4 py-2 pl-12 hover:bg-muted/60 transition-colors text-left"
                                   >
-                                    {isLoading ? (
-                                      <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin shrink-0" />
-                                    ) : isLoteExpanded ? (
-                                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                    ) : (
-                                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                    )}
-                                    <ClipboardList className="h-3.5 w-3.5 text-purple-600 shrink-0" />
-                                    <span className="font-mono font-medium text-sm">{lote.lote_code}</span>
-                                    <span className="text-xs text-muted-foreground">Serie: {lote.series_number}</span>
-                                    <div className="flex flex-wrap items-center gap-3 ml-auto text-xs text-muted-foreground">
+                                    <div className="flex items-center gap-2">
+                                      {isLoading ? (
+                                        <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin shrink-0" />
+                                      ) : isLoteExpanded ? (
+                                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                      ) : (
+                                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                      )}
+                                      <ClipboardList className="h-3.5 w-3.5 text-purple-600 shrink-0" />
+                                      <span className="font-mono font-medium text-sm">{lote.lote_code}</span>
+                                      <span className="text-xs text-muted-foreground hidden sm:inline">Serie: {lote.series_number}</span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 ml-8 text-xs text-muted-foreground">
+                                      <span className="sm:hidden">S: {lote.series_number}</span>
                                       <span>{lote.total_cards} cartones</span>
                                       <span className="text-blue-600">{lote.cards_sold} vendidos</span>
                                       <span className="text-green-600 font-medium">{disponibles} disp.</span>
@@ -313,7 +318,9 @@ export default function MiInventario() {
                                             }`}
                                           >
                                             <CreditCard className="h-3 w-3 shrink-0" />
-                                            <span className="font-mono font-medium">{c.card_code}</span>
+                                            <span className="font-mono font-medium">
+                                              {c.serial.replace(/^0+/, '').replace(/-0+/, '-')}
+                                            </span>
                                             {c.is_sold && c.buyer_name && (
                                               <span className="truncate text-[10px] opacity-70">({c.buyer_name})</span>
                                             )}

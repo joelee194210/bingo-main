@@ -672,6 +672,8 @@ export async function ejecutarVenta(
     almacen_id: number;
     items: { tipo: string; referencia: string }[];
     buyer_name?: string;
+    buyer_cedula?: string;
+    buyer_libreta?: string;
     buyer_phone?: string;
     firmas?: FirmaData;
   },
@@ -692,9 +694,9 @@ export async function ejecutarVenta(
 
   // Crear documento
   const docResult = await pool.query(
-    `INSERT INTO inv_documentos (event_id, accion, de_almacen_id, de_nombre, a_nombre, total_items, total_cartones, realizado_por)
-     VALUES ($1, 'venta', $2, $3, $4, $5, 0, $6) RETURNING id, created_at`,
-    [eventId, data.almacen_id, almacenName, data.buyer_name || 'Comprador', data.items.length, userId]
+    `INSERT INTO inv_documentos (event_id, accion, de_almacen_id, de_nombre, a_nombre, a_cedula, a_libreta, total_items, total_cartones, realizado_por)
+     VALUES ($1, 'venta', $2, $3, $4, $5, $6, $7, 0, $8) RETURNING id, created_at`,
+    [eventId, data.almacen_id, almacenName, data.buyer_name || 'Comprador', data.buyer_cedula || null, data.buyer_libreta || null, data.items.length, userId]
   );
   const documentoId = docResult.rows[0].id;
   const docCreatedAt = docResult.rows[0].created_at;
@@ -720,10 +722,10 @@ export async function ejecutarVenta(
 
         // Marcar todos los cartones como vendidos
         const updateResult = await pool.query(
-          `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, sold_by = $3
-           FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $4 AND cards.is_sold = false
+          `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, buyer_cedula = $3, buyer_libreta = $4, sold_by = $5
+           FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $6 AND cards.is_sold = false
            RETURNING cards.id`,
-          [data.buyer_name || null, data.buyer_phone || null, userId, caja.id]
+          [data.buyer_name || null, data.buyer_phone || null, data.buyer_cedula || null, data.buyer_libreta || null, userId, caja.id]
         );
         const vendidos = updateResult.rowCount || 0;
         totalCartones += vendidos;
@@ -757,9 +759,9 @@ export async function ejecutarVenta(
         if (lote.almacen_id !== data.almacen_id) throw new Error(`Libreta "${item.referencia}" no esta en tu almacen`);
 
         const updateResult = await pool.query(
-          `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, sold_by = $3
-           WHERE lote_id = $4 AND is_sold = false RETURNING id`,
-          [data.buyer_name || null, data.buyer_phone || null, userId, lote.id]
+          `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, buyer_cedula = $3, buyer_libreta = $4, sold_by = $5
+           WHERE lote_id = $6 AND is_sold = false RETURNING id`,
+          [data.buyer_name || null, data.buyer_phone || null, data.buyer_cedula || null, data.buyer_libreta || null, userId, lote.id]
         );
         const vendidos = updateResult.rowCount || 0;
         totalCartones += vendidos;
@@ -777,9 +779,15 @@ export async function ejecutarVenta(
         }];
 
       } else if (item.tipo === 'carton') {
+        // Buscar por card_code o serial (formato 203-21 → 00203-21)
+        let serialSearch = item.referencia;
+        const serialMatch = item.referencia.match(/^(\d+)-(\d+)$/);
+        if (serialMatch) {
+          serialSearch = serialMatch[1].padStart(5, '0') + '-' + serialMatch[2].padStart(2, '0');
+        }
         const cardRes = await pool.query(
-          'SELECT id, lote_id, is_sold, almacen_id FROM cards WHERE card_code = $1 AND event_id = $2',
-          [item.referencia, eventId]
+          'SELECT id, lote_id, is_sold, almacen_id FROM cards WHERE (card_code = $1 OR serial = $3) AND event_id = $2',
+          [item.referencia, eventId, serialSearch]
         );
         if (cardRes.rows.length === 0) throw new Error(`Carton "${item.referencia}" no encontrado`);
         const card = cardRes.rows[0];
@@ -787,8 +795,8 @@ export async function ejecutarVenta(
         if (card.is_sold) throw new Error(`Carton "${item.referencia}" ya fue vendido`);
 
         await pool.query(
-          `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, sold_by = $3 WHERE id = $4`,
-          [data.buyer_name || null, data.buyer_phone || null, userId, card.id]
+          `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, buyer_cedula = $3, buyer_libreta = $4, sold_by = $5 WHERE id = $6`,
+          [data.buyer_name || null, data.buyer_phone || null, data.buyer_cedula || null, data.buyer_libreta || null, userId, card.id]
         );
         totalCartones += 1;
         detalle.cartones = 1;
@@ -806,7 +814,7 @@ export async function ejecutarVenta(
         `INSERT INTO inv_movimientos (event_id, almacen_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, detalles, realizado_por, documento_id)
          VALUES ($1, $2, $3, $4, 'venta', $5, $6, $7, $8, $9, $10)`,
         [eventId, data.almacen_id, item.tipo, item.referencia, almacenName, data.buyer_name || 'Comprador',
-         detalle.cartones, JSON.stringify({ buyer_phone: data.buyer_phone }), userId, documentoId]
+         detalle.cartones, JSON.stringify({ buyer_phone: data.buyer_phone, buyer_cedula: data.buyer_cedula, buyer_libreta: data.buyer_libreta }), userId, documentoId]
       );
 
       pdfItems.push(detalle);

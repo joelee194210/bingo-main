@@ -188,9 +188,9 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <div className="lg:ml-64">
+      <div className="lg:ml-64 min-h-screen flex flex-col overflow-x-hidden">
         {/* Top bar */}
-        <header className="topbar">
+        <header className="topbar shrink-0">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -239,12 +239,12 @@ export default function Layout() {
         </header>
 
         {/* Page content */}
-        <main className="p-4 lg:p-8 animate-fade-in-up">
+        <main className="flex-1 p-4 lg:p-8 animate-fade-in-up min-w-0">
           <Outlet />
         </main>
 
         {/* Footer */}
-        <footer className="border-t px-4 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
+        <footer className="shrink-0 border-t px-4 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>Bingo Pro Manager &copy; 2026</span>
           <span>v2.0</span>
         </footer>

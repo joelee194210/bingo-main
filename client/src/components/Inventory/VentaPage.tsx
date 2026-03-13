@@ -29,10 +29,11 @@ import type { TipoEntidad } from '@/types';
 import SignaturePad from './SignaturePad';
 import { getStatusColor } from '@/lib/badge-variants';
 import QRCameraScanner from './QRCameraScanner';
+import BilleteroSearch from './BilleteroSearch';
 
 const TIPO_ENTIDAD_LABELS: Record<TipoEntidad, string> = {
   caja: 'Caja',
-  libreta: 'Libreta',
+  libreta: 'Lote',
   carton: 'Carton',
 };
 
@@ -59,6 +60,8 @@ export default function VentaPage() {
   const [inputRef, setInputRef] = useState('');
   const [items, setItems] = useState<ItemVenta[]>([]);
   const [buyerName, setBuyerName] = useState('');
+  const [buyerCedula, setBuyerCedula] = useState('');
+  const [buyerLibreta, setBuyerLibreta] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
   const [firmaEntrega, setFirmaEntrega] = useState<string | null>(null);
   const [firmaRecibe, setFirmaRecibe] = useState<string | null>(null);
@@ -189,6 +192,8 @@ export default function VentaPage() {
         almacen_id: currentAlmacen.almacen_id,
         items: validItems.map(i => ({ tipo: i.tipo, referencia: i.referencia })),
         buyer_name: buyerName || undefined,
+        buyer_cedula: buyerCedula || undefined,
+        buyer_libreta: buyerLibreta || undefined,
         buyer_phone: buyerPhone || undefined,
         firma_entrega: firmaEntrega || undefined,
         firma_recibe: firmaRecibe || undefined,
@@ -211,6 +216,8 @@ export default function VentaPage() {
         // Reset
         setItems([]);
         setBuyerName('');
+        setBuyerCedula('');
+        setBuyerLibreta('');
         setBuyerPhone('');
         setFirmaEntrega(null);
         setFirmaRecibe(null);
@@ -269,7 +276,7 @@ export default function VentaPage() {
           <ShoppingCart className="h-6 w-6" /> Punto de Venta
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Vender cajas, libretas o cartones de tu almacen
+          Vender cajas, lotes o cartones de tu almacen
         </p>
       </div>
 
@@ -308,36 +315,28 @@ export default function VentaPage() {
             {resumen && (
               <div className="sm:ml-auto flex items-center gap-4 text-sm">
                 <span><strong>{resumen.totalCajas}</strong> cajas</span>
-                <span><strong>{resumen.totalLibretas}</strong> libretas</span>
+                <span><strong>{resumen.totalLibretas}</strong> lotes</span>
                 <span><strong>{resumen.cartonesDisponibles}</strong> disponibles</span>
               </div>
             )}
           </div>
 
-          {/* Datos del comprador */}
+          {/* Datos del billetero */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Datos del comprador</CardTitle>
+              <CardTitle className="text-base">Billetero</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Nombre (opcional)</Label>
-                  <Input
-                    value={buyerName}
-                    onChange={(e) => setBuyerName(e.target.value)}
-                    placeholder="Nombre del comprador"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Telefono (opcional)</Label>
-                  <Input
-                    value={buyerPhone}
-                    onChange={(e) => setBuyerPhone(e.target.value)}
-                    placeholder="Telefono"
-                  />
-                </div>
-              </div>
+              <BilleteroSearch
+                onSelect={(b) => {
+                  setBuyerName(b.nombre);
+                  setBuyerCedula(b.cedula);
+                  setBuyerLibreta(b.libreta);
+                }}
+                selectedNombre={buyerName}
+                selectedCedula={buyerCedula}
+                selectedLibreta={buyerLibreta}
+              />
             </CardContent>
           </Card>
 
@@ -377,7 +376,7 @@ export default function VentaPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="caja">Caja</SelectItem>
-                      <SelectItem value="libreta">Libreta</SelectItem>
+                      <SelectItem value="libreta">Lote</SelectItem>
                       <SelectItem value="carton">Carton</SelectItem>
                     </SelectContent>
                   </Select>
@@ -463,7 +462,7 @@ export default function VentaPage() {
                 onSignatureChange={setFirmaEntrega}
               />
               <SignaturePad
-                label={`Comprador: ${buyerName || '(opcional)'}`}
+                label={`Billetero: ${buyerName || '(seleccionar)'} ${buyerLibreta ? `- Lib: ${buyerLibreta}` : ''} ${buyerCedula ? `- ${buyerCedula}` : ''}`}
                 onSignatureChange={setFirmaRecibe}
               />
             </CardContent>

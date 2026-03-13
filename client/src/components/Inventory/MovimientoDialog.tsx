@@ -56,7 +56,7 @@ const TIPO_MOVIMIENTO_LABELS: Record<TipoMovimiento, string> = {
 
 const TIPO_ENTIDAD_LABELS: Record<TipoEntidad, string> = {
   caja: 'Caja',
-  libreta: 'Libreta',
+  libreta: 'Lote',
   carton: 'Carton',
 };
 
@@ -532,7 +532,7 @@ export default function MovimientoDialog({ eventId, open, onOpenChange }: Movimi
                   onChange={(e) => setInputRef(e.target.value)}
                   placeholder={
                     tipoEntidad === 'caja' ? 'Ej: C001' :
-                    tipoEntidad === 'libreta' ? 'Ej: L00001' :
+                    tipoEntidad === 'libreta' ? 'Ej: L00001 (Lote)' :
                     'Codigo del carton'
                   }
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }}
