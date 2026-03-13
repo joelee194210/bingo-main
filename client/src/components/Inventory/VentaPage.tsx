@@ -390,7 +390,7 @@ export default function VentaPage() {
                     onKeyDown={(e) => { if (e.key === 'Enter') addItem(); }}
                   />
                 </div>
-                <Button onClick={addItem} size="icon" variant="outline" disabled={validating}>
+                <Button onClick={addItem} size="icon" disabled={validating}>
                   {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 </Button>
               </div>

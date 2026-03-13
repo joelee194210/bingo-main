@@ -1023,7 +1023,7 @@ export default function InventoryPage() {
                           {d.a_nombre || '-'}
                           {(d.a_libreta || d.a_cedula) && (
                             <div className="text-xs text-muted-foreground mt-0.5">
-                              {d.a_libreta && <span>Lib: {d.a_libreta}</span>}
+                              {d.a_libreta && <span>No. Bil: {d.a_libreta}</span>}
                               {d.a_libreta && d.a_cedula && <span> · </span>}
                               {d.a_cedula && <span>CI: {d.a_cedula}</span>}
                             </div>
@@ -1100,7 +1100,7 @@ export default function InventoryPage() {
                       {documentoDetalle.data.documento.de_nombre || '-'} → {documentoDetalle.data.documento.a_nombre || '-'}
                       {(documentoDetalle.data.documento.a_libreta || documentoDetalle.data.documento.a_cedula) && (
                         <span className="ml-1 text-xs">
-                          ({documentoDetalle.data.documento.a_libreta && `Lib: ${documentoDetalle.data.documento.a_libreta}`}
+                          ({documentoDetalle.data.documento.a_libreta && `No. Bil: ${documentoDetalle.data.documento.a_libreta}`}
                           {documentoDetalle.data.documento.a_libreta && documentoDetalle.data.documento.a_cedula && ' · '}
                           {documentoDetalle.data.documento.a_cedula && `CI: ${documentoDetalle.data.documento.a_cedula}`})
                         </span>
@@ -1131,7 +1131,7 @@ export default function InventoryPage() {
                     </div>
                     {documentoDetalle.data.documento.a_libreta && (
                       <div>
-                        <span className="font-medium">Libreta: </span>
+                        <span className="font-medium">No. Billetero: </span>
                         {documentoDetalle.data.documento.a_libreta}
                       </div>
                     )}

@@ -83,7 +83,7 @@ export default function BilleteroSearch({ onSelect, selectedNombre, selectedCedu
               {selectedLibreta && (
                 <Badge variant="outline" className="text-xs gap-1">
                   <BookOpen className="h-3 w-3" />
-                  Libreta: {selectedLibreta}
+                  No. Billetero: {selectedLibreta}
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs gap-1">
@@ -108,7 +108,7 @@ export default function BilleteroSearch({ onSelect, selectedNombre, selectedCedu
             value={query}
             onChange={(e) => { setQuery(e.target.value); setShowResults(true); }}
             onFocus={() => setShowResults(true)}
-            placeholder="Buscar por cedula, nombre o numero de libreta..."
+            placeholder="Buscar por cedula, nombre o No. de billetero..."
             className="pl-9"
           />
         </div>
@@ -124,7 +124,7 @@ export default function BilleteroSearch({ onSelect, selectedNombre, selectedCedu
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm truncate flex-1">{b.nm}</span>
                   <Badge variant="secondary" className="text-[10px] shrink-0 gap-1">
-                    <BookOpen className="h-2.5 w-2.5" />Lib: {b.n}
+                    <BookOpen className="h-2.5 w-2.5" />No. Bil: {b.n}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
