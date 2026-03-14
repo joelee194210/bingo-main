@@ -234,7 +234,7 @@ router.post('/events/:eventId/fixed-rules', requirePermission('cards:create'), a
     for (const rule of rules) {
       const seriesNumbers = [];
       for (let s = rule.series_from; s <= rule.series_to; s++) {
-        seriesNumbers.push(String(s));
+        seriesNumbers.push(String(s).padStart(5, '0'));
       }
       const cardsInSeries = (await pool.query(
         `SELECT COUNT(*) as cnt FROM cards c
@@ -383,7 +383,7 @@ router.post('/events/:eventId/distribute', requirePermission('cards:create'), as
       for (const rule of fixedRules) {
         const seriesNumbers: string[] = [];
         for (let s = rule.series_from; s <= rule.series_to; s++) {
-          seriesNumbers.push(String(s));
+          seriesNumbers.push(String(s).padStart(5, '0'));
         }
         // Obtener cartones en esas series que no han sido asignados aun
         const cardsInSeries = cards.filter(
