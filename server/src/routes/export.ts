@@ -4,6 +4,7 @@ import { getPool } from '../database/init.js';
 import { generateCardsPDF, exportCardsAsImages, generateCardImage } from '../services/exportService.js';
 import { requirePermission } from '../middleware/auth.js';
 import type { BingoCard, BingoEvent, CardNumbers } from '../types/index.js';
+import { logActivity, auditFromReq } from '../services/auditService.js';
 import QRCode from 'qrcode';
 import bwipjs from 'bwip-js';
 import { createCanvas, loadImage } from 'canvas';
@@ -96,6 +97,8 @@ router.post('/pdf', requirePermission('cards:export'), async (req: Request, res:
       cardsPerPage: cards_per_page,
       includeValidationCode: include_validation_code,
     });
+
+    logActivity(pool, auditFromReq(req, 'export_pdf', 'export', { count: cards.length }));
 
     res.json({
       success: true,
@@ -227,9 +230,11 @@ router.get('/csv/:eventId', requirePermission('cards:export'), async (req: Reque
         ? [nums.N[0], nums.N[1], 'FREE', nums.N[2], nums.N[3]]
         : nums.N;
 
-      // Escapar promo_text si contiene comas
+      // Escapar promo_text (RFC 4180)
       const promoText = card.promo_text
-        ? (card.promo_text.includes(',') ? `"${card.promo_text}"` : card.promo_text)
+        ? (card.promo_text.includes(',') || card.promo_text.includes('"') || card.promo_text.includes('\n')
+          ? `"${card.promo_text.replace(/"/g, '""')}"`
+          : card.promo_text)
         : '';
 
       const values = [
@@ -260,7 +265,7 @@ router.get('/csv/:eventId', requirePermission('cards:export'), async (req: Reque
 });
 
 // Total esperado de QRs por evento (para calcular progreso)
-const qrExpected = new Map<number, { total: number; status: 'generating' | 'zipping' | 'completed' | 'error'; folder: string }>();
+const qrExpected = new Map<number, { total: number; status: 'generating' | 'zipping' | 'completed' | 'error'; folder: string; zipPath?: string }>();
 
 // POST /api/export/qr - Generar QR codes como PNG para cartones de un evento
 router.post('/qr', requirePermission('cards:export'), async (req: Request, res: Response) => {
@@ -339,6 +344,33 @@ router.post('/qr', requirePermission('cards:export'), async (req: Request, res: 
         .replace(/\{card_number\}/g, String(card.card_number));
     };
 
+    // Verificar unicidad de seriales y códigos antes de generar (Sets separados para evitar falsos positivos)
+    const serialSet = new Set<string>();
+    const cardCodeSet = new Set<string>();
+    const validationCodeSet = new Set<string>();
+    const duplicates: string[] = [];
+    for (const card of cards) {
+      if (serialSet.has(card.serial)) {
+        duplicates.push(`Serial duplicado: ${card.serial} (cartón #${card.card_number})`);
+      }
+      serialSet.add(card.serial);
+      if (cardCodeSet.has(card.card_code)) {
+        duplicates.push(`card_code duplicado: ${card.card_code} (cartón #${card.card_number})`);
+      }
+      cardCodeSet.add(card.card_code);
+      if (validationCodeSet.has(card.validation_code)) {
+        duplicates.push(`validation_code duplicado: ${card.validation_code} (cartón #${card.card_number})`);
+      }
+      validationCodeSet.add(card.validation_code);
+    }
+    if (duplicates.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Se encontraron ${duplicates.length} duplicados. No se pueden generar QR codes con datos duplicados.`,
+        duplicates: duplicates.slice(0, 20),
+      });
+    }
+
     // Registrar total esperado y carpeta
     qrExpected.set(event_id, { total: cards.length, status: 'generating', folder: outputDir });
 
@@ -373,7 +405,7 @@ router.post('/qr', requirePermission('cards:export'), async (req: Request, res: 
     const zipSizeMB = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
     const sampleUrl = buildUrl(cards[0]);
 
-    qrExpected.set(event_id, { total: cards.length, status: 'completed', folder: outputDir });
+    qrExpected.set(event_id, { total: cards.length, status: 'completed', folder: outputDir, zipPath });
     // Limpiar despues de 5 minutos
     setTimeout(() => qrExpected.delete(event_id), 5 * 60 * 1000);
 
@@ -434,13 +466,20 @@ router.get('/qr/progress/:eventId', (req: Request, res: Response) => {
 router.get('/qr/download/:eventId', requirePermission('cards:export'), async (req: Request, res: Response) => {
   try {
     const eventId = parseInt(String(req.params.eventId), 10);
+    const info = qrExpected.get(eventId);
+
+    if (info?.zipPath && fs.existsSync(info.zipPath)) {
+      const fileName = path.basename(info.zipPath, '.zip');
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}.zip"`);
+      return fs.createReadStream(info.zipPath).pipe(res);
+    }
+
+    // Fallback: buscar por nombre del evento en BD
     const pool = getPool();
     const { rows } = await pool.query('SELECT name FROM events WHERE id = $1', [eventId]);
     const event = rows[0] as { name: string } | undefined;
-
-    if (!event) {
-      return res.status(404).json({ success: false, error: 'Evento no encontrado' });
-    }
+    if (!event) return res.status(404).json({ success: false, error: 'Evento no encontrado' });
 
     const safeName = event.name.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
     const zipPath = path.join(__dirname, '..', '..', 'data', 'qr', `${safeName}_${eventId}.zip`);
@@ -459,7 +498,7 @@ router.get('/qr/download/:eventId', requirePermission('cards:export'), async (re
 });
 
 // GET /api/export/qr/single/:cardCode - Generar QR individual de un carton
-router.get('/qr/single/:cardCode', async (req: Request, res: Response) => {
+router.get('/qr/single/:cardCode', requirePermission('cards:export'), async (req: Request, res: Response) => {
   try {
     const { base_url, size = '300' } = req.query;
 
@@ -494,7 +533,7 @@ router.get('/qr/single/:cardCode', async (req: Request, res: Response) => {
 // =====================================================
 
 // Estado de generacion de barcodes por evento
-const barcodeExpected = new Map<number, { total: number; status: 'generating' | 'zipping' | 'completed' | 'error'; folder: string }>();
+const barcodeExpected = new Map<number, { total: number; status: 'generating' | 'zipping' | 'completed' | 'error'; folder: string; zipPath?: string }>();
 
 // POST /api/export/barcode - Generar etiquetas de codigo de barras para cartones
 router.post('/barcode', requirePermission('cards:export'), async (req: Request, res: Response) => {
@@ -553,6 +592,23 @@ router.post('/barcode', requirePermission('cards:export'), async (req: Request, 
     }
     fs.mkdirSync(outputDir, { recursive: true });
 
+    // Verificar unicidad de seriales antes de generar
+    const serialSet = new Set<string>();
+    const duplicates: string[] = [];
+    for (const card of cards) {
+      if (serialSet.has(card.serial as string)) {
+        duplicates.push(`Serial duplicado: ${card.serial} (cartón #${card.card_number})`);
+      }
+      serialSet.add(card.serial as string);
+    }
+    if (duplicates.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Se encontraron ${duplicates.length} seriales duplicados. No se pueden generar barcodes con seriales duplicados.`,
+        duplicates: duplicates.slice(0, 20),
+      });
+    }
+
     barcodeExpected.set(event_id, { total: cards.length, status: 'generating', folder: outputDir });
 
     // Generar etiquetas: texto grande arriba + barcode abajo (1.9cm x 0.9cm @ 300DPI)
@@ -578,7 +634,7 @@ router.post('/barcode', requirePermission('cards:export'), async (req: Request, 
 
     const zipSizeMB = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
 
-    barcodeExpected.set(event_id, { total: cards.length, status: 'completed', folder: outputDir });
+    barcodeExpected.set(event_id, { total: cards.length, status: 'completed', folder: outputDir, zipPath });
     setTimeout(() => barcodeExpected.delete(event_id), 5 * 60 * 1000);
 
     res.json({
@@ -634,13 +690,20 @@ router.get('/barcode/progress/:eventId', (req: Request, res: Response) => {
 router.get('/barcode/download/:eventId', requirePermission('cards:export'), async (req: Request, res: Response) => {
   try {
     const eventId = parseInt(String(req.params.eventId), 10);
+    const info = barcodeExpected.get(eventId);
+
+    if (info?.zipPath && fs.existsSync(info.zipPath)) {
+      const fileName = path.basename(info.zipPath, '.zip');
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}.zip"`);
+      return fs.createReadStream(info.zipPath).pipe(res);
+    }
+
+    // Fallback: buscar por nombre del evento en BD
     const pool = getPool();
     const { rows } = await pool.query('SELECT name FROM events WHERE id = $1', [eventId]);
     const event = rows[0] as { name: string } | undefined;
-
-    if (!event) {
-      return res.status(404).json({ success: false, error: 'Evento no encontrado' });
-    }
+    if (!event) return res.status(404).json({ success: false, error: 'Evento no encontrado' });
 
     const safeName = event.name.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
     const zipPath = path.join(__dirname, '..', '..', 'data', 'barcode', `${safeName}_${eventId}.zip`);
@@ -659,7 +722,7 @@ router.get('/barcode/download/:eventId', requirePermission('cards:export'), asyn
 });
 
 // GET /api/export/barcode/single/:serial - Generar barcode individual
-router.get('/barcode/single/:serial', async (req: Request, res: Response) => {
+router.get('/barcode/single/:serial', requirePermission('cards:export'), async (req: Request, res: Response) => {
   try {
     const serial = req.params.serial as string;
     const png = await generateBarcodeLabel(serial);
@@ -670,6 +733,210 @@ router.get('/barcode/single/:serial', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error generando barcode individual:', error);
     res.status(500).json({ success: false, error: 'Error generando codigo de barras' });
+  }
+});
+
+// =====================================================
+// QR CAJAS — Etiquetas QR para cajas con info de lotes
+// =====================================================
+
+const qrCajasExpected = new Map<number, { total: number; status: 'generating' | 'zipping' | 'completed' | 'error'; folder: string; zipPath?: string }>();
+
+/** Genera etiqueta PNG: QR arriba + código caja + rango lotes */
+async function generateCajaLabel(
+  qrContent: string,
+  cajaCode: string,
+  loteDesde: string,
+  loteHasta: string,
+  qrSize: number,
+): Promise<Buffer> {
+  const padding = Math.round(qrSize * 0.06);
+  const cajaFontSize = Math.max(24, Math.round(qrSize / 5));
+  const loteFontSize = Math.max(16, Math.round(qrSize / 8));
+  const lineGap = Math.round(loteFontSize * 0.4);
+  const textHeight = cajaFontSize + loteFontSize * 2 + lineGap * 3 + padding;
+  const W = qrSize + padding * 2;
+  const H = qrSize + textHeight + padding * 2;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+
+  // Fondo blanco
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  // QR code
+  const qrBuffer = await QRCode.toBuffer(qrContent, {
+    width: qrSize,
+    margin: 1,
+    color: { dark: '#000000', light: '#ffffff' },
+    errorCorrectionLevel: 'M',
+  });
+  const qrImg = await loadImage(qrBuffer);
+  ctx.drawImage(qrImg, padding, padding, qrSize, qrSize);
+
+  // Código de caja (grande, bold, centrado)
+  ctx.fillStyle = '#000000';
+  ctx.font = `bold ${cajaFontSize}px Arial`;
+  ctx.textAlign = 'center';
+  const textY = padding + qrSize + cajaFontSize + lineGap;
+  ctx.fillText(cajaCode, W / 2, textY);
+
+  // Rango de lotes (más grande)
+  ctx.font = `bold ${loteFontSize}px Arial`;
+  ctx.fillText(`Desde: ${loteDesde}`, W / 2, textY + cajaFontSize * 0.3 + loteFontSize + lineGap);
+  ctx.fillText(`Hasta: ${loteHasta}`, W / 2, textY + cajaFontSize * 0.3 + (loteFontSize + lineGap) * 2);
+
+  return canvas.toBuffer('image/png');
+}
+
+// POST /api/export/qr-cajas - Generar etiquetas QR para cajas de un evento
+router.post('/qr-cajas', requirePermission('cards:export'), async (req: Request, res: Response) => {
+  try {
+    const { event_id, size = 300 } = req.body;
+
+    if (!event_id) {
+      return res.status(400).json({ success: false, error: 'event_id es requerido' });
+    }
+
+    const qrSize = Math.min(2000, Math.max(100, parseInt(size, 10) || 300));
+    const pool = getPool();
+
+    const { rows: eventRows } = await pool.query('SELECT * FROM events WHERE id = $1', [event_id]);
+    const event = eventRows[0] as BingoEvent | undefined;
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Evento no encontrado' });
+    }
+
+    // Obtener cajas con rango de lotes
+    const { rows: cajas } = await pool.query(`
+      SELECT c.id, c.caja_code,
+        MIN(l.lote_code) as lote_desde,
+        MAX(l.lote_code) as lote_hasta,
+        COUNT(l.id)::int as total_lotes
+      FROM cajas c
+      LEFT JOIN lotes l ON l.caja_id = c.id
+      WHERE c.event_id = $1
+      GROUP BY c.id, c.caja_code
+      ORDER BY c.caja_code
+    `, [event_id]);
+
+    if (cajas.length === 0) {
+      return res.status(404).json({ success: false, error: 'No hay cajas para este evento' });
+    }
+
+    // Crear carpeta de salida
+    const safeName = event.name.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+    const outputDir = path.join(__dirname, '..', '..', 'data', 'qr-cajas', `${safeName}_${event_id}`);
+    if (fs.existsSync(outputDir)) {
+      fs.rmSync(outputDir, { recursive: true });
+    }
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    qrCajasExpected.set(event_id, { total: cajas.length, status: 'generating', folder: outputDir });
+
+    // Generar etiqueta para cada caja
+    for (const caja of cajas) {
+      const qrContent = caja.caja_code;
+
+      const png = await generateCajaLabel(
+        qrContent,
+        caja.caja_code,
+        caja.lote_desde || 'N/A',
+        caja.lote_hasta || 'N/A',
+        qrSize,
+      );
+
+      fs.writeFileSync(path.join(outputDir, `${caja.caja_code}.png`), png);
+    }
+
+    // Crear ZIP
+    qrCajasExpected.set(event_id, { total: cajas.length, status: 'zipping', folder: outputDir });
+    const zipPath = path.join(__dirname, '..', '..', 'data', 'qr-cajas', `${safeName}_${event_id}.zip`);
+    await new Promise<void>((resolve, reject) => {
+      const output = fs.createWriteStream(zipPath);
+      const archive = archiver('zip', { zlib: { level: 6 } });
+      output.on('close', resolve);
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.directory(outputDir, `QR_Cajas_${safeName}`);
+      archive.finalize();
+    });
+
+    const zipSizeMB = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
+
+    qrCajasExpected.set(event_id, { total: cajas.length, status: 'completed', folder: outputDir, zipPath });
+    setTimeout(() => qrCajasExpected.delete(event_id), 5 * 60 * 1000);
+
+    logActivity(pool, auditFromReq(req, 'export_qr_cajas', 'export', {
+      event_id, event_name: event.name, cajas_count: cajas.length, qr_size: qrSize,
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        event_name: event.name,
+        cajas_processed: cajas.length,
+        qr_size: `${qrSize}x${qrSize}px`,
+        zip_size_mb: zipSizeMB,
+      },
+    });
+  } catch (error) {
+    console.error('Error generando QR cajas:', error);
+    const eventIdKey = req.body?.event_id;
+    if (eventIdKey) qrCajasExpected.set(eventIdKey, { total: 0, status: 'error', folder: '' });
+    res.status(500).json({ success: false, error: 'Error generando QR de cajas' });
+  }
+});
+
+// GET /api/export/qr-cajas/progress/:eventId
+router.get('/qr-cajas/progress/:eventId', (req: Request, res: Response) => {
+  const eventId = parseInt(String(req.params.eventId), 10);
+  const info = qrCajasExpected.get(eventId);
+
+  if (!info) return res.json({ success: true, data: null });
+
+  let generated = 0;
+  if (info.folder && fs.existsSync(info.folder)) {
+    try {
+      generated = fs.readdirSync(info.folder).filter(f => f.endsWith('.png')).length;
+    } catch { generated = 0; }
+  }
+
+  res.json({ success: true, data: { total: info.total, generated, status: info.status } });
+});
+
+// GET /api/export/qr-cajas/download/:eventId
+router.get('/qr-cajas/download/:eventId', requirePermission('cards:export'), async (req: Request, res: Response) => {
+  try {
+    const eventId = parseInt(String(req.params.eventId), 10);
+    const info = qrCajasExpected.get(eventId);
+
+    if (info?.zipPath && fs.existsSync(info.zipPath)) {
+      const fileName = path.basename(info.zipPath, '.zip');
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}.zip"`);
+      return fs.createReadStream(info.zipPath).pipe(res);
+    }
+
+    // Fallback: buscar por nombre del evento en BD
+    const pool = getPool();
+    const { rows } = await pool.query('SELECT name FROM events WHERE id = $1', [eventId]);
+    const event = rows[0] as { name: string } | undefined;
+    if (!event) return res.status(404).json({ success: false, error: 'Evento no encontrado' });
+
+    const safeName = event.name.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+    const zipPath = path.join(__dirname, '..', '..', 'data', 'qr-cajas', `${safeName}_${eventId}.zip`);
+
+    if (!fs.existsSync(zipPath)) {
+      return res.status(404).json({ success: false, error: 'Genere los QR de cajas primero' });
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="QR_Cajas_${safeName}.zip"`);
+    fs.createReadStream(zipPath).pipe(res);
+  } catch (error) {
+    console.error('Error descargando QR cajas:', error);
+    res.status(500).json({ success: false, error: 'Error descargando archivo' });
   }
 });
 

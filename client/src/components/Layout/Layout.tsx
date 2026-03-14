@@ -18,6 +18,11 @@ import {
   UserCog,
   LogOut,
   ChevronRight,
+  BarChart3,
+  HardDrive,
+  ShieldCheck,
+  ScrollText,
+  Package,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,6 +64,7 @@ const navGroups = [
       { to: '/inventory', icon: Warehouse, label: 'Inventario', permission: 'inventory:read' },
       { to: '/inventory/mi-inventario', icon: PackageOpen, label: 'Mi Inventario', permission: 'inventory:read' },
       { to: '/inventory/venta', icon: ShoppingCart, label: 'Punto de Venta', permission: 'inventory:read' },
+      { to: '/loteria', icon: BarChart3, label: 'Dashboard Loteria', permission: 'inventory:read' },
       { to: '/inventory/usuarios', icon: UserCog, label: 'Usuarios Inv.', permission: 'inventory:manage' },
     ],
   },
@@ -67,12 +73,16 @@ const navGroups = [
     items: [
       { to: '/export/qr', icon: QrCode, label: 'QR Codes', permission: 'cards:export' },
       { to: '/export/barcode', icon: Barcode, label: 'Cod. Barras', permission: 'cards:export' },
+      { to: '/export/qr-cajas', icon: Package, label: 'QR Cajas', permission: 'cards:export' },
     ],
   },
   {
     label: 'Sistema',
     items: [
       { to: '/users', icon: Users, label: 'Usuarios', permission: 'users:read' },
+      { to: '/permisos', icon: ShieldCheck, label: 'Permisos', permission: 'permissions:manage' },
+      { to: '/auditoria', icon: ScrollText, label: 'Auditoria', permission: 'audit:read' },
+      { to: '/backup', icon: HardDrive, label: 'Backup', permission: 'users:read' },
     ],
   },
 ];

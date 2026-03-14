@@ -337,17 +337,6 @@ export default function Login() {
               </div>
             </form>
 
-            {/* Dev credentials */}
-            {import.meta.env.DEV && (
-              <div className="mt-6 pt-5 border-t border-white/[0.05]">
-                <p className="text-[11px] text-slate-600 text-center">
-                  Demo:{' '}
-                  <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-blue-400/60 text-[11px] font-mono">admin</code>
-                  {' / '}
-                  <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-blue-400/60 text-[11px] font-mono">admin123</code>
-                </p>
-              </div>
-            )}
           </div>
         </div>
 

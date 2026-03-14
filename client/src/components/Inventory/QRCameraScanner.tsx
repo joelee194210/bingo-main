@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, CameraOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,8 +15,10 @@ export default function QRCameraScanner({ onScan, active }: QRCameraScannerProps
   const [error, setError] = useState<string | null>(null);
   const lastScanRef = useRef<string>('');
   const lastScanTimeRef = useRef<number>(0);
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
 
-  const startScanner = async () => {
+  const startScanner = useCallback(async () => {
     if (!containerRef.current) return;
     setError(null);
 
@@ -39,7 +41,7 @@ export default function QRCameraScanner({ onScan, active }: QRCameraScannerProps
           }
           lastScanRef.current = decodedText;
           lastScanTimeRef.current = now;
-          onScan(decodedText);
+          onScanRef.current(decodedText);
         },
         () => {
           // Scan error silencioso (no encontro QR en frame)
@@ -56,9 +58,9 @@ export default function QRCameraScanner({ onScan, active }: QRCameraScannerProps
         setError(msg);
       }
     }
-  };
+  }, []);
 
-  const stopScanner = async () => {
+  const stopScanner = useCallback(async () => {
     if (scannerRef.current) {
       try {
         await scannerRef.current.stop();
@@ -69,7 +71,7 @@ export default function QRCameraScanner({ onScan, active }: QRCameraScannerProps
       scannerRef.current = null;
     }
     setScanning(false);
-  };
+  }, []);
 
   // Auto-start cuando active cambia a true, cleanup cuando false
   useEffect(() => {
@@ -82,7 +84,7 @@ export default function QRCameraScanner({ onScan, active }: QRCameraScannerProps
     return () => {
       stopScanner();
     };
-  }, [active]);
+  }, [active, scanning, startScanner, stopScanner]);
 
   if (!active) return null;
 

@@ -16,6 +16,8 @@ import {
   ChevronsRight,
   ChevronLeft,
   ChevronRight,
+  Lock,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -26,8 +28,10 @@ import {
   distributePromo,
   clearPromo,
   getPromoWinners,
+  getPromoFixedRules,
+  savePromoFixedRules,
 } from '@/services/api';
-import type { BingoEvent, PromoWinner } from '@/types';
+import type { BingoEvent, PromoWinner, PromoDistributeResult } from '@/types';
 import { DataExportMenu } from '@/components/ui/data-export-menu';
 import { SortableHeader } from '@/components/ui/sortable-header';
 import { getStatusColor } from '@/lib/badge-variants';
@@ -76,6 +80,9 @@ export default function PromoPage() {
   const [prizeFilter, setPrizeFilter] = useState<string>('');
   const [winnersSearch, setWinnersSearch] = useState('');
   const [winnersSort, setWinnersSort] = useState<{ column: string | null; direction: 'asc' | 'desc' | null }>({ column: null, direction: null });
+  const [fixedRules, setFixedRules] = useState<{ prize_name: string; quantity: number; series_from: number; series_to: number }[]>([]);
+  const [fixedRulesSynced, setFixedRulesSynced] = useState<number | null>(null);
+  const [distributeResult, setDistributeResult] = useState<PromoDistributeResult | null>(null);
 
   const WINNERS_EXPORT_COLUMNS = [
     { key: 'card_number', label: '#' },
@@ -105,6 +112,12 @@ export default function PromoPage() {
     enabled: !!selectedEventId && !!promoData?.data?.stats?.cards_with_prize,
   });
 
+  const { data: fixedRulesData } = useQuery({
+    queryKey: ['promo-fixed-rules', selectedEventId],
+    queryFn: () => getPromoFixedRules(selectedEventId!),
+    enabled: !!selectedEventId,
+  });
+
   const promo = promoData?.data;
 
   // Al seleccionar evento, sincronizar
@@ -121,6 +134,16 @@ export default function PromoPage() {
     setNoPrizeText(promo.config.no_prize_text || 'Gracias por participar');
     setPrizes(promo.prizes.map(p => ({ name: p.name, quantity: p.quantity })));
     setSyncedEventId(selectedEventId);
+  }
+  // Sincronizar reglas fijas
+  if (fixedRulesData?.data && selectedEventId && fixedRulesSynced !== selectedEventId) {
+    setFixedRules(fixedRulesData.data.map(r => ({
+      prize_name: r.prize_name,
+      quantity: r.quantity,
+      series_from: r.series_from,
+      series_to: r.series_to,
+    })));
+    setFixedRulesSynced(selectedEventId);
   }
 
   const saveConfigMutation = useMutation({
@@ -143,6 +166,20 @@ export default function PromoPage() {
     },
   });
 
+  const saveFixedRulesMutation = useMutation({
+    mutationFn: () => savePromoFixedRules(
+      selectedEventId!,
+      fixedRules.filter(r => r.prize_name && r.quantity > 0 && r.series_from > 0 && r.series_to >= r.series_from)
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['promo-fixed-rules', selectedEventId] });
+      toast.success('Reglas fijas guardadas');
+    },
+    onError: (e: { response?: { data?: { error?: string } } }) => {
+      toast.error(e.response?.data?.error || 'Error guardando reglas fijas');
+    },
+  });
+
   const distributeMutation = useMutation({
     mutationFn: async () => {
       // Guardar config + premios antes de distribuir
@@ -156,6 +193,7 @@ export default function PromoPage() {
     onSuccess: (data) => {
       setIsEnabled(true);
       setSyncedEventId(null); // forzar re-sync
+      setDistributeResult(data.data || null);
       queryClient.invalidateQueries({ queryKey: ['promo', selectedEventId] });
       queryClient.invalidateQueries({ queryKey: ['promo-winners', selectedEventId] });
       toast.success(data.data?.message || 'Premios distribuidos');
@@ -174,6 +212,24 @@ export default function PromoPage() {
     },
     onError: () => toast.error('Error limpiando promocion'),
   });
+
+  const addFixedRule = () => setFixedRules([...fixedRules, { prize_name: '', quantity: 1, series_from: 1, series_to: 1 }]);
+  const removeFixedRule = (index: number) => setFixedRules(fixedRules.filter((_, i) => i !== index));
+  const updateFixedRule = (index: number, field: keyof typeof fixedRules[0], value: string | number) => {
+    const updated = [...fixedRules];
+    if (field === 'prize_name') updated[index].prize_name = value as string;
+    else updated[index][field] = Math.max(field === 'quantity' ? 1 : 1, value as number);
+    setFixedRules(updated);
+  };
+
+  // Calcular sumas de reglas fijas por premio para validacion visual
+  const fixedSumsByPrize = useMemo(() => {
+    const sums = new Map<string, number>();
+    for (const r of fixedRules) {
+      if (r.prize_name) sums.set(r.prize_name, (sums.get(r.prize_name) || 0) + r.quantity);
+    }
+    return sums;
+  }, [fixedRules]);
 
   const addPrize = () => setPrizes([...prizes, { name: '', quantity: 1 }]);
   const removePrize = (index: number) => setPrizes(prizes.filter((_, i) => i !== index));
@@ -195,7 +251,7 @@ export default function PromoPage() {
   const totalPrizes = prizes.reduce((sum, p) => sum + (p.quantity || 0), 0);
   const selectedEvent = events.find((e: BingoEvent) => e.id === selectedEventId);
   const hasDistributed = !!(promo?.stats?.cards_with_promo && promo.stats.cards_with_promo > 0);
-  const winners = winnersData?.data || [];
+  const winners = useMemo(() => winnersData?.data || [], [winnersData?.data]);
   const filteredWinners = useMemo(() => {
     let result = winners;
     if (winnersSearch.trim()) {
@@ -293,6 +349,65 @@ export default function PromoPage() {
                     <p className="text-xs text-muted-foreground">Sin Premio</p>
                   </div>
                 </div>
+
+                {/* Verificacion post-distribucion */}
+                {distributeResult?.verification && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-center gap-2 mb-3">
+                      {distributeResult.verification.passed ? (
+                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                          <CheckCircle className="h-3 w-3 mr-1" /> Verificacion OK
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                          <XCircle className="h-3 w-3 mr-1" /> Discrepancia detectada
+                        </Badge>
+                      )}
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Premio</TableHead>
+                          <TableHead className="text-xs text-right">Esperado</TableHead>
+                          <TableHead className="text-xs text-right">Actual</TableHead>
+                          <TableHead className="text-xs text-center">Estado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {distributeResult.verification.details.map((d, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="text-sm">{d.prize}</TableCell>
+                            <TableCell className="text-sm text-right font-mono">{d.expected}</TableCell>
+                            <TableCell className="text-sm text-right font-mono">{d.actual}</TableCell>
+                            <TableCell className="text-center">
+                              {d.ok ? (
+                                <CheckCircle className="h-4 w-4 text-green-600 inline" />
+                              ) : (
+                                <XCircle className="h-4 w-4 text-red-600 inline" />
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {/* Reglas fijas aplicadas */}
+                {distributeResult?.fixed_rules_applied && distributeResult.fixed_rules_applied.length > 0 && (
+                  <div className="mt-3 pt-3 border-t">
+                    <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1">
+                      <Lock className="h-3 w-3" /> Reglas Fijas Aplicadas
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {distributeResult.fixed_rules_applied.map((r, i) => (
+                        <Badge key={i} variant="outline" className="text-xs">
+                          {r.placed}x &quot;{r.prize}&quot; en series {r.series}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -408,6 +523,136 @@ export default function PromoPage() {
                     Guardar Premios
                   </Button>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Reglas de Distribucion Fija */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Lock className="h-4 w-4" />
+                    Reglas de Distribucion Fija
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Garantiza premios especificos en series determinadas
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={addFixedRule} disabled={!!hasDistributed || prizes.length === 0}>
+                  <Plus className="mr-1 h-4 w-4" /> Agregar Regla
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {hasDistributed && (
+                <div className="flex items-center gap-2 text-sm text-yellow-600 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg p-3">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  Ya se distribuyeron premios. Limpie la promocion antes de cambiar reglas fijas.
+                </div>
+              )}
+
+              {prizes.length === 0 && !hasDistributed && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Primero configure premios antes de agregar reglas fijas.
+                </p>
+              )}
+
+              {fixedRules.length === 0 && prizes.length > 0 && !hasDistributed && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Sin reglas fijas. Todos los premios se distribuiran 100% aleatoriamente.
+                </p>
+              )}
+
+              {fixedRules.map((rule, index) => (
+                <div key={index} className="flex items-end gap-2 flex-wrap">
+                  <div className="flex-1 min-w-[140px] space-y-1">
+                    {index === 0 && <Label className="text-xs">Premio</Label>}
+                    <Select
+                      value={rule.prize_name}
+                      onValueChange={(v) => updateFixedRule(index, 'prize_name', v)}
+                      disabled={!!hasDistributed}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar premio" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {prizes.filter(p => p.name.trim()).map((p, i) => (
+                          <SelectItem key={i} value={p.name}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-20 space-y-1">
+                    {index === 0 && <Label className="text-xs">Cantidad</Label>}
+                    <Input
+                      type="number"
+                      value={rule.quantity}
+                      onChange={(e) => updateFixedRule(index, 'quantity', parseInt(e.target.value) || 1)}
+                      min={1}
+                      disabled={!!hasDistributed}
+                    />
+                  </div>
+                  <div className="w-24 space-y-1">
+                    {index === 0 && <Label className="text-xs">Serie Desde</Label>}
+                    <Input
+                      type="number"
+                      value={rule.series_from}
+                      onChange={(e) => updateFixedRule(index, 'series_from', parseInt(e.target.value) || 1)}
+                      min={1}
+                      disabled={!!hasDistributed}
+                    />
+                  </div>
+                  <div className="w-24 space-y-1">
+                    {index === 0 && <Label className="text-xs">Serie Hasta</Label>}
+                    <Input
+                      type="number"
+                      value={rule.series_to}
+                      onChange={(e) => updateFixedRule(index, 'series_to', parseInt(e.target.value) || 1)}
+                      min={rule.series_from}
+                      disabled={!!hasDistributed}
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeFixedRule(index)}
+                    disabled={!!hasDistributed}
+                    className="text-destructive hover:text-destructive shrink-0"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+
+              {fixedRules.length > 0 && (
+                <>
+                  {/* Warnings de validacion */}
+                  {Array.from(fixedSumsByPrize.entries()).map(([name, sum]) => {
+                    const prizeTotal = prizes.find(p => p.name === name)?.quantity || 0;
+                    if (sum > prizeTotal) {
+                      return (
+                        <div key={name} className="flex items-center gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-950/30 rounded-lg p-2">
+                          <XCircle className="h-4 w-4 shrink-0" />
+                          &quot;{name}&quot;: reglas fijas suman {sum} pero solo hay {prizeTotal} en total
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+
+                  <div className="flex justify-end pt-2 border-t">
+                    <Button
+                      onClick={() => saveFixedRulesMutation.mutate()}
+                      disabled={saveFixedRulesMutation.isPending || !!hasDistributed}
+                      size="sm"
+                    >
+                      {saveFixedRulesMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Guardar Reglas
+                    </Button>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

@@ -86,6 +86,9 @@ function AlmacenNode({
           {!almacen.is_active && (
             <Badge variant="outline" className="text-xs shrink-0">Inactivo</Badge>
           )}
+          {almacen.es_agencia_loteria && (
+            <Badge variant="info" className="text-[10px] shrink-0">Agencia</Badge>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -150,7 +153,7 @@ export default function InventoryPage() {
     queryKey: ['events'],
     queryFn: getEvents,
   });
-  const eventsList = eventsData?.data || [];
+  const eventsList = useMemo(() => eventsData?.data || [], [eventsData?.data]);
 
   const eventId = selectedEventId || (eventIdParam ? Number(eventIdParam) : 0);
 
@@ -173,6 +176,7 @@ export default function InventoryPage() {
     address: '',
     contact_name: '',
     contact_phone: '',
+    es_agencia_loteria: false,
   });
 
   // Asignacion dialog
@@ -266,7 +270,7 @@ export default function InventoryPage() {
     enabled: !!selectedDocumentoId,
   });
 
-  const tree = treeData?.data ?? [];
+  const tree = useMemo(() => treeData?.data ?? [], [treeData?.data]);
   // B4: derivar lista plana del tree en lugar de query separada
   const almacenes = useMemo(() => {
     const flat: typeof tree = [];
@@ -280,9 +284,9 @@ export default function InventoryPage() {
     return flat;
   }, [tree]);
   const resumen = resumenData?.data;
-  const cajas = cajasData?.data ?? [];
-  const movimientos = movimientosData?.data ?? [];
-  const documentos = documentosData?.data ?? [];
+  const cajas = useMemo(() => cajasData?.data ?? [], [cajasData?.data]);
+  const movimientos = useMemo(() => movimientosData?.data ?? [], [movimientosData?.data]);
+  const documentos = useMemo(() => documentosData?.data ?? [], [documentosData?.data]);
 
   const toggleCajasSort = (column: string) => {
     setCajasSort(prev => {
@@ -521,6 +525,7 @@ export default function InventoryPage() {
         address: almacenForm.address || undefined,
         contact_name: almacenForm.contact_name || undefined,
         contact_phone: almacenForm.contact_phone || undefined,
+        es_agencia_loteria: almacenForm.es_agencia_loteria,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['almacen-tree', eventId] });
@@ -600,7 +605,7 @@ export default function InventoryPage() {
 
   const openCreateAlmacen = () => {
     setEditingAlmacen(null);
-    setAlmacenForm({ name: '', code: '', parent_id: '__none__', address: '', contact_name: '', contact_phone: '' });
+    setAlmacenForm({ name: '', code: '', parent_id: '__none__', address: '', contact_name: '', contact_phone: '', es_agencia_loteria: false });
     setShowAlmacenDialog(true);
   };
 
@@ -613,6 +618,7 @@ export default function InventoryPage() {
       address: a.address ?? '',
       contact_name: a.contact_name ?? '',
       contact_phone: a.contact_phone ?? '',
+      es_agencia_loteria: !!a.es_agencia_loteria,
     });
     setShowAlmacenDialog(true);
   };
@@ -1433,6 +1439,18 @@ export default function InventoryPage() {
                 onChange={(e) => setAlmacenForm({ ...almacenForm, contact_phone: e.target.value })}
                 placeholder="Telefono"
               />
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <input
+                type="checkbox"
+                id="es_agencia_loteria"
+                checked={almacenForm.es_agencia_loteria}
+                onChange={(e) => setAlmacenForm({ ...almacenForm, es_agencia_loteria: e.target.checked })}
+                className="h-4 w-4 rounded border-input accent-primary"
+              />
+              <Label htmlFor="es_agencia_loteria" className="cursor-pointer">
+                Agencia de Loteria (aparece en Dashboard Loteria)
+              </Label>
             </div>
           </div>
           <DialogFooter>

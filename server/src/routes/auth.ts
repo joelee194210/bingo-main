@@ -9,10 +9,12 @@ import {
   deleteUser,
   changePassword,
   getUserById,
+  verifyToken,
 } from '../services/authService.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import type { CreateUserRequest, UpdateUserRequest, UserRole } from '../types/auth.js';
 import { ROLE_LABELS } from '../types/auth.js';
+import { logActivity, getClientIp } from '../services/auditService.js';
 
 const router = Router();
 
@@ -32,11 +34,26 @@ router.post('/login', async (req: Request, res: Response) => {
     const result = await loginUser(pool, username, password);
 
     if (!result) {
+      logActivity(pool, {
+        username: username,
+        action: 'login_failed',
+        category: 'auth',
+        details: { reason: 'invalid_credentials' },
+        ipAddress: getClientIp(req),
+      });
       return res.status(401).json({
         success: false,
         error: 'Usuario o contraseña incorrectos',
       });
     }
+
+    logActivity(pool, {
+      userId: result.user.id,
+      username: result.user.username,
+      action: 'login_success',
+      category: 'auth',
+      ipAddress: getClientIp(req),
+    });
 
     // M10: setear token en httpOnly cookie
     res.cookie('bingo_token', result.token, {
@@ -50,7 +67,6 @@ router.post('/login', async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
-        token: result.token, // mantener en response para Socket.IO auth
         user: result.user,
         expiresIn: 24 * 60 * 60,
       },
@@ -70,7 +86,22 @@ router.get('/me', authenticate, (req: Request, res: Response) => {
 });
 
 // POST /api/auth/logout - Cerrar sesión (limpiar cookie)
-router.post('/logout', (_req: Request, res: Response) => {
+router.post('/logout', (req: Request, res: Response) => {
+  // Intentar logear el logout si hay cookie válida
+  const pool = getPool();
+  const cookieToken = req.cookies?.bingo_token;
+  if (cookieToken) {
+    const payload = verifyToken(cookieToken);
+    if (payload) {
+      logActivity(pool, {
+        userId: payload.userId,
+        username: payload.username,
+        action: 'logout',
+        category: 'auth',
+        ipAddress: getClientIp(req),
+      });
+    }
+  }
   res.clearCookie('bingo_token', { path: '/' });
   res.json({ success: true, message: 'Sesión cerrada' });
 });
@@ -178,6 +209,15 @@ router.post('/users', authenticate, requireRole('admin'), async (req: Request, r
     const pool = getPool();
     const user = await createUser(pool, { username, password, email, full_name, role });
 
+    logActivity(pool, {
+      userId: req.user!.id,
+      username: req.user!.username,
+      action: 'user_created',
+      category: 'users',
+      details: { created_user: username, role },
+      ipAddress: getClientIp(req),
+    });
+
     res.status(201).json({ success: true, data: user });
   } catch (error) {
     console.error('Error creando usuario:', error);
@@ -227,6 +267,15 @@ router.put('/users/:id', authenticate, requireRole('admin'), async (req: Request
       return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
     }
 
+    logActivity(pool, {
+      userId: req.user!.id,
+      username: req.user!.username,
+      action: 'user_updated',
+      category: 'users',
+      details: { updated_user_id: userId, changes: { email, full_name, role, is_active } },
+      ipAddress: getClientIp(req),
+    });
+
     res.json({ success: true, data: user });
   } catch (error) {
     console.error('Error actualizando usuario:', error);
@@ -257,6 +306,15 @@ router.delete('/users/:id', authenticate, requireRole('admin'), async (req: Requ
     if (!success) {
       return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
     }
+
+    logActivity(pool, {
+      userId: req.user!.id,
+      username: req.user!.username,
+      action: 'user_deleted',
+      category: 'users',
+      details: { deleted_user_id: userId },
+      ipAddress: getClientIp(req),
+    });
 
     res.json({ success: true, message: 'Usuario eliminado' });
   } catch (error) {

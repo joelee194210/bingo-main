@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 import type { Pool } from 'pg';
-import type { User, UserPublic, JWTPayload, UserRole, CreateUserRequest, UpdateUserRequest } from '../types/auth.js';
+import type { User, UserPublic, JWTPayload, CreateUserRequest, UpdateUserRequest } from '../types/auth.js';
 
 // Clave secreta para JWT
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -11,7 +12,7 @@ if (!JWT_SECRET) {
   }
   console.warn('⚠️  JWT_SECRET no configurado. Usando clave por defecto (NO usar en producción).');
 }
-const EFFECTIVE_JWT_SECRET = JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || randomBytes(32).toString('hex');
 const JWT_EXPIRES_IN = '24h';
 const SALT_ROUNDS = 10;
 
@@ -279,7 +280,7 @@ export async function ensureAdminExists(pool: Pool): Promise<void> {
     console.log('🔐 Creando usuario administrador por defecto...');
     await createUser(pool, {
       username: 'admin',
-      password: adminPassword || require('crypto').randomBytes(12).toString('base64url'),
+      password: adminPassword || 'admin123',
       full_name: 'Administrador',
       role: 'admin',
     });

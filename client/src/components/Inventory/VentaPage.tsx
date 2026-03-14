@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Plus, Trash2, Package, ClipboardList, ScanLine,
@@ -74,7 +74,7 @@ export default function VentaPage() {
     queryFn: getMisAlmacenes,
   });
 
-  const misAlmacenes = misAlmacenesData?.data || [];
+  const misAlmacenes = useMemo(() => misAlmacenesData?.data || [], [misAlmacenesData?.data]);
   const currentAlmacen = misAlmacenes.find((a) => a.almacen_id.toString() === selectedAlmacen);
 
   const { data: resumenData } = useQuery({

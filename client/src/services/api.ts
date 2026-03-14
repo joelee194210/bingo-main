@@ -17,6 +17,7 @@ import type {
   PromoPrize,
   PromoDistributeResult,
   PromoWinner,
+  PromoFixedRule,
   Almacen,
   AlmacenUsuario,
   InvAsignacion,
@@ -36,7 +37,7 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/')) {
+    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/') && !error.config?.url?.includes('/backup/progress')) {
       localStorage.removeItem('bingo_auth_user');
       window.location.href = '/login';
     }
@@ -203,6 +204,21 @@ export const getBarcodeProgress = (eventId: number) =>
 export const downloadBarcodeZip = (eventId: number) =>
   api.get(`/export/barcode/download/${eventId}`, { responseType: 'blob' }).then(r => r.data);
 
+// QR Cajas
+export const generateQRCajas = (data: { event_id: number; size?: number }) =>
+  api.post<ApiResponse<{
+    event_name: string;
+    cajas_processed: number;
+    qr_size: string;
+    zip_size_mb: string;
+  }>>('/export/qr-cajas', data).then(r => r.data);
+
+export const getQRCajasProgress = (eventId: number) =>
+  api.get<ApiResponse<{ total: number; generated: number; status: string } | null>>(`/export/qr-cajas/progress/${eventId}`).then(r => r.data);
+
+export const downloadQRCajasZip = (eventId: number) =>
+  api.get(`/export/qr-cajas/download/${eventId}`, { responseType: 'blob' }).then(r => r.data);
+
 // =====================================================
 // PROMOCIONES / RASPADITO
 // =====================================================
@@ -225,6 +241,15 @@ export const clearPromo = (eventId: number) =>
 export const getPromoWinners = (eventId: number, params?: { page?: number; limit?: number; prize?: string }) =>
   api.get<ApiResponse<PromoWinner[]>>(`/promo/events/${eventId}/winners`, { params }).then(r => r.data);
 
+export const getPromoFixedRules = (eventId: number) =>
+  api.get<ApiResponse<PromoFixedRule[]>>(`/promo/events/${eventId}/fixed-rules`).then(r => r.data);
+
+export const savePromoFixedRules = (eventId: number, rules: Omit<PromoFixedRule, 'id' | 'event_id' | 'created_at'>[]) =>
+  api.post<ApiResponse<PromoFixedRule[]>>(`/promo/events/${eventId}/fixed-rules`, { rules }).then(r => r.data);
+
+export const deletePromoFixedRules = (eventId: number) =>
+  api.delete<ApiResponse<void>>(`/promo/events/${eventId}/fixed-rules`).then(r => r.data);
+
 // =====================================================
 // INVENTARIO - ALMACENES
 // =====================================================
@@ -238,7 +263,7 @@ export const getAlmacenTree = (eventId: number) =>
 export const createAlmacen = (data: { event_id: number; name: string; code?: string; parent_id?: number; address?: string; contact_name?: string; contact_phone?: string }) =>
   api.post<ApiResponse<Almacen>>('/inventario/almacenes', data).then(r => r.data);
 
-export const updateAlmacen = (id: number, data: { name?: string; parent_id?: number | null; address?: string; contact_name?: string; contact_phone?: string; is_active?: boolean }) =>
+export const updateAlmacen = (id: number, data: { name?: string; parent_id?: number | null; address?: string; contact_name?: string; contact_phone?: string; is_active?: boolean; es_agencia_loteria?: boolean }) =>
   api.put<ApiResponse<Almacen>>(`/inventario/almacenes/${id}`, data).then(r => r.data);
 
 export const getAlmacen = (id: number) =>
@@ -372,5 +397,146 @@ export const getDocumentoPdf = (documentoId: number) =>
 
 export const escanearCodigo = (eventId: number, codigo: string) =>
   api.get<ApiResponse<{ tipo: string; entidad: unknown; asignacion: InvAsignacion | null }>>(`/inventario/escanear/${eventId}/${codigo}`).then(r => r.data);
+
+// =====================================================
+// DASHBOARD LOTERÍA
+// =====================================================
+
+export interface LoteriaDashboardData {
+  resumen: {
+    total_cartones: number;
+    cartones_vendidos: number;
+    cartones_disponibles: number;
+    total_cajas: number;
+    total_lotes: number;
+    porcentaje_vendido: number;
+  };
+  agencias: {
+    id: number;
+    name: string;
+    code: string;
+    total_cajas: number;
+    total_lotes: number;
+    total_cartones: number;
+    cartones_vendidos: number;
+    cartones_disponibles: number;
+    porcentaje: number;
+  }[];
+  ventas_por_dia: { fecha: string; vendidos: number }[];
+  ventas_agencia_dia: { agencia: string; fecha: string; vendidos: number }[];
+}
+
+export const getLoteriaDashboard = (eventId: number) =>
+  api.get<ApiResponse<LoteriaDashboardData>>(`/inventario/loteria-dashboard/${eventId}`).then(r => r.data);
+
+// =====================================================
+// BACKUP / RESTORE
+// =====================================================
+
+export interface BackupEvent {
+  id: number;
+  name: string;
+  status: string;
+  total_cards: number;
+  cards_sold: number;
+  total_games: number;
+  created_at: string;
+}
+
+export const getBackupEvents = () =>
+  api.get<ApiResponse<BackupEvent[]>>('/backup/events').then(r => r.data);
+
+export const downloadFullBackup = () =>
+  api.get('/backup/full', { responseType: 'blob' }).then(r => r.data);
+
+export const downloadEventBackup = (eventId: number) =>
+  api.get(`/backup/event/${eventId}`, { responseType: 'blob' }).then(r => r.data);
+
+export const restoreEventBackup = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post<ApiResponse<{ jobId: string }>>('/backup/restore-event', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300000,
+  }).then(r => r.data);
+};
+
+export const restoreFullBackup = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post<ApiResponse<{ jobId: string }>>('/backup/restore-full', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 600000,
+  }).then(r => r.data);
+};
+
+export interface BackupJobProgress {
+  jobId: string;
+  type: string;
+  status: 'running' | 'completed' | 'error';
+  step: string;
+  current: number;
+  total: number;
+  details: string;
+  result?: any;
+  error?: string;
+  startedAt: number;
+  updatedAt: number;
+}
+
+export const getBackupProgress = (jobId: string) =>
+  api.get<ApiResponse<BackupJobProgress>>(`/backup/progress/${jobId}`).then(r => r.data);
+
+export const downloadEventDump = (eventId: number) =>
+  api.get(`/backup/event/${eventId}/dump`, { responseType: 'blob' }).then(r => r.data);
+
+export const restoreEventDump = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post<ApiResponse<{ jobId: string }>>('/backup/restore-event-dump', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300000,
+  }).then(r => r.data);
+};
+
+// =====================================================
+// PERMISOS
+// =====================================================
+
+export const getPermissionMatrix = () =>
+  api.get<ApiResponse<{ matrix: Record<string, Record<string, boolean>>; permissions: string[]; roles: string[] }>>('/permissions/matrix').then(r => r.data);
+
+export const updateRolePermission = (role: string, permission: string, granted: boolean) =>
+  api.put<ApiResponse<void>>(`/permissions/role/${role}`, { permission, granted }).then(r => r.data);
+
+export const getMyPermissions = () =>
+  api.get<ApiResponse<{ permissions: string[]; role: string }>>('/permissions/my').then(r => r.data);
+
+// =====================================================
+// AUDITORÍA / ACTIVITY LOG
+// =====================================================
+
+export interface ActivityLogEntry {
+  id: number;
+  user_id: number | null;
+  username: string | null;
+  action: string;
+  category: string;
+  details: Record<string, unknown>;
+  ip_address: string | null;
+  created_at: string;
+}
+
+export interface ActivityLogStats {
+  byCategory: { category: string; count: string }[];
+  topUsers: { user_id: number; username: string; count: string }[];
+  counts: { last_24h: string; last_7d: string; last_30d: string };
+}
+
+export const getActivityLog = (params?: { category?: string; userId?: string; action?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+  api.get<ApiResponse<ActivityLogEntry[]>>('/activity-log', { params }).then(r => r.data);
+
+export const getActivityLogStats = () =>
+  api.get<ApiResponse<ActivityLogStats>>('/activity-log/stats').then(r => r.data);
 
 export default api;

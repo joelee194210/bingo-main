@@ -20,6 +20,7 @@ import { findWinners } from '../services/cardVerifier.js';
 import { requirePermission } from '../middleware/auth.js';
 import { emitGameUpdate, emitBallCalled, emitWinnerFound } from '../app.js';
 import type { GameType, StartGameRequest } from '../types/index.js';
+import { logActivity, auditFromReq } from '../services/auditService.js';
 
 const router = Router();
 
@@ -122,6 +123,8 @@ router.post('/', requirePermission('games:create'), async (req: Request, res: Re
 
     const state = await getGameState(pool, game.id);
 
+    logActivity(pool, auditFromReq(req, 'game_created', 'games', { game_id: game.id, event_id: event_id, game_type }));
+
     res.status(201).json({ success: true, data: state });
   } catch (error) {
     console.error('Error creando juego:', error);
@@ -136,6 +139,8 @@ router.post('/:id/start', requirePermission('games:play'), async (req: Request, 
     const gameId = parseInt(req.params.id as string, 10);
     const state = await startGame(pool, gameId);
     emitGameUpdate(gameId, state);
+
+    logActivity(pool, auditFromReq(req, 'game_started', 'games', { game_id: gameId }));
 
     res.json({ success: true, data: state });
   } catch (error) {
@@ -228,6 +233,8 @@ router.post('/:id/finish', requirePermission('games:finish'), async (req: Reques
     const gameId = parseInt(req.params.id as string, 10);
     const { gameState, report } = await finishGame(pool, gameId);
     emitGameUpdate(gameId, gameState);
+
+    logActivity(pool, auditFromReq(req, 'game_completed', 'games', { game_id: gameId }));
 
     res.json({
       success: true,

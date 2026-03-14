@@ -223,6 +223,32 @@ async function runMigrations(p: Pool): Promise<void> {
     console.log('✅ Migración aplicada: a_libreta agregado a inv_documentos');
   }
 
+  // Migration: es_agencia_loteria on almacenes
+  if (!(await checkColumn('almacenes', 'es_agencia_loteria'))) {
+    await p.query('ALTER TABLE almacenes ADD COLUMN es_agencia_loteria BOOLEAN DEFAULT FALSE');
+    console.log('✅ Migración aplicada: es_agencia_loteria agregado a almacenes');
+  }
+
+  // Migration: promo_fixed_rules table
+  const fixedRulesExists = await p.query(`SELECT to_regclass('public.promo_fixed_rules') as exists`);
+  if (!fixedRulesExists.rows[0].exists) {
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS promo_fixed_rules (
+        id SERIAL PRIMARY KEY,
+        event_id INTEGER NOT NULL,
+        prize_name TEXT NOT NULL,
+        quantity INTEGER NOT NULL CHECK(quantity > 0),
+        series_from INTEGER NOT NULL CHECK(series_from > 0),
+        series_to INTEGER NOT NULL CHECK(series_to > 0),
+        created_at TIMESTAMP DEFAULT NOW(),
+        CHECK(series_to >= series_from),
+        FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+      )
+    `);
+    await p.query('CREATE INDEX IF NOT EXISTS idx_promo_fixed_event ON promo_fixed_rules(event_id)');
+    console.log('✅ Migración aplicada: tabla promo_fixed_rules creada');
+  }
+
   // Backfill: lotes/cards que tienen caja con almacen pero ellos no
   await p.query(`
     UPDATE lotes SET almacen_id = c.almacen_id

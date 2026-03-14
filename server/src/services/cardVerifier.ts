@@ -1,5 +1,5 @@
-import type { Pool } from 'pg';
-import type { CardNumbers, Position, GameType, WinPattern, WIN_PATTERNS, BLACKOUT_POSITIONS } from '../types/index.js';
+import type { Pool, PoolClient } from 'pg';
+import type { CardNumbers, Position, GameType } from '../types/index.js';
 import { getNumberAtPosition, calculateCardHash } from './cardGenerator.js';
 
 // Patrones de victoria
@@ -70,7 +70,7 @@ export async function verifyEventCards(
 
   // Obtener todos los cartones del evento
   const cardsResult = await pool.query(`
-    SELECT id, card_code, validation_code, numbers_hash
+    SELECT id, card_code, validation_code, numbers_hash, serial
     FROM cards
     WHERE event_id = $1
     ORDER BY id
@@ -80,13 +80,16 @@ export async function verifyEventCards(
     card_code: string;
     validation_code: string;
     numbers_hash: string;
+    serial: string;
   }>;
 
   const totalCards = cards.length;
   const hashMap = new Map<string, number[]>();
-  const codeMap = new Map<string, number[]>();
+  const cardCodeMap = new Map<string, number[]>();
+  const valCodeMap = new Map<string, number[]>();
+  const serialMap = new Map<string, number[]>();
 
-  // Fase 1: Verificar duplicados de hash y códigos
+  // Fase 1: Verificar duplicados de hash, códigos y serial
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i];
 
@@ -98,18 +101,26 @@ export async function verifyEventCards(
     }
 
     // Verificar código de cartón duplicado
-    if (codeMap.has(card.card_code)) {
-      codeMap.get(card.card_code)!.push(card.id);
+    if (cardCodeMap.has(card.card_code)) {
+      cardCodeMap.get(card.card_code)!.push(card.id);
     } else {
-      codeMap.set(card.card_code, [card.id]);
+      cardCodeMap.set(card.card_code, [card.id]);
     }
 
-    // Verificar código de validación duplicado
-    const valCodeKey = `val_${card.validation_code}`;
-    if (codeMap.has(valCodeKey)) {
-      codeMap.get(valCodeKey)!.push(card.id);
+    // Verificar código de validación duplicado (Map separado para evitar falsos positivos)
+    if (valCodeMap.has(card.validation_code)) {
+      valCodeMap.get(card.validation_code)!.push(card.id);
     } else {
-      codeMap.set(valCodeKey, [card.id]);
+      valCodeMap.set(card.validation_code, [card.id]);
+    }
+
+    // Verificar serial duplicado
+    if (card.serial) {
+      if (serialMap.has(card.serial)) {
+        serialMap.get(card.serial)!.push(card.id);
+      } else {
+        serialMap.set(card.serial, [card.id]);
+      }
     }
 
     if (onProgress && (i + 1) % 1000 === 0) {
@@ -131,13 +142,35 @@ export async function verifyEventCards(
     }
   }
 
-  for (const [code, cardIds] of codeMap) {
+  for (const [code, cardIds] of cardCodeMap) {
     if (cardIds.length > 1) {
-      const isValidation = code.startsWith('val_');
+      duplicatesFound += cardIds.length - 1;
       issues.push({
         type: 'duplicate_code',
         cardIds,
-        description: `${cardIds.length} cartones tienen el mismo ${isValidation ? 'código de validación' : 'código de cartón'}`,
+        description: `${cardIds.length} cartones tienen el mismo código de cartón (${code})`,
+      });
+    }
+  }
+
+  for (const [code, cardIds] of valCodeMap) {
+    if (cardIds.length > 1) {
+      duplicatesFound += cardIds.length - 1;
+      issues.push({
+        type: 'duplicate_code',
+        cardIds,
+        description: `${cardIds.length} cartones tienen el mismo código de validación (${code})`,
+      });
+    }
+  }
+
+  for (const [serial, cardIds] of serialMap) {
+    if (cardIds.length > 1) {
+      duplicatesFound += cardIds.length - 1;
+      issues.push({
+        type: 'duplicate_code',
+        cardIds,
+        description: `${cardIds.length} cartones tienen el mismo serial (${serial})`,
       });
     }
   }
@@ -160,6 +193,8 @@ export async function checkCardExists(
   pool: Pool,
   numbersHash: string,
   cardCode: string,
+  validationCode?: string,
+  serial?: string,
   eventId?: number
 ): Promise<{ exists: boolean; reason?: string }> {
   // Verificar hash
@@ -174,13 +209,35 @@ export async function checkCardExists(
     return { exists: true, reason: 'Ya existe un cartón con los mismos números' };
   }
 
-  // Verificar código
+  // Verificar card_code
   const codeResult = (await pool.query(
     'SELECT id FROM cards WHERE card_code = $1 LIMIT 1', [cardCode]
   )).rows[0];
 
   if (codeResult) {
     return { exists: true, reason: 'Ya existe un cartón con el mismo código' };
+  }
+
+  // Verificar validation_code
+  if (validationCode) {
+    const valResult = (await pool.query(
+      'SELECT id FROM cards WHERE validation_code = $1 LIMIT 1', [validationCode]
+    )).rows[0];
+
+    if (valResult) {
+      return { exists: true, reason: 'Ya existe un cartón con el mismo código de validación' };
+    }
+  }
+
+  // Verificar serial
+  if (serial && eventId) {
+    const serialResult = (await pool.query(
+      'SELECT id FROM cards WHERE serial = $1 AND event_id = $2 LIMIT 1', [serial, eventId]
+    )).rows[0];
+
+    if (serialResult) {
+      return { exists: true, reason: 'Ya existe un cartón con el mismo serial en este evento' };
+    }
   }
 
   return { exists: false };
@@ -246,7 +303,7 @@ export function checkCardWinner(
 
   for (const pattern of patterns) {
     let matches = 0;
-    let required = pattern.length;
+    const required = pattern.length;
 
     for (const [row, col] of pattern) {
       const num = getNumberAtPosition(numbers, row, col, useFreeCenter);
@@ -279,7 +336,7 @@ export function checkCardWinner(
  * Busca todos los cartones ganadores en un evento
  */
 export async function findWinners(
-  pool: Pool,
+  pool: Pool | PoolClient,
   eventId: number,
   gameId: number,
   calledBalls: number[],
@@ -309,35 +366,47 @@ export async function findWinners(
   const event = eventResult.rows[0] as { use_free_center: boolean } | undefined;
   const useFreeCenter = event?.use_free_center !== false; // Por defecto true
 
-  // Obtener cartones (todos o solo vendidos según el modo)
-  const query = isPracticeMode
+  // Procesar cartones en batches para evitar OOM con muchos cartones (600K+)
+  const BATCH_SIZE = 10000;
+  const baseQuery = isPracticeMode
     ? 'SELECT id, card_number, card_code, validation_code, numbers, buyer_name FROM cards WHERE event_id = $1'
     : 'SELECT id, card_number, card_code, validation_code, numbers, buyer_name FROM cards WHERE event_id = $1 AND is_sold = TRUE';
 
-  const cardsResult = await pool.query(query, [eventId]);
-  const cards = cardsResult.rows as Array<{
-    id: number;
-    card_number: number;
-    card_code: string;
-    validation_code: string;
-    numbers: string;
-    buyer_name: string | null;
-  }>;
+  let offset = 0;
+  let hasMore = true;
 
-  for (const card of cards) {
-    const numbers: CardNumbers = JSON.parse(card.numbers);
-    const result = checkCardWinner(numbers, calledSet, gameType, customPattern, useFreeCenter);
+  while (hasMore) {
+    const cardsResult = await pool.query(
+      `${baseQuery} ORDER BY id LIMIT $2 OFFSET $3`,
+      [eventId, BATCH_SIZE, offset]
+    );
+    const cards = cardsResult.rows as Array<{
+      id: number;
+      card_number: number;
+      card_code: string;
+      validation_code: string;
+      numbers: string;
+      buyer_name: string | null;
+    }>;
 
-    if (result.isWinner) {
-      winners.push({
-        cardId: card.id,
-        cardCode: card.card_code,
-        cardNumber: card.card_number,
-        validationCode: card.validation_code,
-        winningPattern: result.winningPattern!,
-        buyerName: card.buyer_name || undefined,
-      });
+    for (const card of cards) {
+      const numbers: CardNumbers = JSON.parse(card.numbers);
+      const result = checkCardWinner(numbers, calledSet, gameType, customPattern, useFreeCenter);
+
+      if (result.isWinner) {
+        winners.push({
+          cardId: card.id,
+          cardCode: card.card_code,
+          cardNumber: card.card_number,
+          validationCode: card.validation_code,
+          winningPattern: result.winningPattern!,
+          buyerName: card.buyer_name || undefined,
+        });
+      }
     }
+
+    hasMore = cards.length === BATCH_SIZE;
+    offset += BATCH_SIZE;
   }
 
   return winners;

@@ -198,6 +198,7 @@ export interface Almacen {
   contact_name: string | null;
   contact_phone: string | null;
   is_active: number;
+  es_agencia_loteria: boolean;
   created_at: string;
   updated_at: string;
   children?: Almacen[];
@@ -354,11 +355,39 @@ export interface PromoData {
   stats: PromoStats;
 }
 
+export interface PromoFixedRule {
+  id: number;
+  event_id: number;
+  prize_name: string;
+  quantity: number;
+  series_from: number;
+  series_to: number;
+  created_at?: string;
+}
+
+export interface PromoVerificationDetail {
+  prize: string;
+  expected: number;
+  actual: number;
+  ok: boolean;
+}
+
+export interface PromoFixedRuleApplied {
+  prize: string;
+  series: string;
+  placed: number;
+}
+
 export interface PromoDistributeResult {
   total_cards: number;
   winners: number;
   no_prize: number;
   message: string;
+  verification?: {
+    passed: boolean;
+    details: PromoVerificationDetail[];
+  };
+  fixed_rules_applied?: PromoFixedRuleApplied[];
 }
 
 export interface PromoWinner {

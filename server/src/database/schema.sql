@@ -37,6 +37,29 @@ CREATE INDEX IF NOT EXISTS idx_sessions_token ON user_sessions(token_hash);
 -- TABLAS DE BINGO
 -- =====================================================
 
+-- =====================================================
+-- MÓDULO DE INVENTARIO AISLADO (antes de cards por FK)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS almacenes (
+    id SERIAL PRIMARY KEY,
+    event_id INTEGER NOT NULL,
+    parent_id INTEGER,
+    name TEXT NOT NULL,
+    code TEXT NOT NULL,
+    address TEXT,
+    contact_name TEXT,
+    contact_phone TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    es_agencia_loteria BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (parent_id) REFERENCES almacenes(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_almacenes_event_code ON almacenes(event_id, code);
+CREATE INDEX IF NOT EXISTS idx_almacenes_parent ON almacenes(parent_id);
+CREATE INDEX IF NOT EXISTS idx_almacenes_event ON almacenes(event_id);
+
 CREATE TABLE IF NOT EXISTS events (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -48,6 +71,16 @@ CREATE TABLE IF NOT EXISTS events (
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- FK diferido: almacenes.event_id → events (almacenes se crea primero por dependencia de cards)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'almacenes_event_id_fkey' AND table_name = 'almacenes'
+  ) THEN
+    ALTER TABLE almacenes ADD CONSTRAINT almacenes_event_id_fkey FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS cards (
     id SERIAL PRIMARY KEY,
@@ -67,7 +100,7 @@ CREATE TABLE IF NOT EXISTS cards (
     buyer_libreta TEXT,
     sold_by INTEGER,
     almacen_id INTEGER,
-    lote_id INTEGER,
+    lote_id INTEGER REFERENCES lotes(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
     FOREIGN KEY (sold_by) REFERENCES users(id),
@@ -248,6 +281,19 @@ CREATE TABLE IF NOT EXISTS promo_prizes (
 
 CREATE INDEX IF NOT EXISTS idx_promo_prizes_event ON promo_prizes(event_id);
 
+CREATE TABLE IF NOT EXISTS promo_fixed_rules (
+    id SERIAL PRIMARY KEY,
+    event_id INTEGER NOT NULL,
+    prize_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL CHECK(quantity > 0),
+    series_from INTEGER NOT NULL CHECK(series_from > 0),
+    series_to INTEGER NOT NULL CHECK(series_to > 0),
+    created_at TIMESTAMP DEFAULT NOW(),
+    CHECK(series_to >= series_from),
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_promo_fixed_event ON promo_fixed_rules(event_id);
+
 -- =====================================================
 -- SISTEMA DE INVENTARIO LEGACY (centros, cajas, lotes, envios)
 -- =====================================================
@@ -375,27 +421,8 @@ CREATE INDEX IF NOT EXISTS idx_audit_centro ON inventory_audit(centro_id);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON inventory_audit(created_at);
 
 -- =====================================================
--- MÓDULO DE INVENTARIO AISLADO
+-- MÓDULO DE INVENTARIO AISLADO (cont.)
 -- =====================================================
-
-CREATE TABLE IF NOT EXISTS almacenes (
-    id SERIAL PRIMARY KEY,
-    event_id INTEGER NOT NULL,
-    parent_id INTEGER,
-    name TEXT NOT NULL,
-    code TEXT NOT NULL,
-    address TEXT,
-    contact_name TEXT,
-    contact_phone TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-    FOREIGN KEY (parent_id) REFERENCES almacenes(id) ON DELETE SET NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_almacenes_event_code ON almacenes(event_id, code);
-CREATE INDEX IF NOT EXISTS idx_almacenes_parent ON almacenes(parent_id);
-CREATE INDEX IF NOT EXISTS idx_almacenes_event ON almacenes(event_id);
 
 CREATE TABLE IF NOT EXISTS almacen_usuarios (
     id SERIAL PRIMARY KEY,

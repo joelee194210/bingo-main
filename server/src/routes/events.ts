@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { getPool } from '../database/init.js';
 import { requirePermission } from '../middleware/auth.js';
 import type { BingoEvent, CreateEventRequest } from '../types/index.js';
+import { logActivity, auditFromReq } from '../services/auditService.js';
 
 const router = Router();
 
@@ -54,6 +55,8 @@ router.post('/', requirePermission('events:create'), async (req: Request, res: R
 
     const { rows } = await pool.query('SELECT * FROM events WHERE id = $1', [result.rows[0].id]);
     const event = rows[0] as BingoEvent;
+
+    logActivity(pool, auditFromReq(req, 'event_created', 'events', { event_id: event.id, name: event.name }));
 
     res.status(201).json({ success: true, data: event });
   } catch (error) {
@@ -108,6 +111,9 @@ router.put('/:id', requirePermission('events:update'), async (req: Request, res:
 
     const { rows } = await pool.query('SELECT * FROM events WHERE id = $1', [req.params.id]);
     const event = rows[0] as BingoEvent;
+
+    logActivity(pool, auditFromReq(req, 'event_updated', 'events', { event_id: event.id, changes: { name, description, status } }));
+
     res.json({ success: true, data: event });
   } catch (error) {
     console.error('Error actualizando evento:', error);
@@ -126,6 +132,9 @@ router.delete('/:id', requirePermission('events:delete'), async (req: Request, r
     }
 
     await pool.query('DELETE FROM events WHERE id = $1', [req.params.id]);
+
+    logActivity(pool, auditFromReq(req, 'event_deleted', 'events', { event_id: parseInt(req.params.id as string) }));
+
     res.json({ success: true, message: 'Evento eliminado' });
   } catch (error) {
     console.error('Error eliminando evento:', error);

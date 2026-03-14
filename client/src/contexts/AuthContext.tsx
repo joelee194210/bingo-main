@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type { User, UserRole, AuthState } from '../types/auth';
-import { hasPermission } from '../types/auth';
+import { hasPermission as hasPermissionDefault } from '../types/auth';
 import api from '../services/api';
 
 interface AuthContextType extends AuthState {
@@ -12,14 +12,8 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// M10: token ahora en httpOnly cookie, solo guardamos user en localStorage
+// M10: token en httpOnly cookie, solo guardamos user en localStorage
 const USER_KEY = 'bingo_auth_user';
-// Token en memoria solo para Socket.IO (no persiste en localStorage)
-let memoryToken: string | null = null;
-
-export function getAuthToken(): string | null {
-  return memoryToken;
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -28,6 +22,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: false,
     isLoading: true,
   });
+  const dynamicPermissions = useRef<string[] | null>(null);
+
+  const loadDynamicPermissions = useCallback(async () => {
+    try {
+      const resp = await api.get('/permissions/my');
+      if (resp.data.success) {
+        dynamicPermissions.current = resp.data.data.permissions;
+      }
+    } catch {
+      // Fallback a permisos hardcodeados
+      dynamicPermissions.current = null;
+    }
+  }, []);
+
+  const clearAuth = useCallback(() => {
+    localStorage.removeItem(USER_KEY);
+    setState({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
+  }, []);
+
+  const verifyToken = useCallback(async () => {
+    try {
+      const response = await api.get('/auth/me');
+      if (response.data.success) {
+        const user = response.data.data as User;
+        localStorage.setItem(USER_KEY, JSON.stringify(user));
+        setState(s => ({ ...s, user, isAuthenticated: true, isLoading: false }));
+        loadDynamicPermissions();
+      } else {
+        clearAuth();
+      }
+    } catch {
+      clearAuth();
+    }
+  }, [loadDynamicPermissions, clearAuth]);
 
   // Al iniciar, verificar si la cookie httpOnly es válida
   useEffect(() => {
@@ -50,52 +83,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Intentar verificar por si hay cookie válida
       verifyToken();
     }
-  }, []);
-
-  const verifyToken = async () => {
-    try {
-      const response = await api.get('/auth/me');
-      if (response.data.success) {
-        const user = response.data.data as User;
-        localStorage.setItem(USER_KEY, JSON.stringify(user));
-        setState(s => ({ ...s, user, isAuthenticated: true, isLoading: false }));
-      } else {
-        clearAuth();
-      }
-    } catch {
-      clearAuth();
-    }
-  };
-
-  const clearAuth = () => {
-    localStorage.removeItem(USER_KEY);
-    memoryToken = null;
-    setState({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
-  };
+  }, [verifyToken, clearAuth]);
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
       const response = await api.post('/auth/login', { username, password });
 
       if (response.data.success) {
-        const { token, user } = response.data.data;
+        const { user } = response.data.data;
 
         // M10: cookie httpOnly se setea automáticamente por el server
-        // Guardar solo user en localStorage, token en memoria para Socket.IO
         localStorage.setItem(USER_KEY, JSON.stringify(user));
-        memoryToken = token;
 
         setState({
           user,
-          token,
+          token: null,
           isAuthenticated: true,
           isLoading: false,
         });
+
+        loadDynamicPermissions();
 
         return true;
       }
@@ -114,7 +121,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkPermission = (permission: string): boolean => {
     if (!state.user) return false;
-    return hasPermission(state.user.role, permission);
+    // Usar permisos dinámicos si están cargados, sino fallback a defaults
+    if (dynamicPermissions.current) {
+      return dynamicPermissions.current.includes(permission);
+    }
+    return hasPermissionDefault(state.user.role, permission);
   };
 
   const isRole = (...roles: UserRole[]): boolean => {

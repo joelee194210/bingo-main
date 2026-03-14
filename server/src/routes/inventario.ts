@@ -4,6 +4,7 @@ import { getPool } from '../database/init.js';
 import { requirePermission, requireRole } from '../middleware/auth.js';
 import * as inv from '../services/inventarioModule.js';
 import { getMovimientoPdfPath } from '../services/movimientoPdfService.js';
+import { logActivity, auditFromReq } from '../services/auditService.js';
 
 const router = Router();
 
@@ -70,7 +71,7 @@ router.get('/almacenes/:id', requirePermission('inventory:read'), async (req, re
 // MIS ALMACENES (para usuario logueado)
 // =====================================================
 
-router.get('/mis-almacenes', async (req, res) => {
+router.get('/mis-almacenes', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
     const userId = (req as unknown as { user: { id: number } }).user.id;
@@ -349,6 +350,7 @@ router.post('/asignaciones', requirePermission('inventory:manage'), async (req, 
     const { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe, ...asignacionData } = req.body;
     const firmas = (firma_entrega || firma_recibe) ? { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } : undefined;
     const data = await inv.createAsignacion(pool, { ...asignacionData, asignado_por: userId }, firmas);
+    logActivity(pool, auditFromReq(req, 'asignacion_created', 'inventory', { asignacion_id: data.id, referencia: asignacionData.referencia }));
     res.status(201).json({ success: true, data });
   } catch (error) {
     res.status(400).json({ success: false, error: (error as Error).message });
@@ -361,7 +363,9 @@ router.post('/asignaciones/:id/devolver', requirePermission('inventory:manage'),
     const userId = (req as unknown as { user: { id: number } }).user.id;
     const { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body || {};
     const firmas = (firma_entrega || firma_recibe) ? { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } : undefined;
-    const data = await inv.devolverAsignacion(pool, parseInt(req.params.id as string, 10), userId, firmas);
+    const asigId = parseInt(req.params.id as string, 10);
+    const data = await inv.devolverAsignacion(pool, asigId, userId, firmas);
+    logActivity(pool, auditFromReq(req, 'devolucion', 'inventory', { asignacion_id: asigId }));
     res.json({ success: true, data });
   } catch (error) {
     res.status(400).json({ success: false, error: (error as Error).message });
@@ -453,6 +457,7 @@ router.post('/venta', requirePermission('inventory:manage'), async (req, res) =>
       buyer_phone,
       firmas,
     }, userId);
+    logActivity(pool, auditFromReq(req, 'venta', 'inventory', { event_id, items_count: items.length, total_cartones: data.totalCartones }));
     res.json({ success: true, data });
   } catch (error) {
     res.status(400).json({ success: false, error: (error as Error).message });
@@ -646,6 +651,20 @@ router.get('/escanear/:eventId/:codigo', requirePermission('inventory:read'), as
     const pool = getPool();
     const data = await inv.escanearCodigo(pool, parseInt(req.params.eventId as string, 10), req.params.codigo as string);
     if (!data) return res.status(404).json({ success: false, error: 'Codigo no encontrado' });
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// =====================================================
+// DASHBOARD LOTERÍA
+// =====================================================
+
+router.get('/loteria-dashboard/:eventId', requirePermission('inventory:read'), async (req, res) => {
+  try {
+    const pool = getPool();
+    const data = await inv.getLoteriaDashboard(pool, parseInt(req.params.eventId as string, 10));
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });

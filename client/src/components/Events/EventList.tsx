@@ -67,16 +67,15 @@ export default function EventList() {
     if (newEvent.name.trim()) createMutation.mutate(newEvent);
   };
 
-  const events = data?.data || [];
-
   const filteredEvents = useMemo(() => {
+    const events = data?.data || [];
     if (!searchTerm.trim()) return events;
     const q = searchTerm.toLowerCase();
     return events.filter((ev) =>
       ev.name.toLowerCase().includes(q) ||
       (ev.description && ev.description.toLowerCase().includes(q))
     );
-  }, [events, searchTerm]);
+  }, [data?.data, searchTerm]);
 
   const getStatusBadge = (status: EventStatus) => (
     <Badge className={getStatusColor(status)}>{EVENT_STATUS_LABELS[status]}</Badge>

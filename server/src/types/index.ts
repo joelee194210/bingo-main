@@ -348,6 +348,7 @@ export interface Almacen {
   contact_name: string | null;
   contact_phone: string | null;
   is_active: boolean;
+  es_agencia_loteria: boolean;
   created_at: string;
   updated_at: string;
   children?: Almacen[];

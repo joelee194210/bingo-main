@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Package, ClipboardList, CreditCard, Warehouse,
@@ -32,7 +32,7 @@ export default function MiInventario() {
     queryFn: getMisAlmacenes,
   });
 
-  const misAlmacenes = misAlmacenesData?.data || [];
+  const misAlmacenes = useMemo(() => misAlmacenesData?.data || [], [misAlmacenesData?.data]);
   const currentAlmacen = misAlmacenes.find((a) => a.almacen_id.toString() === selectedAlmacen);
 
   const { data: resumenData } = useQuery({

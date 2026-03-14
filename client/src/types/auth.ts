@@ -42,7 +42,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   inventory: 'bg-purple-100 text-purple-700',
 };
 
-// Permisos por rol (para verificación en frontend)
+// Permisos default por rol (fallback si no se cargaron dinámicos)
 export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   admin: [
     'users:read', 'users:create', 'users:update', 'users:delete',
@@ -52,6 +52,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'reports:read', 'reports:export',
     'inventory:read', 'inventory:manage',
     'dashboard:read',
+    'permissions:manage',
+    'audit:read',
   ],
   moderator: [
     'events:read',
@@ -60,6 +62,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'reports:read',
     'inventory:read', 'inventory:manage',
     'dashboard:read',
+    'audit:read',
   ],
   seller: [
     'events:read',
@@ -86,3 +89,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
 export function hasPermission(role: UserRole, permission: string): boolean {
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 }
+
+// Tipo para la matriz de permisos del servidor
+export type PermissionMatrix = Record<string, Record<string, boolean>>;

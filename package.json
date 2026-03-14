@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Plataforma de administración de juegos de Bingo Americano",
   "private": true,
+  "type": "module",
   "workspaces": [
     "client",
     "server"
@@ -13,9 +14,15 @@
     "dev:client": "npm run dev --workspace=client",
     "build": "npm run build --workspaces",
     "start": "npm run start --workspace=server",
-    "db:init": "npm run db:init --workspace=server"
+    "db:init": "npm run db:init --workspace=server",
+    "lint": "eslint client/src server/src",
+    "lint:fix": "eslint client/src server/src --fix"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "typescript-eslint": "^8.57.0"
   }
 }

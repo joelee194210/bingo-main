@@ -18,12 +18,17 @@ const CardActivation = lazy(() => import('./components/Cards/CardActivation'));
 const Users = lazy(() => import('./pages/Users'));
 const QRExport = lazy(() => import('./components/Export/QRExport'));
 const BarcodeExport = lazy(() => import('./components/Export/BarcodeExport'));
+const QRCajasExport = lazy(() => import('./components/Export/QRCajasExport'));
 const PromoPage = lazy(() => import('./components/Promo/PromoPage'));
 const InventoryPage = lazy(() => import('./components/Inventory/InventoryPage'));
 const AsignacionDetail = lazy(() => import('./components/Inventory/AsignacionDetail'));
 const InventarioUsuarios = lazy(() => import('./components/Inventory/InventarioUsuarios'));
 const MiInventario = lazy(() => import('./components/Inventory/MiInventario'));
 const VentaPage = lazy(() => import('./components/Inventory/VentaPage'));
+const LoteriaDashboard = lazy(() => import('./components/Inventory/LoteriaDashboard'));
+const BackupPage = lazy(() => import('./components/Backup/BackupPage'));
+const Permissions = lazy(() => import('./pages/Permissions'));
+const ActivityLog = lazy(() => import('./pages/ActivityLog'));
 
 function LazyFallback() {
   return (
@@ -114,28 +119,12 @@ function App() {
           }
         />
 
-        {/* Inventario */}
+        {/* Inventario — rutas estáticas ANTES de la dinámica :eventId */}
         <Route
           path="inventory"
           element={
             <ProtectedRoute permission="inventory:read">
               <InventoryPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="inventory/:eventId"
-          element={
-            <ProtectedRoute permission="inventory:read">
-              <InventoryPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="inventory/:eventId/asignacion/:id"
-          element={
-            <ProtectedRoute permission="inventory:read">
-              <AsignacionDetail />
             </ProtectedRoute>
           }
         />
@@ -163,6 +152,62 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="inventory/:eventId"
+          element={
+            <ProtectedRoute permission="inventory:read">
+              <InventoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="inventory/:eventId/asignacion/:id"
+          element={
+            <ProtectedRoute permission="inventory:read">
+              <AsignacionDetail />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Dashboard Lotería */}
+        <Route
+          path="loteria"
+          element={
+            <ProtectedRoute permission="inventory:read">
+              <LoteriaDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Backup y Restauración */}
+        <Route
+          path="backup"
+          element={
+            <ProtectedRoute permission="users:read">
+              <BackupPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Permisos */}
+        <Route
+          path="permisos"
+          element={
+            <ProtectedRoute permission="permissions:manage">
+              <Permissions />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Auditoría */}
+        <Route
+          path="auditoria"
+          element={
+            <ProtectedRoute permission="audit:read">
+              <ActivityLog />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Exportar QR Codes */}
         <Route
@@ -180,6 +225,16 @@ function App() {
           element={
             <ProtectedRoute permission="cards:export">
               <BarcodeExport />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* QR Cajas */}
+        <Route
+          path="export/qr-cajas"
+          element={
+            <ProtectedRoute permission="cards:export">
+              <QRCajasExport />
             </ProtectedRoute>
           }
         />

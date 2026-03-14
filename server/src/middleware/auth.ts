@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { verifyToken, getUserById } from '../services/authService.js';
 import { getPool } from '../database/init.js';
 import type { JWTPayload, UserRole, UserPublic } from '../types/auth.js';
-import { ROLE_PERMISSIONS } from '../types/auth.js';
+import { hasPermission as checkPerm } from '../services/permissionService.js';
 
 // Extender Request para incluir usuario autenticado
 declare global {
@@ -94,8 +94,7 @@ export function requirePermission(permission: string) {
       });
     }
 
-    const userPermissions = ROLE_PERMISSIONS[req.user.role];
-    if (!userPermissions.includes(permission)) {
+    if (!checkPerm(req.user.role, permission)) {
       return res.status(403).json({
         success: false,
         error: 'No tienes permisos para realizar esta acción',

@@ -90,6 +90,33 @@ export default function GamePlay() {
     queryClient.setQueryData(['game', id], { success: true, data: socketData });
   }, [id, queryClient]);
 
+  const playSound = useCallback((ball: number) => {
+    if (!soundEnabled) return;
+    try {
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      oscillator.frequency.value = 440 + (ball * 5);
+      oscillator.type = 'sine';
+      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.3);
+    } catch {
+      // Silently ignore audio errors
+    }
+  }, [soundEnabled]);
+
   const handleSocketBallCalled = useCallback((result: any) => {
     if (result?.ball) {
       setLastCalledBall(result.ball);
@@ -97,7 +124,7 @@ export default function GamePlay() {
     }
     // Refetch para tener el estado completo actualizado
     refetch();
-  }, [refetch]);
+  }, [refetch, playSound]);
 
   const handleSocketWinnerFound = useCallback((socketWinners: any[]) => {
     if (socketWinners?.length > 0) {
@@ -223,33 +250,6 @@ export default function GamePlay() {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}m ${secs}s`;
-  };
-
-  const playSound = (ball: number) => {
-    if (!soundEnabled) return;
-    try {
-      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-        audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') ctx.resume();
-
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      oscillator.frequency.value = 440 + (ball * 5);
-      oscillator.type = 'sine';
-      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-
-      oscillator.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + 0.3);
-    } catch {
-      // Silently ignore audio errors
-    }
   };
 
   const getColumn = (num: number): string => {

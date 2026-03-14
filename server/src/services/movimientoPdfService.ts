@@ -238,7 +238,7 @@ export interface DocumentoItemDetalle {
   referencia: string;
   cartones: number;
   lotes?: { lote_code: string; total_cards: number; cards_sold: number }[];
-  cartonesDetalle?: { card_code: string; serial: string; is_sold: boolean }[];
+  cartonesDetalle?: { card_code: string; serial: string; is_sold: boolean; total_cards?: number; cards_sold?: number }[];
 }
 
 export interface DocumentoPdfData {
@@ -284,7 +284,7 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
 
     // ---- INFO GENERAL ----
     const infoCol1 = margin;
-    const infoCol2 = margin + pageWidth / 2;
+    const _infoCol2 = margin + pageWidth / 2;
 
     doc.fontSize(9).font('Helvetica-Bold').text('Evento: ', infoCol1, doc.y, { continued: true });
     doc.font('Helvetica').text(data.eventoNombre);
@@ -450,7 +450,7 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
 }
 
 export function getMovimientoPdfPath(filename: string): string {
-  const sanitized = filename.replace(/[\/\\]/g, '').replace(/\.\./g, '');
+  const sanitized = filename.replace(/[/\\]/g, '').replace(/\.\./g, '');
   const resolved = join(MOVIMIENTOS_DIR, sanitized);
   if (!resolved.startsWith(MOVIMIENTOS_DIR)) {
     throw new Error('Ruta de archivo no permitida');

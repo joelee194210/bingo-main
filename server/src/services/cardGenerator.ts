@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from 'crypto';
-import type { CardNumbers, BingoColumn, BINGO_RANGES } from '../types/index.js';
+import type { CardNumbers, BingoColumn } from '../types/index.js';
 
 // Rangos de números por columna - Bingo Americano 75
 const BINGO_COLUMN_RANGES: Record<BingoColumn, { min: number; max: number }> = {

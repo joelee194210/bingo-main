@@ -37,6 +37,14 @@ server/data/
 
 # Generated reports
 server/reports/
+server/exports/
+
+# SSL certs
+server/certs/
+
+# SQL dumps
+*.sql.bak
+event_dump_test.sql
 
 # Coverage
 coverage/
@@ -46,3 +54,4 @@ coverage/
 
 # Vite
 vite.config.ts.timestamp-*
+.playwright-mcp/

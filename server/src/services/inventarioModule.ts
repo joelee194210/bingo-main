@@ -7,7 +7,7 @@ import type {
   InvMovimiento,
   BingoCard,
 } from '../types/index.js';
-import { generateMovimientoPdf, generateDocumentoPdf, type MovimientoPdfData, type DocumentoItemDetalle } from './movimientoPdfService.js';
+import { generateMovimientoPdf, generateDocumentoPdf, type DocumentoItemDetalle } from './movimientoPdfService.js';
 
 export interface FirmaData {
   firma_entrega?: string;
@@ -50,7 +50,7 @@ export async function createAlmacen(
 export async function updateAlmacen(
   pool: Pool,
   id: number,
-  data: { name?: string; parent_id?: number | null; address?: string; contact_name?: string; contact_phone?: string; is_active?: boolean }
+  data: { name?: string; parent_id?: number | null; address?: string; contact_name?: string; contact_phone?: string; is_active?: boolean; es_agencia_loteria?: boolean }
 ): Promise<Almacen> {
   const almacenResult = await pool.query('SELECT * FROM almacenes WHERE id = $1', [id]);
   const almacen = almacenResult.rows[0] as Almacen | undefined;
@@ -74,6 +74,7 @@ export async function updateAlmacen(
   if (data.contact_name !== undefined) { fields.push(`contact_name = $${paramIndex++}`); values.push(data.contact_name); }
   if (data.contact_phone !== undefined) { fields.push(`contact_phone = $${paramIndex++}`); values.push(data.contact_phone); }
   if (data.is_active !== undefined) { fields.push(`is_active = $${paramIndex++}`); values.push(data.is_active); }
+  if (data.es_agencia_loteria !== undefined) { fields.push(`es_agencia_loteria = $${paramIndex++}`); values.push(data.es_agencia_loteria); }
 
   fields.push('updated_at = CURRENT_TIMESTAMP');
   values.push(id);
@@ -91,6 +92,113 @@ export async function getAlmacen(pool: Pool, id: number): Promise<Almacen | unde
 export async function getAlmacenes(pool: Pool, eventId: number): Promise<Almacen[]> {
   const result = await pool.query('SELECT * FROM almacenes WHERE event_id = $1 ORDER BY name', [eventId]);
   return result.rows as Almacen[];
+}
+
+export async function getLoteriaDashboard(pool: Pool, eventId: number) {
+  // Resumen global del evento
+  const globalResult = await pool.query(`
+    SELECT
+      COUNT(*) AS total_cartones,
+      COUNT(*) FILTER (WHERE is_sold = true) AS cartones_vendidos,
+      COUNT(*) FILTER (WHERE is_sold = false) AS cartones_disponibles
+    FROM cards WHERE event_id = $1
+  `, [eventId]);
+  const global = globalResult.rows[0];
+
+  const cajasResult = await pool.query(`
+    SELECT COUNT(*) AS total_cajas FROM cajas WHERE event_id = $1
+  `, [eventId]);
+  const lotesResult = await pool.query(`
+    SELECT COUNT(*) AS total_lotes FROM lotes WHERE event_id = $1
+  `, [eventId]);
+
+  // Stats por agencia (solo almacenes marcados como agencia de lotería)
+  const agenciasResult = await pool.query(`
+    SELECT
+      a.id, a.name, a.code,
+      COALESCE(stock.total_cajas, 0) AS total_cajas,
+      COALESCE(stock.total_lotes, 0) AS total_lotes,
+      COALESCE(stock.total_cartones, 0) AS total_cartones,
+      COALESCE(sold.vendidos, 0) AS cartones_vendidos
+    FROM almacenes a
+    LEFT JOIN (
+      SELECT c.almacen_id,
+        COUNT(DISTINCT c.id) AS total_cajas,
+        COUNT(DISTINCT l.id) AS total_lotes,
+        COUNT(DISTINCT ca.id) AS total_cartones
+      FROM cajas c
+      LEFT JOIN lotes l ON l.caja_id = c.id
+      LEFT JOIN cards ca ON ca.lote_id = l.id
+      WHERE c.event_id = $1 AND c.almacen_id IS NOT NULL
+      GROUP BY c.almacen_id
+    ) stock ON stock.almacen_id = a.id
+    LEFT JOIN (
+      SELECT almacen_id, COUNT(*) AS vendidos
+      FROM cards WHERE event_id = $1 AND is_sold = true
+      GROUP BY almacen_id
+    ) sold ON sold.almacen_id = a.id
+    WHERE a.event_id = $1 AND a.es_agencia_loteria = true AND a.is_active = true
+    ORDER BY a.name
+  `, [eventId]);
+
+  // Ventas por día (últimos 30 días)
+  const ventasPorDiaResult = await pool.query(`
+    SELECT
+      DATE(sold_at) AS fecha,
+      COUNT(*) AS vendidos
+    FROM cards
+    WHERE event_id = $1 AND is_sold = true AND sold_at >= NOW() - INTERVAL '30 days'
+    GROUP BY DATE(sold_at)
+    ORDER BY fecha
+  `, [eventId]);
+
+  // Ventas por agencia por día (últimos 7 días, top agencias)
+  const ventasAgenciaDiaResult = await pool.query(`
+    SELECT
+      a.name AS agencia,
+      DATE(c.sold_at) AS fecha,
+      COUNT(*) AS vendidos
+    FROM cards c
+    JOIN almacenes a ON a.id = c.almacen_id AND a.es_agencia_loteria = true
+    WHERE c.event_id = $1 AND c.is_sold = true AND c.sold_at >= NOW() - INTERVAL '7 days'
+    GROUP BY a.name, DATE(c.sold_at)
+    ORDER BY fecha, a.name
+  `, [eventId]);
+
+  return {
+    resumen: {
+      total_cartones: parseInt(global.total_cartones),
+      cartones_vendidos: parseInt(global.cartones_vendidos),
+      cartones_disponibles: parseInt(global.cartones_disponibles),
+      total_cajas: parseInt(cajasResult.rows[0].total_cajas),
+      total_lotes: parseInt(lotesResult.rows[0].total_lotes),
+      porcentaje_vendido: parseInt(global.total_cartones) > 0
+        ? Math.round((parseInt(global.cartones_vendidos) / parseInt(global.total_cartones)) * 100)
+        : 0,
+    },
+    agencias: agenciasResult.rows.map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      code: a.code,
+      total_cajas: parseInt(a.total_cajas),
+      total_lotes: parseInt(a.total_lotes),
+      total_cartones: parseInt(a.total_cartones),
+      cartones_vendidos: parseInt(a.cartones_vendidos),
+      cartones_disponibles: parseInt(a.total_cartones) - parseInt(a.cartones_vendidos),
+      porcentaje: parseInt(a.total_cartones) > 0
+        ? Math.round((parseInt(a.cartones_vendidos) / parseInt(a.total_cartones)) * 100)
+        : 0,
+    })),
+    ventas_por_dia: ventasPorDiaResult.rows.map((r: any) => ({
+      fecha: r.fecha,
+      vendidos: parseInt(r.vendidos),
+    })),
+    ventas_agencia_dia: ventasAgenciaDiaResult.rows.map((r: any) => ({
+      agencia: r.agencia,
+      fecha: r.fecha,
+      vendidos: parseInt(r.vendidos),
+    })),
+  };
 }
 
 export async function getAlmacenTree(pool: Pool, eventId: number): Promise<Almacen[]> {
@@ -494,7 +602,7 @@ export async function ejecutarMovimientoBulk(
   for (const item of data.items) {
     try {
       // Reutilizar lógica de mover individual (sin generar PDF individual)
-      const almResult = destinoResult;
+      const _almResult = destinoResult;
       let cartones = 0;
       let itemOrigenName: string | null = null;
 
@@ -994,7 +1102,7 @@ export async function getCajas(pool: Pool, eventId: number, almacenId?: number):
 
   // Obtener todos los lotes en una sola query (evita N+1)
   const cajaIds = cajasResult.rows.map((c: any) => c.id);
-  let lotesMap: Record<number, any[]> = {};
+  const lotesMap: Record<number, any[]> = {};
   if (cajaIds.length > 0) {
     const lotesResult = await pool.query(`
       SELECT id, caja_id, lote_code, series_number, total_cards, cards_sold, status
@@ -1100,12 +1208,14 @@ export async function createAsignacion(
   let asignacionId: number;
   let movimientoId: number;
 
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
     // Check none of these cards are already assigned (in active assignment)
     if (cardIds.length > 0) {
       const placeholders = cardIds.map((_, idx) => `$${idx + 1}`).join(',');
-      const alreadyAssignedResult = await pool.query(`
+      const alreadyAssignedResult = await client.query(`
         SELECT iac.card_id, ia.persona_nombre, ia.referencia
         FROM inv_asignacion_cartones iac
         JOIN inv_asignaciones ia ON ia.id = iac.asignacion_id
@@ -1119,7 +1229,7 @@ export async function createAsignacion(
       }
     }
 
-    const insertResult = await pool.query(`
+    const insertResult = await client.query(`
       INSERT INTO inv_asignaciones (event_id, almacen_id, tipo_entidad, referencia, cantidad_cartones, persona_nombre, persona_telefono, persona_user_id, proposito, asignado_por)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
@@ -1133,14 +1243,14 @@ export async function createAsignacion(
 
     // Insert card details
     for (const card of cards) {
-      await pool.query(`
+      await client.query(`
         INSERT INTO inv_asignacion_cartones (asignacion_id, card_id, card_code, serial)
         VALUES ($1, $2, $3, $4)
       `, [asignacionId, card.id, card.card_code, card.serial]);
     }
 
     // Log movement
-    const movResult = await pool.query(`
+    const movResult = await client.query(`
       INSERT INTO inv_movimientos (event_id, almacen_id, asignacion_id, tipo_entidad, referencia, accion, a_persona, cantidad_cartones, detalles, realizado_por, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe)
       VALUES ($1, $2, $3, $4, $5, 'asignar', $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING id
@@ -1155,10 +1265,12 @@ export async function createAsignacion(
 
     movimientoId = movResult.rows[0].id;
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw e;
+  } finally {
+    client.release();
   }
 
   const asignacionResult = await pool.query(`
@@ -1268,13 +1380,15 @@ export async function devolverAsignacion(pool: Pool, id: number, userId: number,
   }
 
   let movimientoId: number;
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
-    await pool.query(`
+    await client.query('BEGIN');
+
+    await client.query(`
       UPDATE inv_asignaciones SET estado = 'devuelto', devuelto_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1
     `, [id]);
 
-    const movResult = await pool.query(`
+    const movResult = await client.query(`
       INSERT INTO inv_movimientos (event_id, almacen_id, asignacion_id, tipo_entidad, referencia, accion, de_persona, cantidad_cartones, realizado_por, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe)
       VALUES ($1, $2, $3, $4, $5, 'devolver', $6, $7, $8, $9, $10, $11, $12)
       RETURNING id
@@ -1286,10 +1400,12 @@ export async function devolverAsignacion(pool: Pool, id: number, userId: number,
     ]);
     movimientoId = movResult.rows[0].id;
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw e;
+  } finally {
+    client.release();
   }
 
   // Generate PDF
@@ -1338,11 +1454,13 @@ export async function cancelarAsignacion(pool: Pool, id: number, userId: number,
   if (asignacion.cartones_vendidos > 0) throw new Error('No se puede cancelar, hay cartones vendidos');
 
   let movimientoId: number;
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
-    await pool.query(`UPDATE inv_asignaciones SET estado = 'cancelado', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [id]);
+    await client.query('BEGIN');
 
-    const movResult = await pool.query(`
+    await client.query(`UPDATE inv_asignaciones SET estado = 'cancelado', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [id]);
+
+    const movResult = await client.query(`
       INSERT INTO inv_movimientos (event_id, almacen_id, asignacion_id, tipo_entidad, referencia, accion, de_persona, cantidad_cartones, realizado_por, firma_entrega, nombre_entrega)
       VALUES ($1, $2, $3, $4, $5, 'cancelar', $6, $7, $8, $9, $10)
       RETURNING id
@@ -1353,10 +1471,12 @@ export async function cancelarAsignacion(pool: Pool, id: number, userId: number,
     ]);
     movimientoId = movResult.rows[0].id;
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw e;
+  } finally {
+    client.release();
   }
 
   // Generate PDF
@@ -1420,19 +1540,21 @@ export async function venderCarton(
     throw new Error('Esta asignacion es de custodia, no se pueden vender cartones directamente');
   }
 
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
     // Mark card as sold in assignment
-    await pool.query(`
+    await client.query(`
       UPDATE inv_asignacion_cartones SET vendido = TRUE, vendido_at = CURRENT_TIMESTAMP, comprador_nombre = $1, comprador_telefono = $2 WHERE id = $3
     `, [data?.comprador_nombre || null, data?.comprador_telefono || null, asignacionCartonId]);
 
     // Mark card as sold in bingo cards table
-    await pool.query(`UPDATE cards SET is_sold = TRUE, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2 WHERE id = $3`,
+    await client.query(`UPDATE cards SET is_sold = TRUE, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2 WHERE id = $3`,
       [data?.comprador_nombre || null, data?.comprador_telefono || null, carton.card_id]);
 
     // Update assignment counters
-    await pool.query(`
+    await client.query(`
       UPDATE inv_asignaciones SET
         cartones_vendidos = cartones_vendidos + 1,
         estado = CASE
@@ -1444,7 +1566,7 @@ export async function venderCarton(
     `, [carton.asignacion_id]);
 
     // Log movement
-    await pool.query(`
+    await client.query(`
       INSERT INTO inv_movimientos (event_id, almacen_id, asignacion_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, detalles, realizado_por)
       VALUES ($1, $2, $3, 'carton', $4, 'vender', $5, $6, 1, $7, $8)
     `, [
@@ -1454,10 +1576,12 @@ export async function venderCarton(
       userId
     ]);
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw e;
+  } finally {
+    client.release();
   }
 
   const result = await pool.query('SELECT * FROM inv_asignacion_cartones WHERE id = $1', [asignacionCartonId]);
@@ -1484,22 +1608,24 @@ export async function venderTodos(
   const pendientes = pendientesResult.rows as InvAsignacionCarton[];
   if (pendientes.length === 0) throw new Error('No hay cartones pendientes de venta');
 
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
     for (const carton of pendientes) {
-      await pool.query(`
+      await client.query(`
         UPDATE inv_asignacion_cartones SET vendido = TRUE, vendido_at = CURRENT_TIMESTAMP, comprador_nombre = $1, comprador_telefono = $2 WHERE id = $3
       `, [data?.comprador_nombre || null, data?.comprador_telefono || null, carton.id]);
 
-      await pool.query(`UPDATE cards SET is_sold = TRUE, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2 WHERE id = $3`,
+      await client.query(`UPDATE cards SET is_sold = TRUE, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2 WHERE id = $3`,
         [data?.comprador_nombre || null, data?.comprador_telefono || null, carton.card_id]);
     }
 
-    await pool.query(`
+    await client.query(`
       UPDATE inv_asignaciones SET cartones_vendidos = cantidad_cartones, estado = 'completado', updated_at = CURRENT_TIMESTAMP WHERE id = $1
     `, [asignacionId]);
 
-    await pool.query(`
+    await client.query(`
       INSERT INTO inv_movimientos (event_id, almacen_id, asignacion_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, realizado_por)
       VALUES ($1, $2, $3, $4, $5, 'vender', $6, $7, $8, $9)
     `, [
@@ -1509,10 +1635,12 @@ export async function venderTodos(
       pendientes.length, userId
     ]);
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw e;
+  } finally {
+    client.release();
   }
 
   return { vendidos: pendientes.length };

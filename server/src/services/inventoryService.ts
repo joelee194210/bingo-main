@@ -321,7 +321,7 @@ export function createCajas(
 
     if (looseLotes.length === 0) return { created: 0, totalLotes: 0 };
 
-    let seqRow = db.prepare('SELECT COALESCE(MAX(id), 0) AS maxId FROM cajas').get() as { maxId: number };
+    const seqRow = db.prepare('SELECT COALESCE(MAX(id), 0) AS maxId FROM cajas').get() as { maxId: number };
     let seq = seqRow.maxId + 1;
 
     const insertCaja = db.prepare(`

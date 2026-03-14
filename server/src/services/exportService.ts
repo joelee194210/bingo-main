@@ -163,7 +163,7 @@ export async function generateCardsPDF(
     const cardHeight = (pageHeight - 20) / rows;
 
     cards.forEach((card, index) => {
-      const pageIndex = Math.floor(index / cardsPerPage);
+      const _pageIndex = Math.floor(index / cardsPerPage);
       const positionOnPage = index % cardsPerPage;
 
       // Nueva página si es necesario
@@ -262,6 +262,16 @@ function drawCardOnPDF(
  * Exporta cartones como imágenes individuales
  */
 export async function exportCardsAsImages(cards: CardData[]): Promise<string[]> {
+  // Verificar unicidad de nombres de archivo antes de generar
+  const filenames = new Set<string>();
+  for (const card of cards) {
+    const filename = `carton_${card.cardNumber}_${card.cardCode}.png`;
+    if (filenames.has(filename)) {
+      throw new Error(`Nombre de archivo duplicado: ${filename}. Verifique que card_number y card_code sean únicos.`);
+    }
+    filenames.add(filename);
+  }
+
   const files: string[] = [];
 
   for (const card of cards) {

@@ -1,8 +1,8 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import PDFDocument from 'pdfkit';
 import { createWriteStream, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import type { BingoGame, CardNumbers } from '../types/index.js';
+import type { BingoGame } from '../types/index.js';
 
 const REPORTS_DIR = join(process.cwd(), 'reports');
 
@@ -63,7 +63,7 @@ const GAME_TYPE_LABELS: Record<string, string> = {
  * Registra una balota llamada en el historial
  */
 export async function recordBallCall(
-  pool: Pool,
+  pool: Pool | PoolClient,
   gameId: number,
   ballNumber: number,
   callOrder: number
@@ -85,7 +85,7 @@ export async function recordBallCall(
  * Registra un ganador del juego
  */
 export async function recordWinner(
-  pool: Pool,
+  pool: Pool | PoolClient,
   gameId: number,
   cardId: number,
   winningPattern: string,
@@ -124,7 +124,7 @@ export async function recordWinner(
 /**
  * Genera el reporte completo de un juego
  */
-export async function generateGameReport(pool: Pool, gameId: number): Promise<GameReport | null> {
+export async function generateGameReport(pool: Pool | PoolClient, gameId: number): Promise<GameReport | null> {
   // Obtener datos del juego
   const gameResult = await pool.query(`
     SELECT g.*, e.name as event_name
@@ -300,7 +300,7 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
 
     report.ball_history.forEach((ball, index) => {
       const col = index % ballsPerRow;
-      const row = Math.floor(index / ballsPerRow);
+      const _row = Math.floor(index / ballsPerRow);
 
       if (col === 0 && index > 0) {
         currentY += cellHeight;

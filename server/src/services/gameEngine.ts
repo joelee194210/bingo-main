@@ -215,7 +215,7 @@ export async function callBall(
   else if (ball <= 60) column = 'G';
   else column = 'O';
 
-  // Envolver todo en transacción para consistencia y evitar race conditions
+  // Envolver todo en transacción con conexión dedicada para consistencia
   let newWinners: Array<{
     cardId: number;
     cardCode: string;
@@ -225,11 +225,13 @@ export async function callBall(
     buyerName?: string;
   }>;
 
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
-    // Re-leer called_balls dentro de la transacción para evitar duplicados por concurrencia
-    const freshGameResult = await pool.query('SELECT called_balls FROM games WHERE id = $1', [gameId]);
-    const freshGame = freshGameResult.rows[0] as { called_balls: string };
+    await client.query('BEGIN');
+
+    // FOR UPDATE bloquea la fila para evitar race conditions entre llamadas concurrentes
+    const freshGameResult = await client.query('SELECT called_balls, winner_cards, custom_pattern FROM games WHERE id = $1 FOR UPDATE', [gameId]);
+    const freshGame = freshGameResult.rows[0] as { called_balls: string; winner_cards: string; custom_pattern: string | null };
     const currentBalls: number[] = JSON.parse(freshGame.called_balls || '[]');
 
     if (currentBalls.includes(ball)) {
@@ -241,22 +243,20 @@ export async function callBall(
     const callOrder = newCalledBalls.length;
 
     // Actualizar en BD
-    await pool.query('UPDATE games SET called_balls = $1 WHERE id = $2',
+    await client.query('UPDATE games SET called_balls = $1 WHERE id = $2',
       [JSON.stringify(newCalledBalls), gameId]);
 
     // Registrar balota en historial (para certificación)
-    await recordBallCall(pool, gameId, ball, callOrder);
+    await recordBallCall(client, gameId, ball, callOrder);
 
     // Verificar ganadores
-    const gameDataResult = await pool.query('SELECT * FROM games WHERE id = $1', [gameId]);
-    const gameData = gameDataResult.rows[0] as BingoGame;
-    const customPattern = gameData.custom_pattern ? JSON.parse(gameData.custom_pattern) : undefined;
+    const customPattern = freshGame.custom_pattern ? JSON.parse(freshGame.custom_pattern) : undefined;
 
     // Obtener ganadores existentes para no registrar duplicados
-    const existingWinnerIds = new Set(JSON.parse(gameData.winner_cards || '[]') as number[]);
+    const existingWinnerIds = new Set(JSON.parse(freshGame.winner_cards || '[]') as number[]);
 
     const winners = await findWinners(
-      pool,
+      client,
       game.eventId,
       gameId,
       newCalledBalls,
@@ -271,28 +271,30 @@ export async function callBall(
     // Si hay nuevos ganadores, registrarlos y finalizar el juego
     if (newWinners.length > 0) {
       for (const winner of newWinners) {
-        await recordWinner(pool, gameId, winner.cardId, winner.winningPattern, callOrder);
+        await recordWinner(client, gameId, winner.cardId, winner.winningPattern, callOrder);
       }
 
       // Actualizar lista de ganadores en el juego
       const allWinnerIds = [...existingWinnerIds, ...newWinners.map(w => w.cardId)];
-      await pool.query('UPDATE games SET winner_cards = $1 WHERE id = $2',
+      await client.query('UPDATE games SET winner_cards = $1 WHERE id = $2',
         [JSON.stringify(allWinnerIds), gameId]);
 
       // Finalizar el juego automaticamente al detectar ganador(es)
-      await pool.query(`
+      await client.query(`
         UPDATE games SET status = 'completed', finished_at = CURRENT_TIMESTAMP
         WHERE id = $1
       `, [gameId]);
 
       // Generar reporte automatico
-      await generateGameReport(pool, gameId);
+      await generateGameReport(client, gameId);
     }
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw e;
+  } finally {
+    client.release();
   }
 
   return {
@@ -394,25 +396,29 @@ export async function resetGame(pool: Pool, gameId: number): Promise<GameState> 
     throw new Error('No se puede reiniciar un juego completado. Los datos de certificación son permanentes.');
   }
 
-  // Limpiar historial de balotas
-  await pool.query('DELETE FROM ball_history WHERE game_id = $1', [gameId]);
-
-  // Limpiar ganadores
-  await pool.query('DELETE FROM game_winners WHERE game_id = $1', [gameId]);
-
-  // Limpiar reporte si existe
-  await pool.query('DELETE FROM game_reports WHERE game_id = $1', [gameId]);
-
-  // Reiniciar el juego
-  await pool.query(`
-    UPDATE games
-    SET status = 'pending',
-        called_balls = '[]',
-        winner_cards = '[]',
-        started_at = NULL,
-        finished_at = NULL
-    WHERE id = $1
-  `, [gameId]);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT id FROM games WHERE id = $1 FOR UPDATE', [gameId]);
+    await client.query('DELETE FROM ball_history WHERE game_id = $1', [gameId]);
+    await client.query('DELETE FROM game_winners WHERE game_id = $1', [gameId]);
+    await client.query('DELETE FROM game_reports WHERE game_id = $1', [gameId]);
+    await client.query(`
+      UPDATE games
+      SET status = 'pending',
+          called_balls = '[]',
+          winner_cards = '[]',
+          started_at = NULL,
+          finished_at = NULL
+      WHERE id = $1
+    `, [gameId]);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 
   return (await getGameState(pool, gameId))!;
 }

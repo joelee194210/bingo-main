@@ -71,6 +71,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'reports:read', 'reports:export',
     'inventory:read', 'inventory:manage',
     'dashboard:read',
+    'permissions:manage',
+    'audit:read',
   ],
   moderator: [
     'events:read',
@@ -79,6 +81,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'reports:read',
     'inventory:read', 'inventory:manage',
     'dashboard:read',
+    'audit:read',
   ],
   seller: [
     'events:read',

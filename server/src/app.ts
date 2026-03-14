@@ -6,14 +6,12 @@ import cookieParser from 'cookie-parser';
 import { createServer as createHttpServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { resolve } from 'path';
 import { Server } from 'socket.io';
 import { initializeDatabase, getPool } from './database/init.js';
 import { ensureAdminExists, verifyToken } from './services/authService.js';
-import { authenticate, requireRole, requirePermission } from './middleware/auth.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { authenticate } from './middleware/auth.js';
+import { initPermissions } from './services/permissionService.js';
 
 // Importar rutas
 import authRouter from './routes/auth.js';
@@ -25,14 +23,17 @@ import exportRouter from './routes/export.js';
 import reportsRouter from './routes/reports.js';
 import promoRouter from './routes/promo.js';
 import inventarioRouter from './routes/inventario.js';
+import backupRouter, { backupProgressRouter } from './routes/backup.js';
+import permissionsRouter from './routes/permissions.js';
+import activityLogRouter from './routes/activityLog.js';
 
 const app = express();
 
 // SSL certs for HTTPS
-let httpServer;
+let httpServer: ReturnType<typeof createHttpsServer> | ReturnType<typeof createHttpServer>;
 try {
-  const sslKey = readFileSync(resolve(__dirname, '../certs/key.pem'));
-  const sslCert = readFileSync(resolve(__dirname, '../certs/cert.pem'));
+  const sslKey = readFileSync(resolve(process.cwd(), 'certs/key.pem'));
+  const sslCert = readFileSync(resolve(process.cwd(), 'certs/cert.pem'));
   httpServer = createHttpsServer({ key: sslKey, cert: sslCert }, app);
   console.log('🔒 HTTPS habilitado');
 } catch {
@@ -104,6 +105,7 @@ app.use((req, _res, next) => {
 
 // Rutas API públicas
 app.use('/api/auth', authRouter);
+app.use('/api/backup', backupProgressRouter); // progreso sin auth (jobId es secreto)
 
 // Rutas API protegidas
 app.use('/api/events', authenticate, eventsRouter);
@@ -114,6 +116,9 @@ app.use('/api/export', authenticate, exportRouter);
 app.use('/api/reports', authenticate, reportsRouter);
 app.use('/api/promo', authenticate, promoRouter);
 app.use('/api/inventario', authenticate, inventarioRouter);
+app.use('/api/backup', authenticate, backupRouter);
+app.use('/api/permissions', authenticate, permissionsRouter);
+app.use('/api/activity-log', authenticate, activityLogRouter);
 
 // Ruta de salud
 app.get('/api/health', (_req, res) => {
@@ -130,9 +135,13 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   });
 });
 
-// Socket.IO con autenticación
+// Socket.IO con autenticación via cookie httpOnly
 io.use((socket, next) => {
-  const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  // Extraer token de la cookie httpOnly (enviada via withCredentials)
+  const cookieHeader = socket.handshake.headers.cookie || '';
+  const tokenMatch = cookieHeader.match(/bingo_token=([^;]+)/);
+  const token = tokenMatch?.[1] || socket.handshake.auth?.token || socket.handshake.query?.token;
+
   if (!token) {
     return next(new Error('Token de autenticación requerido'));
   }
@@ -187,9 +196,22 @@ async function start() {
     console.log('🔧 Inicializando base de datos...');
     await initializeDatabase();
 
-    // Crear usuario admin por defecto si no existe
+    // Ejecutar migración de permisos/auditoría
     const pool = getPool();
+    const migrationPath = resolve(process.cwd(), 'src/database/migration_roles_audit.sql');
+    try {
+      const migrationSQL = readFileSync(migrationPath, 'utf-8');
+      await pool.query(migrationSQL);
+      console.log('✅ Migración de permisos/auditoría aplicada');
+    } catch (err) {
+      console.warn('⚠️  Migración permisos/auditoría:', (err as Error).message);
+    }
+
+    // Crear usuario admin por defecto si no existe
     await ensureAdminExists(pool);
+
+    // Inicializar cache de permisos
+    await initPermissions(pool);
 
     const protocol = httpServer instanceof (await import('https')).Server ? 'https' : 'http';
     const wsProtocol = protocol === 'https' ? 'wss' : 'ws';

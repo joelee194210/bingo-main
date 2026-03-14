@@ -37,16 +37,15 @@ export default function GameList() {
   });
 
   const events = eventsData?.data || [];
-  const allGames = data?.data || [];
-
   const games = useMemo(() => {
+    const allGames = data?.data || [];
     if (!searchTerm.trim()) return allGames;
     const q = searchTerm.toLowerCase();
     return allGames.filter(g =>
       (g.name && g.name.toLowerCase().includes(q)) ||
       GAME_TYPE_LABELS[g.game_type]?.toLowerCase().includes(q)
     );
-  }, [allGames, searchTerm]);
+  }, [data?.data, searchTerm]);
 
   const EXPORT_COLUMNS = [
     { key: 'name', label: 'Nombre' },

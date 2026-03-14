@@ -24,16 +24,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function Dashboard() {
   const { user } = useAuth();
 
-  // Usuarios de inventario van directo a su sección
-  if (user?.role === 'inventory') {
-    return <Navigate to="/inventory" replace />;
-  }
-
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboard,
     refetchInterval: 30000,
+    enabled: user?.role !== 'inventory',
   });
+
+  // Usuarios de inventario van directo a su sección
+  if (user?.role === 'inventory') {
+    return <Navigate to="/inventory" replace />;
+  }
 
   if (isLoading) {
     return (

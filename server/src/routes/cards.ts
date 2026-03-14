@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getPool } from '../database/init.js';
-import { generateCards, cardNumbersToMatrix, type GeneratedCard } from '../services/cardGenerator.js';
+import { generateCards, cardNumbersToMatrix } from '../services/cardGenerator.js';
 import { verifyEventCards, validateCard } from '../services/cardVerifier.js';
 import { requirePermission } from '../middleware/auth.js';
 import type { BingoCard, BingoEvent, CardNumbers } from '../types/index.js';
+import { logActivity, auditFromReq } from '../services/auditService.js';
 const router = Router();
 
 // Almacenar progreso de generación en memoria
@@ -270,6 +271,8 @@ router.post('/generate', requirePermission('cards:create'), async (req: Request,
 
     generationProgress.set(event_id, { total: qty, generated: qty, inserted: qty, status: 'completed' });
 
+    logActivity(pool, auditFromReq(req, 'cards_generated', 'cards', { event_id, quantity: result.cards.length }));
+
     // Limpiar progreso después de 5 minutos
     setTimeout(() => generationProgress.delete(event_id), 5 * 60 * 1000);
 
@@ -373,6 +376,8 @@ router.put('/:id/sell', requirePermission('cards:sell'), async (req: Request, re
 
     const { rows: updatedRows } = await pool.query('SELECT * FROM cards WHERE id = $1', [req.params.id]);
     const updated = updatedRows[0] as BingoCard;
+
+    logActivity(pool, auditFromReq(req, 'card_sold', 'cards', { card_id: card.id, card_code: card.card_code, buyer_name }));
 
     res.json({ success: true, data: updated });
   } catch (error) {
