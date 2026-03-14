@@ -316,6 +316,15 @@ router.post('/events/:eventId/distribute', requirePermission('cards:create'), as
       return res.status(400).json({ success: false, error: 'La promocion no esta habilitada para este evento' });
     }
 
+    // Check if already distributed
+    const alreadyDistributed = (await pool.query(
+      'SELECT COUNT(*)::int as cnt FROM cards WHERE event_id = $1 AND promo_text IS NOT NULL',
+      [eventId]
+    )).rows[0].cnt;
+    if (alreadyDistributed > 0) {
+      return res.status(409).json({ success: false, error: 'Ya hay premios distribuidos. Limpie la promo antes de redistribuir.' });
+    }
+
     // Obtener premios
     const prizes = (await pool.query(
       'SELECT * FROM promo_prizes WHERE event_id = $1 ORDER BY id',
@@ -360,7 +369,8 @@ router.post('/events/:eventId/distribute', requirePermission('cards:create'), as
           error: `Regla fija referencia premio "${rule.prize_name}" que no existe`,
         });
       }
-      fixedSums.set(rule.prize_name, (fixedSums.get(rule.prize_name) || 0) + rule.quantity);
+      const seriesCount = rule.series_to - rule.series_from + 1;
+      fixedSums.set(rule.prize_name, (fixedSums.get(rule.prize_name) || 0) + rule.quantity * seriesCount);
     }
     for (const [name, fixedQty] of fixedSums) {
       if (fixedQty > prizeMap.get(name)!) {
@@ -379,71 +389,143 @@ router.post('/events/:eventId/distribute', requirePermission('cards:create'), as
     try {
       await client.query('BEGIN');
 
-      // FASE 1: Distribuir premios fijos
+      // FASE 1: Distribuir premios fijos (quantity POR SERIE)
       for (const rule of fixedRules) {
-        const seriesNumbers: string[] = [];
+        let totalPlaced = 0;
+
         for (let s = rule.series_from; s <= rule.series_to; s++) {
-          seriesNumbers.push(String(s).padStart(5, '0'));
-        }
-        // Obtener cartones en esas series que no han sido asignados aun
-        const cardsInSeries = cards.filter(
-          c => c.series_number !== null && seriesNumbers.includes(c.series_number) && !fixedAssignedIds.has(c.id)
-        );
+          const sn = String(s).padStart(5, '0');
 
-        if (cardsInSeries.length < rule.quantity) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({
-            success: false,
-            error: `Series ${rule.series_from}-${rule.series_to}: solo ${cardsInSeries.length} cartones disponibles pero la regla requiere ${rule.quantity} para "${rule.prize_name}"`,
-          });
-        }
+          // Cartones disponibles en esta serie
+          const cardsInSeries = cards.filter(
+            c => c.series_number === sn && !fixedAssignedIds.has(c.id)
+          );
 
-        // Fisher-Yates parcial: seleccionar rule.quantity cartones al azar
-        const selected = [...cardsInSeries];
-        for (let i = selected.length - 1; i > 0; i--) {
-          const j = randomInt(i + 1);
-          [selected[i], selected[j]] = [selected[j], selected[i]];
-        }
-        const chosen = selected.slice(0, rule.quantity);
+          if (cardsInSeries.length < rule.quantity) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              success: false,
+              error: `Serie ${sn}: solo ${cardsInSeries.length} cartones disponibles pero la regla requiere ${rule.quantity} para "${rule.prize_name}"`,
+            });
+          }
 
-        for (const card of chosen) {
-          await client.query('UPDATE cards SET promo_text = $1 WHERE id = $2', [rule.prize_name, card.id]);
-          fixedAssignedIds.add(card.id);
+          // Fisher-Yates parcial: seleccionar rule.quantity cartones al azar en ESTA serie
+          const selected = [...cardsInSeries];
+          for (let i = selected.length - 1; i > 0; i--) {
+            const j = randomInt(i + 1);
+            [selected[i], selected[j]] = [selected[j], selected[i]];
+          }
+          const chosen = selected.slice(0, rule.quantity);
+
+          const chosenIds = chosen.map(c => c.id);
+          await client.query('UPDATE cards SET promo_text = $1 WHERE id = ANY($2::int[])', [rule.prize_name, chosenIds]);
+          for (const card of chosen) {
+            fixedAssignedIds.add(card.id);
+          }
+          totalPlaced += chosen.length;
         }
 
         fixedRulesApplied.push({
           prize: rule.prize_name,
           series: `${rule.series_from}-${rule.series_to}`,
-          placed: chosen.length,
+          placed: totalPlaced,
         });
       }
 
-      // FASE 2: Distribuir premios restantes (random)
+      // FASE 2: Distribuir premios restantes — concentrados en series bajas (fuera de reglas fijas)
       const remainingCards = cards.filter(c => !fixedAssignedIds.has(c.id));
 
-      // Calcular remanente por premio
-      const textPool: string[] = [];
+      // Determinar series cubiertas por reglas fijas
+      const coveredSeries = new Set<string>();
+      for (const rule of fixedRules) {
+        for (let s = rule.series_from; s <= rule.series_to; s++) {
+          coveredSeries.add(String(s).padStart(5, '0'));
+        }
+      }
+
+      // Separar: cartones en series cubiertas → no_prize, cartones en series libres → reciben premios random
+      const coveredRemainingIds: number[] = [];
+      const freeCards: typeof remainingCards = [];
+      for (const card of remainingCards) {
+        const sn = card.series_number || '99999';
+        if (coveredSeries.has(sn)) {
+          coveredRemainingIds.push(card.id);
+        } else {
+          freeCards.push(card);
+        }
+      }
+
+      // Crear pool de premios (solo premios, sin no_prize)
+      const prizePool: string[] = [];
       for (const prize of prizes) {
         const fixedUsed = fixedSums.get(prize.name) || 0;
         const remaining = prize.quantity - fixedUsed;
         for (let i = 0; i < remaining; i++) {
-          textPool.push(prize.name);
+          prizePool.push(prize.name);
         }
       }
-      // Rellenar con no-premio
-      while (textPool.length < remainingCards.length) {
-        textPool.push(noPrizeText);
-      }
-
-      // Fisher-Yates shuffle
-      for (let i = textPool.length - 1; i > 0; i--) {
+      // Shuffle para mezclar tipos de premios
+      for (let i = prizePool.length - 1; i > 0; i--) {
         const j = randomInt(i + 1);
-        [textPool[i], textPool[j]] = [textPool[j], textPool[i]];
+        [prizePool[i], prizePool[j]] = [prizePool[j], prizePool[i]];
       }
 
-      // Asignar a cartones restantes
-      for (let i = 0; i < remainingCards.length; i++) {
-        await client.query('UPDATE cards SET promo_text = $1 WHERE id = $2', [textPool[i], remainingCards[i].id]);
+      // Agrupar cartones libres por serie
+      const cardsBySeries = new Map<string, typeof freeCards>();
+      for (const card of freeCards) {
+        const sn = card.series_number || '99999';
+        if (!cardsBySeries.has(sn)) cardsBySeries.set(sn, []);
+        cardsBySeries.get(sn)!.push(card);
+      }
+
+      // Ordenar series numéricamente de menor a mayor
+      const sortedSeries = [...cardsBySeries.keys()].sort((a, b) => parseInt(a) - parseInt(b));
+
+      // Distribuir premios de menor a mayor serie (solo series libres)
+      const batchMap = new Map<string, number[]>();
+      let prizeIdx = 0;
+
+      for (let s = 0; s < sortedSeries.length; s++) {
+        const seriesCards = cardsBySeries.get(sortedSeries[s])!;
+
+        // Shuffle cartones de esta serie para posiciones random
+        for (let i = seriesCards.length - 1; i > 0; i--) {
+          const j = randomInt(i + 1);
+          [seriesCards[i], seriesCards[j]] = [seriesCards[j], seriesCards[i]];
+        }
+
+        // Calcular cuántos premios van en esta serie
+        let prizesForSeries = 0;
+        if (prizeIdx < prizePool.length) {
+          const seriesLeft = sortedSeries.length - s;
+          const prizesLeft = prizePool.length - prizeIdx;
+          prizesForSeries = Math.min(seriesCards.length, Math.ceil(prizesLeft / seriesLeft));
+        }
+
+        // Asignar premios y no_prize
+        for (let i = 0; i < seriesCards.length; i++) {
+          const text = (i < prizesForSeries && prizeIdx < prizePool.length)
+            ? prizePool[prizeIdx++]
+            : noPrizeText;
+          if (!batchMap.has(text)) batchMap.set(text, []);
+          batchMap.get(text)!.push(seriesCards[i].id);
+        }
+      }
+
+      // Series cubiertas: cartones restantes → no_prize
+      if (coveredRemainingIds.length > 0) {
+        if (!batchMap.has(noPrizeText)) batchMap.set(noPrizeText, []);
+        const noPrizeIds = batchMap.get(noPrizeText)!;
+        for (const id of coveredRemainingIds) noPrizeIds.push(id);
+      }
+
+      // Batch update: un UPDATE por cada texto distinto (en chunks de 50K)
+      const CHUNK_SIZE = 50000;
+      for (const [text, ids] of batchMap) {
+        for (let start = 0; start < ids.length; start += CHUNK_SIZE) {
+          const chunk = ids.slice(start, start + CHUNK_SIZE);
+          await client.query('UPDATE cards SET promo_text = $1 WHERE id = ANY($2::int[])', [text, chunk]);
+        }
       }
 
       // Actualizar contadores de distribucion
@@ -453,10 +535,8 @@ router.post('/events/:eventId/distribute', requirePermission('cards:create'), as
         prizeCount.set(rule.prize, (prizeCount.get(rule.prize) || 0) + rule.placed);
       }
       // Contar random
-      for (const text of textPool) {
-        if (text !== noPrizeText) {
-          prizeCount.set(text, (prizeCount.get(text) || 0) + 1);
-        }
+      for (const text of prizePool) {
+        prizeCount.set(text, (prizeCount.get(text) || 0) + 1);
       }
       for (const prize of prizes) {
         const count = prizeCount.get(prize.name) || 0;

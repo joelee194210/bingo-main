@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -129,22 +129,26 @@ export default function PromoPage() {
 
   // Sincronizar estado local cuando llegan datos del server
   const [syncedEventId, setSyncedEventId] = useState<number | null>(null);
-  if (promo && selectedEventId && syncedEventId !== selectedEventId) {
-    setIsEnabled(!!promo.config.is_enabled);
-    setNoPrizeText(promo.config.no_prize_text || 'Gracias por participar');
-    setPrizes(promo.prizes.map(p => ({ name: p.name, quantity: p.quantity })));
-    setSyncedEventId(selectedEventId);
-  }
+  useEffect(() => {
+    if (promo && selectedEventId && syncedEventId !== selectedEventId) {
+      setIsEnabled(!!promo.config.is_enabled);
+      setNoPrizeText(promo.config.no_prize_text || 'Gracias por participar');
+      setPrizes(promo.prizes.map(p => ({ name: p.name, quantity: p.quantity })));
+      setSyncedEventId(selectedEventId);
+    }
+  }, [promo, selectedEventId, syncedEventId]);
   // Sincronizar reglas fijas
-  if (fixedRulesData?.data && selectedEventId && fixedRulesSynced !== selectedEventId) {
-    setFixedRules(fixedRulesData.data.map(r => ({
-      prize_name: r.prize_name,
-      quantity: r.quantity,
-      series_from: r.series_from,
-      series_to: r.series_to,
-    })));
-    setFixedRulesSynced(selectedEventId);
-  }
+  useEffect(() => {
+    if (fixedRulesData?.data && selectedEventId && fixedRulesSynced !== selectedEventId) {
+      setFixedRules(fixedRulesData.data.map(r => ({
+        prize_name: r.prize_name,
+        quantity: r.quantity,
+        series_from: r.series_from,
+        series_to: r.series_to,
+      })));
+      setFixedRulesSynced(selectedEventId);
+    }
+  }, [fixedRulesData?.data, selectedEventId, fixedRulesSynced]);
 
   const saveConfigMutation = useMutation({
     mutationFn: () => savePromoConfig(selectedEventId!, { is_enabled: isEnabled, no_prize_text: noPrizeText }),
@@ -226,7 +230,10 @@ export default function PromoPage() {
   const fixedSumsByPrize = useMemo(() => {
     const sums = new Map<string, number>();
     for (const r of fixedRules) {
-      if (r.prize_name) sums.set(r.prize_name, (sums.get(r.prize_name) || 0) + r.quantity);
+      if (r.prize_name) {
+        const seriesCount = Math.max(0, r.series_to - r.series_from + 1);
+        sums.set(r.prize_name, (sums.get(r.prize_name) || 0) + r.quantity * seriesCount);
+      }
     }
     return sums;
   }, [fixedRules]);
@@ -613,6 +620,12 @@ export default function PromoPage() {
                       min={rule.series_from}
                       disabled={!!hasDistributed}
                     />
+                  </div>
+                  <div className="w-16 flex items-center justify-center shrink-0">
+                    {index === 0 && <Label className="text-xs block mb-1">Total</Label>}
+                    <span className="text-sm font-medium text-muted-foreground">
+                      = {rule.quantity * Math.max(0, rule.series_to - rule.series_from + 1)}
+                    </span>
                   </div>
                   <Button
                     variant="ghost"
