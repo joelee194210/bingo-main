@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getPool } from '../database/init.js';
-import { createUser, updateUser } from '../services/authService.js';
+import { createUser, updateUser, validatePassword } from '../services/authService.js';
 import { authenticate } from '../middleware/auth.js';
 import type { UserRole } from '../types/auth.js';
 import { logActivity, getClientIp } from '../services/auditService.js';
-import bcrypt from 'bcryptjs';
 
 const router = Router();
 
@@ -45,8 +44,9 @@ router.post('/', authenticate, requireLoteria, async (req: Request, res: Respons
       return res.status(400).json({ success: false, error: 'Usuario, contraseña, nombre completo y rol son requeridos' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, error: 'La contraseña debe tener al menos 6 caracteres' });
+    const pwError = validatePassword(password);
+    if (pwError) {
+      return res.status(400).json({ success: false, error: pwError });
     }
 
     if (!SUB_USER_ROLES.includes(role)) {

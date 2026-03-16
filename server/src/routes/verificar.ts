@@ -3,6 +3,10 @@ import { getPool } from '../database/init.js';
 
 const router = Router();
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 interface CardRow {
   card_code: string;
   serial: string;
@@ -219,7 +223,7 @@ function renderPage(card: CardRow | null, error: string | null): string {
     ${error ? `
     <div class="error-box">
       <div class="icon">🔍</div>
-      <h2>${error}</h2>
+      <h2>${escapeHtml(error)}</h2>
       <p>El código escaneado no corresponde a ningún cartón registrado.</p>
     </div>` : `
     <div class="status-badge">
@@ -229,26 +233,26 @@ function renderPage(card: CardRow | null, error: string | null): string {
     <div class="info-grid">
       <div class="info-row">
         <span class="info-label">Código</span>
-        <span class="info-value">${card!.card_code}</span>
+        <span class="info-value">${escapeHtml(card!.card_code)}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Serial</span>
-        <span class="info-value">${card!.serial}</span>
+        <span class="info-value">${escapeHtml(card!.serial)}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Evento</span>
-        <span class="info-value">${card!.event_name}</span>
+        <span class="info-value">${escapeHtml(card!.event_name)}</span>
       </div>
       ${card!.buyer_name ? `
       <div class="info-row">
         <span class="info-label">Comprador</span>
-        <span class="info-value">${card!.buyer_name}</span>
+        <span class="info-value">${escapeHtml(card!.buyer_name)}</span>
       </div>` : ''}
     </div>
 
     ${card!.numbers ? renderNumbers(card!.numbers, card!.use_free_center) : ''}
 
-    ${card!.promo_text ? `<div class="promo">🎁 ${card!.promo_text}</div>` : ''}
+    ${card!.promo_text ? `<div class="promo">🎁 ${escapeHtml(card!.promo_text)}</div>` : ''}
     `}
     <div class="footer">
       Bingo Manager &copy; ${new Date().getFullYear()}

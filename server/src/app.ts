@@ -79,7 +79,21 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "wss:", "ws:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 
 // Rate limiting en login
 const loginLimiter = rateLimit({
@@ -90,6 +104,16 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 app.use('/api/auth/login', loginLimiter);
+
+// Rate limiting en cambio de contraseña
+const authSensitiveLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, error: 'Demasiados intentos. Intente en 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/change-password', authSensitiveLimiter);
 
 // Rate limiting general
 const generalLimiter = rateLimit({
@@ -159,10 +183,10 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 // Socket.IO con autenticación via cookie httpOnly
 io.use((socket, next) => {
-  // Extraer token de la cookie httpOnly (enviada via withCredentials)
+  // Extraer token de la cookie httpOnly o del handshake auth (NO de query string)
   const cookieHeader = socket.handshake.headers.cookie || '';
   const tokenMatch = cookieHeader.match(/bingo_token=([^;]+)/);
-  const token = tokenMatch?.[1] || socket.handshake.auth?.token || socket.handshake.query?.token;
+  const token = tokenMatch?.[1] || socket.handshake.auth?.token;
 
   if (!token) {
     return next(new Error('Token de autenticación requerido'));

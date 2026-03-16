@@ -10,6 +10,7 @@ import {
   changePassword,
   getUserById,
   verifyToken,
+  validatePassword,
 } from '../services/authService.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import type { CreateUserRequest, UpdateUserRequest, UserRole } from '../types/auth.js';
@@ -56,10 +57,11 @@ router.post('/login', async (req: Request, res: Response) => {
     });
 
     // M10: setear token en httpOnly cookie
+    const isProduction = process.env.NODE_ENV === 'production';
     res.cookie('bingo_token', result.token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProduction,
+      sameSite: isProduction ? 'strict' : 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 24 horas
       path: '/',
     });
@@ -118,11 +120,9 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
       });
     }
 
-    if (new_password.length < 8 || !/\d/.test(new_password) || !/[a-zA-Z]/.test(new_password)) {
-      return res.status(400).json({
-        success: false,
-        error: 'La contraseña debe tener al menos 8 caracteres, incluir letras y numeros',
-      });
+    const pwError = validatePassword(new_password);
+    if (pwError) {
+      return res.status(400).json({ success: false, error: pwError });
     }
 
     const pool = getPool();
@@ -191,11 +191,9 @@ router.post('/users', authenticate, requireRole('admin'), async (req: Request, r
       });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        error: 'La contraseña debe tener al menos 6 caracteres',
-      });
+    const pwError = validatePassword(password);
+    if (pwError) {
+      return res.status(400).json({ success: false, error: pwError });
     }
 
     const validRoles: UserRole[] = ['admin', 'moderator', 'seller', 'viewer', 'inventory', 'loteria'];
@@ -253,11 +251,11 @@ router.put('/users/:id', authenticate, requireRole('admin'), async (req: Request
       }
     }
 
-    if (password && password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        error: 'La contraseña debe tener al menos 6 caracteres',
-      });
+    if (password) {
+      const pwError = validatePassword(password);
+      if (pwError) {
+        return res.status(400).json({ success: false, error: pwError });
+      }
     }
 
     const pool = getPool();

@@ -14,7 +14,17 @@ if (!JWT_SECRET) {
 }
 const EFFECTIVE_JWT_SECRET = JWT_SECRET || randomBytes(32).toString('hex');
 const JWT_EXPIRES_IN = '24h';
-const SALT_ROUNDS = 10;
+const SALT_ROUNDS = 12;
+
+/**
+ * Valida fortaleza de contraseña: mínimo 8 chars, letras y números
+ */
+export function validatePassword(password: string): string | null {
+  if (!password || password.length < 8) return 'La contraseña debe tener al menos 8 caracteres';
+  if (!/[a-zA-Z]/.test(password)) return 'La contraseña debe incluir al menos una letra';
+  if (!/\d/.test(password)) return 'La contraseña debe incluir al menos un número';
+  return null;
+}
 
 /**
  * Convierte un usuario de BD a formato público (sin password_hash)
@@ -277,10 +287,12 @@ export async function ensureAdminExists(pool: Pool): Promise<void> {
       }
       console.warn('⚠️  ADMIN_PASSWORD no configurado. Usando contraseña por defecto (NO usar en producción).');
     }
+    const finalPassword = adminPassword || (process.env.NODE_ENV === 'production' ? undefined : 'Admin123!dev');
+    if (!finalPassword) throw new Error('ADMIN_PASSWORD requerido en producción');
     console.log('🔐 Creando usuario administrador por defecto...');
     await createUser(pool, {
       username: 'admin',
-      password: adminPassword || 'admin123',
+      password: finalPassword,
       full_name: 'Administrador',
       role: 'admin',
     });

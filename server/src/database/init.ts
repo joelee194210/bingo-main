@@ -34,7 +34,6 @@ export async function initializeDatabase(): Promise<Pool> {
   await runMigrations(p);
 
   console.log('✅ Base de datos PostgreSQL inicializada correctamente');
-  console.log(`📍 Conexión: ${DATABASE_URL.replace(/\/\/.*@/, '//*****@')}`);
 
   return p;
 }
