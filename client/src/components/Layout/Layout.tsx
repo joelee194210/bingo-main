@@ -79,6 +79,12 @@ const navGroups = [
     ],
   },
   {
+    label: 'Mi Equipo',
+    items: [
+      { to: '/mis-usuarios', icon: UserCog, label: 'Mis Usuarios', permission: 'sub_users:manage' },
+    ],
+  },
+  {
     label: 'Sistema',
     items: [
       { to: '/users', icon: Users, label: 'Usuarios', permission: 'users:read' },

@@ -1,6 +1,6 @@
 // Tipos para autenticación y usuarios
 
-export type UserRole = 'admin' | 'moderator' | 'seller' | 'viewer' | 'inventory';
+export type UserRole = 'admin' | 'moderator' | 'seller' | 'viewer' | 'inventory' | 'loteria';
 
 export interface User {
   id: number;
@@ -103,6 +103,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'inventory:manage',
     'dashboard:read',
   ],
+  loteria: [
+    'events:read',
+    'cards:read', 'cards:sell',
+    'games:read',
+    'inventory:read', 'inventory:manage',
+    'dashboard:read',
+    'sub_users:manage',
+  ],
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -111,4 +119,5 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   seller: 'Vendedor',
   viewer: 'Visor',
   inventory: 'Inventario',
+  loteria: 'Lotería',
 };

@@ -46,6 +46,7 @@ server/certs/
 *.sql.bak
 *.dump
 event_dump_test.sql
+backups/
 
 # SSL certs backup
 server/certs.bak/

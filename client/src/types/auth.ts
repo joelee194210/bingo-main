@@ -1,6 +1,6 @@
 // Tipos para autenticación en el frontend
 
-export type UserRole = 'admin' | 'moderator' | 'seller' | 'viewer' | 'inventory';
+export type UserRole = 'admin' | 'moderator' | 'seller' | 'viewer' | 'inventory' | 'loteria';
 
 export interface User {
   id: number;
@@ -32,6 +32,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   seller: 'Vendedor',
   viewer: 'Visor',
   inventory: 'Inventario',
+  loteria: 'Lotería',
 };
 
 export const ROLE_COLORS: Record<UserRole, string> = {
@@ -40,6 +41,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   seller: 'bg-green-100 text-green-700',
   viewer: 'bg-gray-100 text-gray-700',
   inventory: 'bg-purple-100 text-purple-700',
+  loteria: 'bg-amber-100 text-amber-700',
 };
 
 // Permisos default por rol (fallback si no se cargaron dinámicos)
@@ -83,6 +85,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'inventory:read',
     'inventory:manage',
     'dashboard:read',
+  ],
+  loteria: [
+    'events:read',
+    'cards:read', 'cards:sell',
+    'games:read',
+    'inventory:read', 'inventory:manage',
+    'dashboard:read',
+    'sub_users:manage',
   ],
 };
 

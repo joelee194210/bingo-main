@@ -30,6 +30,7 @@ const LoteriaDashboard = lazy(() => import('./components/Inventory/LoteriaDashbo
 const BackupPage = lazy(() => import('./components/Backup/BackupPage'));
 const Permissions = lazy(() => import('./pages/Permissions'));
 const ActivityLog = lazy(() => import('./pages/ActivityLog'));
+const MisUsuarios = lazy(() => import('./pages/MisUsuarios'));
 
 function LazyFallback() {
   return (
@@ -106,6 +107,16 @@ function App() {
           element={
             <ProtectedRoute permission="users:read">
               <Users />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Mis Usuarios - solo loteria */}
+        <Route
+          path="mis-usuarios"
+          element={
+            <ProtectedRoute permission="sub_users:manage">
+              <MisUsuarios />
             </ProtectedRoute>
           }
         />

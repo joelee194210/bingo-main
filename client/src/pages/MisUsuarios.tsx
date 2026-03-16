@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, UserCheck, UserX, Search, Loader2 } from 'lucide-react';
+import { Plus, Edit2, UserCheck, UserX, Search, Loader2, Trash2 } from 'lucide-react';
 import api from '@/services/api';
 import type { User, UserRole } from '@/types/auth';
 import { ROLE_LABELS } from '@/types/auth';
@@ -23,7 +23,6 @@ import {
 import { useTableControls } from '@/hooks/useTableControls';
 import { SortableHeader } from '@/components/ui/sortable-header';
 import { TablePagination } from '@/components/ui/table-pagination';
-import { DataExportMenu } from '@/components/ui/data-export-menu';
 import { getStatusColor } from '@/lib/badge-variants';
 
 interface UserFormData {
@@ -39,45 +38,42 @@ const initialFormData: UserFormData = {
   password: '',
   full_name: '',
   email: '',
-  role: 'viewer',
+  role: 'seller',
 };
 
-const EXPORT_COLUMNS = [
-  { key: 'username', label: 'Usuario' },
-  { key: 'full_name', label: 'Nombre' },
-  { key: 'email', label: 'Email' },
-  { key: 'role', label: 'Rol' },
-  { key: 'is_active', label: 'Activo' },
-  { key: 'last_login', label: 'Ultimo acceso' },
+const SUB_ROLES: { value: UserRole; label: string; desc: string }[] = [
+  { value: 'seller', label: 'Vendedor', desc: 'Puede vender cartones y ver inventario' },
+  { value: 'inventory', label: 'Inventario', desc: 'Gestiona inventario y almacenes' },
+  { value: 'viewer', label: 'Operaciones', desc: 'Acceso de lectura a eventos, cartones y reportes' },
 ];
 
-export default function Users() {
+export default function MisUsuarios() {
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<UserFormData>(initialFormData);
   const [error, setError] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<User | null>(null);
 
   const queryClient = useQueryClient();
 
   const { data: users, isLoading } = useQuery<User[]>({
-    queryKey: ['users'],
+    queryKey: ['mis-usuarios'],
     queryFn: async () => {
-      const res = await api.get('/auth/users');
+      const res = await api.get('/mis-usuarios');
       return res.data.data;
     },
   });
 
-  const baseUsers = (users || []).filter(u => u.role !== 'inventory') as (User & Record<string, unknown>)[];
-
+  const baseUsers = (users || []) as (User & Record<string, unknown>)[];
   const table = useTableControls(baseUsers, ['username', 'full_name', 'email']);
 
   const createMutation = useMutation({
     mutationFn: async (data: UserFormData) => {
-      const res = await api.post('/auth/users', data);
+      const res = await api.post('/mis-usuarios', data);
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['mis-usuarios'] });
       closeModal();
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
@@ -87,11 +83,11 @@ export default function Users() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<UserFormData> }) => {
-      const res = await api.put(`/auth/users/${id}`, data);
+      const res = await api.put(`/mis-usuarios/${id}`, data);
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['mis-usuarios'] });
       closeModal();
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
@@ -101,11 +97,22 @@ export default function Users() {
 
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: number; is_active: boolean }) => {
-      const res = await api.put(`/auth/users/${id}`, { is_active });
+      const res = await api.put(`/mis-usuarios/${id}`, { is_active });
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['mis-usuarios'] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/mis-usuarios/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mis-usuarios'] });
+      setShowDeleteConfirm(null);
     },
   });
 
@@ -149,15 +156,11 @@ export default function Users() {
       updateMutation.mutate({ id: editingUser.id, data: updateData });
     } else {
       if (!formData.username || !formData.password || !formData.full_name) {
-        setError('Usuario, contrasena y nombre completo son requeridos');
+        setError('Usuario, contraseña y nombre completo son requeridos');
         return;
       }
       createMutation.mutate(formData);
     }
-  };
-
-  const handleToggleActive = (user: User) => {
-    toggleActiveMutation.mutate({ id: user.id, is_active: !user.is_active });
   };
 
   const formatDate = (dateStr: string | null) => {
@@ -172,46 +175,32 @@ export default function Users() {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-4 w-64" />
-          </div>
+          <Skeleton className="h-8 w-48" />
           <Skeleton className="h-10 w-36" />
         </div>
         <Skeleton className="h-10 w-full" />
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
-          </CardContent>
-        </Card>
+        <Card><CardContent className="pt-6 space-y-4">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+        </CardContent></Card>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Gestion de Usuarios</h1>
-          <p className="text-muted-foreground text-sm mt-1">Administra los usuarios del sistema</p>
+          <h1 className="text-2xl font-bold tracking-tight">Mis Usuarios</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Gestiona tu equipo de vendedores, inventario y operaciones
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <DataExportMenu
-            data={table.allFilteredData as Record<string, unknown>[]}
-            columns={EXPORT_COLUMNS}
-            filename="usuarios"
-          />
-          <Button onClick={openCreateModal}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo Usuario
-          </Button>
-        </div>
+        <Button onClick={openCreateModal}>
+          <Plus className="mr-2 h-4 w-4" />
+          Nuevo Usuario
+        </Button>
       </div>
 
-      {/* Busqueda */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
         <Input
@@ -222,12 +211,23 @@ export default function Users() {
         />
       </div>
 
-      {/* Tabla */}
       {table.paginatedData.length === 0 ? (
         <Card className="text-center py-12">
           <CardContent>
-            <h3 className="text-xl font-semibold mb-2">No se encontraron usuarios</h3>
-            <p className="text-muted-foreground">Intenta con otro termino de busqueda</p>
+            <h3 className="text-xl font-semibold mb-2">
+              {(users || []).length === 0 ? 'No tienes usuarios creados' : 'No se encontraron resultados'}
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              {(users || []).length === 0
+                ? 'Crea tu primer usuario para comenzar a delegar tareas'
+                : 'Intenta con otro termino de busqueda'}
+            </p>
+            {(users || []).length === 0 && (
+              <Button onClick={openCreateModal}>
+                <Plus className="mr-2 h-4 w-4" />
+                Crear primer usuario
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -259,7 +259,7 @@ export default function Users() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar>
-                          <AvatarFallback className="bg-primary/10 text-primary">
+                          <AvatarFallback className="bg-amber-100 text-amber-700">
                             {u.full_name.charAt(0).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
@@ -271,7 +271,7 @@ export default function Users() {
                     </TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(u.role)}>
-                        {ROLE_LABELS[u.role]}
+                        {ROLE_LABELS[u.role] || u.role}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -291,11 +291,19 @@ export default function Users() {
                         </Button>
                         <Button
                           variant="ghost" size="icon"
-                          onClick={() => handleToggleActive(u)}
+                          onClick={() => toggleActiveMutation.mutate({ id: u.id, is_active: !u.is_active })}
                           title={u.is_active ? 'Desactivar' : 'Activar'}
                           className={u.is_active ? 'hover:text-destructive' : 'hover:text-green-600'}
                         >
                           {u.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          onClick={() => setShowDeleteConfirm(u)}
+                          title="Eliminar"
+                          className="hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -330,8 +338,8 @@ export default function Users() {
               <Input id="username" value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} disabled={!!editingUser} placeholder="nombre_usuario" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">{editingUser ? 'Nueva Contrasena (dejar vacio para no cambiar)' : 'Contrasena'}</Label>
-              <Input id="password" type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} placeholder={editingUser ? '••••••••' : 'Ingrese contrasena'} />
+              <Label htmlFor="password">{editingUser ? 'Nueva Contraseña (dejar vacio para no cambiar)' : 'Contraseña'}</Label>
+              <Input id="password" type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} placeholder={editingUser ? '••••••••' : 'Ingrese contraseña'} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="full_name">Nombre Completo</Label>
@@ -346,19 +354,13 @@ export default function Users() {
               <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value as UserRole })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">Administrador</SelectItem>
-                  <SelectItem value="moderator">Moderador</SelectItem>
-                  <SelectItem value="seller">Vendedor</SelectItem>
-                  <SelectItem value="viewer">Visor</SelectItem>
-                  <SelectItem value="loteria">Loteria</SelectItem>
+                  {SUB_ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {formData.role === 'admin' && 'Acceso completo a todas las funciones'}
-                {formData.role === 'moderator' && 'Puede crear y administrar juegos'}
-                {formData.role === 'seller' && 'Puede vender cartones'}
-                {formData.role === 'viewer' && 'Solo puede ver informacion'}
-                {formData.role === 'loteria' && 'Gestiona su equipo, vende cartones e inventario'}
+                {SUB_ROLES.find(r => r.value === formData.role)?.desc}
               </p>
             </div>
             <div className="flex justify-end gap-3 pt-4">
@@ -370,6 +372,30 @@ export default function Users() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal confirmar eliminacion */}
+      <Dialog open={!!showDeleteConfirm} onOpenChange={() => setShowDeleteConfirm(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Eliminar Usuario</DialogTitle>
+          </DialogHeader>
+          <p className="text-muted-foreground">
+            ¿Estas seguro de eliminar a <strong>{showDeleteConfirm?.full_name}</strong> (@{showDeleteConfirm?.username})?
+            Esta accion no se puede deshacer.
+          </p>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => showDeleteConfirm && deleteMutation.mutate(showDeleteConfirm.id)}
+            >
+              {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Eliminar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

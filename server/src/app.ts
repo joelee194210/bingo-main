@@ -27,6 +27,7 @@ import backupRouter, { backupProgressRouter } from './routes/backup.js';
 import permissionsRouter from './routes/permissions.js';
 import activityLogRouter from './routes/activityLog.js';
 import verificarRouter from './routes/verificar.js';
+import misUsuariosRouter from './routes/misUsuarios.js';
 
 const app = express();
 
@@ -122,6 +123,7 @@ app.use('/api/inventario', authenticate, inventarioRouter);
 app.use('/api/backup', authenticate, backupRouter);
 app.use('/api/permissions', authenticate, permissionsRouter);
 app.use('/api/activity-log', authenticate, activityLogRouter);
+app.use('/api/mis-usuarios', misUsuariosRouter); // auth interno en el router
 
 // Ruta de salud
 app.get('/api/health', (_req, res) => {

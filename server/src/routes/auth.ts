@@ -198,7 +198,7 @@ router.post('/users', authenticate, requireRole('admin'), async (req: Request, r
       });
     }
 
-    const validRoles: UserRole[] = ['admin', 'moderator', 'seller', 'viewer', 'inventory'];
+    const validRoles: UserRole[] = ['admin', 'moderator', 'seller', 'viewer', 'inventory', 'loteria'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,
@@ -244,7 +244,7 @@ router.put('/users/:id', authenticate, requireRole('admin'), async (req: Request
     }
 
     if (role) {
-      const validRoles: UserRole[] = ['admin', 'moderator', 'seller', 'viewer', 'inventory'];
+      const validRoles: UserRole[] = ['admin', 'moderator', 'seller', 'viewer', 'inventory', 'loteria'];
       if (!validRoles.includes(role)) {
         return res.status(400).json({
           success: false,

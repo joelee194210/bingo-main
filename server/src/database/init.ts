@@ -257,4 +257,19 @@ async function runMigrations(p: Pool): Promise<void> {
     UPDATE cards SET almacen_id = l.almacen_id
     FROM lotes l WHERE l.id = cards.lote_id AND l.almacen_id IS NOT NULL AND cards.almacen_id IS NULL
   `);
+
+  // Migration: add 'loteria' to users role constraint
+  try {
+    await p.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
+    await p.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('admin', 'moderator', 'seller', 'viewer', 'inventory', 'loteria'))`);
+  } catch {
+    // constraint may already include 'loteria'
+  }
+
+  // Migration: created_by on users (para sub-usuarios de loteria)
+  if (!(await checkColumn('users', 'created_by'))) {
+    await p.query('ALTER TABLE users ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
+    await p.query('CREATE INDEX IF NOT EXISTS idx_users_created_by ON users(created_by)');
+    console.log('✅ Migración aplicada: created_by agregado a users');
+  }
 }
