@@ -42,9 +42,13 @@ server/exports/
 # SSL certs
 server/certs/
 
-# SQL dumps
+# SQL dumps & backups
 *.sql.bak
+*.dump
 event_dump_test.sql
+
+# SSL certs backup
+server/certs.bak/
 
 # Coverage
 coverage/
