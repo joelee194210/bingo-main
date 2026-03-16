@@ -223,8 +223,9 @@ export default function BackupPage() {
       downloadBlob(blob, filename);
       setResult({ type: 'success', message: 'Dump PostgreSQL completo descargado exitosamente' });
       refetchLogs();
-    } catch {
-      setResult({ type: 'error', message: 'Error al generar el dump. Verifique que pg_dump este instalado en el servidor.' });
+    } catch (err: any) {
+      const serverMsg = err?.response?.data?.error;
+      setResult({ type: 'error', message: serverMsg || 'Error al generar el dump. Verifique que pg_dump este instalado en el servidor.' });
       refetchLogs();
     } finally {
       setLoadingFull(false);
