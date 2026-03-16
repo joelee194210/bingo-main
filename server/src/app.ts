@@ -5,8 +5,8 @@ import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { createServer as createHttpServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, existsSync } from 'fs';
+import { resolve, join } from 'path';
 import { Server } from 'socket.io';
 import { initializeDatabase, getPool } from './database/init.js';
 import { ensureAdminExists, verifyToken } from './services/authService.js';
@@ -29,20 +29,21 @@ import activityLogRouter from './routes/activityLog.js';
 
 const app = express();
 
-// SSL certs for HTTPS
+// SSL certs for HTTPS (Railway/PaaS manejan SSL via proxy inverso)
 let httpServer: ReturnType<typeof createHttpsServer> | ReturnType<typeof createHttpServer>;
-try {
-  const sslKey = readFileSync(resolve(process.cwd(), 'certs/key.pem'));
-  const sslCert = readFileSync(resolve(process.cwd(), 'certs/cert.pem'));
+const certsPath = resolve(process.cwd(), 'certs');
+if (existsSync(resolve(certsPath, 'key.pem')) && existsSync(resolve(certsPath, 'cert.pem'))) {
+  const sslKey = readFileSync(resolve(certsPath, 'key.pem'));
+  const sslCert = readFileSync(resolve(certsPath, 'cert.pem'));
   httpServer = createHttpsServer({ key: sslKey, cert: sslCert }, app);
   console.log('🔒 HTTPS habilitado');
-} catch {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('❌ HTTPS requerido en producción. Configure certificados SSL en server/certs/');
-    process.exit(1);
-  }
+} else {
   httpServer = createHttpServer(app);
-  console.warn('⚠️  Sin certificados SSL, usando HTTP (solo desarrollo)');
+  if (process.env.NODE_ENV === 'production') {
+    console.log('🔒 HTTP mode — SSL manejado por proxy inverso (Railway/PaaS)');
+  } else {
+    console.warn('⚠️  Sin certificados SSL, usando HTTP (solo desarrollo)');
+  }
 }
 
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean);
@@ -125,6 +126,23 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Servir archivos estáticos del client build (producción)
+// En Docker cwd=/app, en local cwd=server/ — buscar ambos
+const clientDistPath = existsSync(resolve(process.cwd(), '../client/dist'))
+  ? resolve(process.cwd(), '../client/dist')
+  : resolve(process.cwd(), 'client/dist');
+if (existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  // Catch-all: cualquier ruta no-API devuelve index.html (React Router)
+  app.get('*', (_req, res, next) => {
+    if (_req.path.startsWith('/api') || _req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    res.sendFile(resolve(clientDistPath, 'index.html'));
+  });
+  console.log('📦 Sirviendo client build desde', clientDistPath);
+}
+
 // Error handler centralizado — no leakear detalles internos
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err);
@@ -198,7 +216,9 @@ async function start() {
 
     // Ejecutar migración de permisos/auditoría
     const pool = getPool();
-    const migrationPath = resolve(process.cwd(), 'src/database/migration_roles_audit.sql');
+    // @ts-expect-error import.meta works at runtime with ESM
+    const __dirname_app = new URL('.', (import.meta as { url: string }).url).pathname;
+    const migrationPath = resolve(__dirname_app, 'database/migration_roles_audit.sql');
     try {
       const migrationSQL = readFileSync(migrationPath, 'utf-8');
       await pool.query(migrationSQL);
