@@ -155,20 +155,107 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Servir archivos estáticos del client build (producción)
-// En Docker cwd=/app, en local cwd=server/ — buscar ambos
 const clientDistPath = existsSync(resolve(process.cwd(), '../client/dist'))
   ? resolve(process.cwd(), '../client/dist')
   : resolve(process.cwd(), 'client/dist');
+
+const ADMIN_HOSTS = (process.env.ADMIN_HOSTS || 'admin.verificatubingo.com,localhost').split(',');
+
+function isAdminHost(host: string | undefined): boolean {
+  if (!host) return false;
+  const hostname = host.split(':')[0];
+  return ADMIN_HOSTS.some(h => hostname === h || hostname.endsWith('.railway.app'));
+}
+
 if (existsSync(clientDistPath)) {
-  app.use(express.static(clientDistPath));
-  // Catch-all: cualquier ruta no-API devuelve index.html (React Router)
+  // Assets estáticos (JS, CSS, imágenes) se sirven a todos los hosts
+  app.use('/assets', express.static(resolve(clientDistPath, 'assets')));
+  app.use('/bingo.svg', express.static(resolve(clientDistPath, 'bingo.svg')));
+
+  // SPA catch-all SOLO para admin subdomain
   app.get('*', (_req, res, next) => {
-    if (_req.path.startsWith('/api') || _req.path.startsWith('/socket.io')) {
+    if (_req.path.startsWith('/api') || _req.path.startsWith('/socket.io') || _req.path.startsWith('/verificar')) {
       return next();
     }
-    res.sendFile(resolve(clientDistPath, 'index.html'));
+
+    // Admin host → servir SPA
+    if (isAdminHost(_req.headers.host)) {
+      return res.sendFile(resolve(clientDistPath, 'index.html'));
+    }
+
+    // Dominio público — landing page
+    if (_req.path === '/' || _req.path === '') {
+      return res.send(renderPublicLanding());
+    }
+
+    // Cualquier otra ruta en dominio público → 404
+    return res.status(404).send(renderPublic404());
   });
-  console.log('📦 Sirviendo client build desde', clientDistPath);
+  console.log('📦 Admin SPA solo via:', ADMIN_HOSTS.join(', '));
+}
+
+function renderPublicLanding(): string {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verifica Tu Bingo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; color: #e2e8f0; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 48px 32px; max-width: 480px; width: 100%; box-shadow: 0 25px 50px rgba(0,0,0,0.5); text-align: center; }
+    h1 { font-size: 32px; font-weight: 700; background: linear-gradient(90deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 12px; }
+    .subtitle { color: #94a3b8; font-size: 16px; margin-bottom: 32px; }
+    .info { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+    .info p { color: #cbd5e1; font-size: 14px; line-height: 1.6; }
+    .info strong { color: #3b82f6; }
+    .footer { color: #475569; font-size: 12px; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎱 Verifica Tu Bingo</h1>
+    <p class="subtitle">Plataforma de verificación de cartones</p>
+    <div class="info">
+      <p>Escanea el <strong>código QR</strong> de tu cartón de bingo para verificar su autenticidad y estado.</p>
+    </div>
+    <div class="info">
+      <p>Si tienes el código de tu cartón, ingresa a:<br><strong>verificatubingo.com/verificar/TU-CODIGO</strong></p>
+    </div>
+    <div class="footer">Bingo Manager &copy; ${new Date().getFullYear()}</div>
+  </div>
+</body>
+</html>`;
+}
+
+function renderPublic404(): string {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Página no encontrada — Verifica Tu Bingo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; color: #e2e8f0; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 48px 32px; max-width: 400px; width: 100%; box-shadow: 0 25px 50px rgba(0,0,0,0.5); text-align: center; }
+    h1 { font-size: 64px; margin-bottom: 12px; }
+    h2 { font-size: 20px; margin-bottom: 8px; }
+    p { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+    a { color: #3b82f6; text-decoration: none; font-weight: 600; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>404</h1>
+    <h2>Página no encontrada</h2>
+    <p>La página que buscas no existe.</p>
+    <a href="/">Volver al inicio</a>
+  </div>
+</body>
+</html>`;
 }
 
 // Error handler centralizado — no leakear detalles internos

@@ -19,6 +19,11 @@ interface CardRow {
   use_free_center: boolean;
 }
 
+// /verificar/ sin código → instrucciones
+router.get('/', (_req: Request, res: Response) => {
+  res.send(renderPage(null, 'Escanea el QR de tu cartón para verificarlo'));
+});
+
 router.get('/:card_code', async (req: Request, res: Response) => {
   const { card_code } = req.params;
 
