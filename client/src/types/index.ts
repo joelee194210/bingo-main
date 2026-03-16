@@ -281,6 +281,7 @@ export interface ResumenInventario {
   totalCajas: number;
   cartonesAsignados: number;
   cartonesDisponibles: number;
+  cajasSinAlmacen: number;
 }
 
 export interface CajaReal {

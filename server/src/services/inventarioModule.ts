@@ -340,6 +340,7 @@ export async function getResumenInventario(pool: Pool, eventId: number, almacenI
   totalCajas: number;
   cartonesAsignados: number;
   cartonesDisponibles: number;
+  cajasSinAlmacen: number;
 }> {
   if (almacenId) {
     // Per-almacen: count cajas/lotes/cards que estan en este almacen
@@ -352,12 +353,14 @@ export async function getResumenInventario(pool: Pool, eventId: number, almacenI
 
     const totalCartones = Number(cartonesRow.total);
     const vendidos = Number(cartonesRow.vendidos);
+    const sinAlmacenRow = (await pool.query('SELECT COUNT(*) as total FROM cajas WHERE event_id = $1 AND almacen_id IS NULL', [eventId])).rows[0];
     return {
       totalCartones,
       totalLibretas: Number(lotesRow.total),
       totalCajas: Number(cajasRow.total),
       cartonesAsignados: vendidos,
       cartonesDisponibles: totalCartones - vendidos,
+      cajasSinAlmacen: Number(sinAlmacenRow.total),
     };
   }
 
@@ -368,6 +371,7 @@ export async function getResumenInventario(pool: Pool, eventId: number, almacenI
   )).rows[0];
   const lotesRow = (await pool.query('SELECT COUNT(*) as total FROM lotes WHERE event_id = $1', [eventId])).rows[0];
   const cajasRow = (await pool.query('SELECT COUNT(*) as total FROM cajas WHERE event_id = $1', [eventId])).rows[0];
+  const sinAlmacenRow = (await pool.query('SELECT COUNT(*) as total FROM cajas WHERE event_id = $1 AND almacen_id IS NULL', [eventId])).rows[0];
 
   const totalCartones = Number(totalRow.total);
   const vendidos = Number(totalRow.vendidos);
@@ -377,6 +381,7 @@ export async function getResumenInventario(pool: Pool, eventId: number, almacenI
     totalCajas: Number(cajasRow.total),
     cartonesAsignados: vendidos,
     cartonesDisponibles: totalCartones - vendidos,
+    cajasSinAlmacen: Number(sinAlmacenRow.total),
   };
 }
 
