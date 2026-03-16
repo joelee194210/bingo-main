@@ -128,11 +128,9 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const success = await login(username, password);
-      if (success) {
-        const userStr = localStorage.getItem('bingo_auth_user');
-        const userData = userStr ? JSON.parse(userStr) : null;
-        const destination = userData?.role === 'inventory' ? '/inventory' : from;
+      const user = await login(username, password);
+      if (user) {
+        const destination = user.role === 'inventory' ? '/inventory' : from;
         navigate(destination, { replace: true });
       } else {
         setError('Usuario o contrasena incorrectos');

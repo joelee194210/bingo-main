@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS cards (
     buyer_libreta TEXT,
     sold_by INTEGER,
     almacen_id INTEGER,
-    lote_id INTEGER REFERENCES lotes(id) ON DELETE SET NULL,
+    lote_id INTEGER,
     created_at TIMESTAMP DEFAULT NOW(),
     FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
     FOREIGN KEY (sold_by) REFERENCES users(id),
@@ -198,6 +198,7 @@ CREATE INDEX IF NOT EXISTS idx_cards_event_sold ON cards(event_id, is_sold);
 CREATE INDEX IF NOT EXISTS idx_cards_event_number ON cards(event_id, card_number);
 CREATE INDEX IF NOT EXISTS idx_cards_validation ON cards(validation_code);
 CREATE INDEX IF NOT EXISTS idx_cards_serial ON cards(serial);
+CREATE INDEX IF NOT EXISTS idx_cards_almacen ON cards(almacen_id);
 CREATE INDEX IF NOT EXISTS idx_games_event ON games(event_id, status);
 CREATE INDEX IF NOT EXISTS idx_ball_history_game ON ball_history(game_id, call_order);
 CREATE INDEX IF NOT EXISTS idx_winners_game ON game_winners(game_id);
@@ -363,6 +364,13 @@ CREATE INDEX IF NOT EXISTS idx_lotes_caja ON lotes(caja_id);
 CREATE INDEX IF NOT EXISTS idx_lotes_centro ON lotes(centro_id);
 CREATE INDEX IF NOT EXISTS idx_lotes_series ON lotes(event_id, series_number);
 CREATE INDEX IF NOT EXISTS idx_lotes_status ON lotes(event_id, status);
+
+-- FK diferida: cards.lote_id -> lotes.id (lotes se define después de cards)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cards_lote_id_fkey') THEN
+    ALTER TABLE cards ADD CONSTRAINT cards_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES lotes(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS envios (
     id SERIAL PRIMARY KEY,

@@ -10,13 +10,24 @@ import {
   getJob,
   exportFullDump,
   restoreFullDump,
-  exportEventDump,
-  restoreEventDump,
+  streamEventDump,
+  restoreEventDumpFromFile,
 } from '../services/backupService.js';
 import { logActivity, auditFromReq } from '../services/auditService.js';
+import { readdirSync, unlinkSync, mkdirSync } from 'fs';
+
+// Limpiar archivos temporales de uploads anteriores al iniciar
+try {
+  mkdirSync('/tmp/bingo-uploads', { recursive: true });
+  for (const f of readdirSync('/tmp/bingo-uploads')) {
+    try { unlinkSync(`/tmp/bingo-uploads/${f}`); } catch {}
+  }
+} catch {}
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } }); // 500MB max
+// Para archivos SQL grandes: guardar en disco y pipear directo a psql (sin cargar en RAM)
+const uploadDisk = multer({ dest: '/tmp/bingo-uploads/', limits: { fileSize: 500 * 1024 * 1024 } });
 
 // Router publico para progreso (se monta sin authenticate en app.ts)
 export const backupProgressRouter = Router();
@@ -182,52 +193,54 @@ router.post('/restore-full', upload.single('file'), async (req, res) => {
   }
 });
 
-// Backup evento como dump SQL
+// Backup evento como dump SQL — streaming directo (sin buffering en memoria)
 router.get('/event/:eventId/dump', async (req, res) => {
   const pool = getPool();
   try {
     const eventId = parseInt(req.params.eventId, 10);
     if (!eventId) return res.status(400).json({ success: false, error: 'eventId invalido' });
-    const sql = await exportEventDump(pool, eventId);
+
     const { rows } = await pool.query('SELECT name FROM events WHERE id = $1', [eventId]);
-    const safeName = (rows[0]?.name || 'evento').replace(/[^a-zA-Z0-9]/g, '_');
+    if (!rows[0]) return res.status(404).json({ success: false, error: 'Evento no encontrado' });
+    const eventName = rows[0].name;
+
+    const safeName = (eventName || 'evento').replace(/[^a-zA-Z0-9]/g, '_');
     const filename = `bingo_dump_${safeName}_${new Date().toISOString().slice(0, 10)}.sql`;
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'application/sql');
 
+    // Streamear dump directamente via psql → response HTTP (cero buffering)
+    streamEventDump(pool, eventId, eventName, res);
+
     logActivity(pool, auditFromReq(req, 'backup_event_export', 'backup', {
       event_id: eventId,
-      event_name: rows[0]?.name,
-      format: 'sql_dump',
+      event_name: eventName,
+      format: 'sql_dump_stream',
       filename,
     }));
-
-    res.send(sql);
   } catch (error) {
     logActivity(pool, auditFromReq(req, 'backup_event_export_error', 'backup', {
       event_id: req.params.eventId,
       format: 'sql_dump',
       error: (error as Error).message,
     }));
-    res.status(500).json({ success: false, error: (error as Error).message });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: (error as Error).message });
+    }
   }
 });
 
-// Restaurar evento desde dump SQL
-router.post('/restore-event-dump', upload.single('file'), async (req, res) => {
+// Restaurar evento desde dump SQL — usa disco + psql -f (cero RAM)
+router.post('/restore-event-dump', uploadDisk.single('file'), async (req, res) => {
   const pool = getPool();
   if (!req.file) return res.status(400).json({ success: false, error: 'Archivo SQL requerido' });
 
-  const sql = req.file.buffer.toString('utf-8');
-  if (!sql.trim()) {
-    return res.status(400).json({ success: false, error: 'El archivo SQL esta vacio' });
-  }
-
+  const filePath = req.file.path;
   const job = createJob('restore_event');
   res.json({ success: true, data: { jobId: job.jobId } });
 
   try {
-    const result = await restoreEventDump(pool, sql, job);
+    const result = await restoreEventDumpFromFile(pool, filePath, job);
 
     logActivity(pool, auditFromReq(req, 'backup_event_restore', 'backup', {
       format: 'sql_dump',
@@ -249,6 +262,9 @@ router.post('/restore-event-dump', upload.single('file'), async (req, res) => {
       format: 'sql_dump',
       error: err.message,
     }));
+  } finally {
+    // Limpiar archivo temporal
+    import('fs').then(fs => fs.unlink(filePath, () => {}));
   }
 });
 

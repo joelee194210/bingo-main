@@ -5,11 +5,11 @@ import {
   Download,
   Loader2,
   CheckCircle,
-  Package,
+  BookOpen,
   AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getEvents, generateQRCajas, getQRCajasProgress, downloadQRCajasZip } from '@/services/api';
+import { getEvents, generateQRLibretas, getQRLibretasProgress, downloadQRLibretasZip } from '@/services/api';
 import type { BingoEvent } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,14 +24,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-export default function QRCajasExport() {
+export default function QRLibretasExport() {
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [qrSize, setQrSize] = useState(300);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState<{ total: number; generated: number; status: string } | null>(null);
   const [result, setResult] = useState<{
     event_name: string;
-    cajas_processed: number;
+    libretas_processed: number;
     qr_size: string;
     zip_size_mb: string;
   } | null>(null);
@@ -48,14 +48,14 @@ export default function QRCajasExport() {
     if (!isGenerating || !selectedEventId) return;
     const interval = setInterval(async () => {
       try {
-        const res = await getQRCajasProgress(selectedEventId);
+        const res = await getQRLibretasProgress(selectedEventId);
         if (res.data) {
           setProgress(res.data);
           if (res.data.status === 'completed') {
             setIsGenerating(false);
           } else if (res.data.status === 'error') {
             setIsGenerating(false);
-            setError('Error generando QR de cajas');
+            setError('Error generando QR de libretas');
           }
         }
       } catch { /* ignore */ }
@@ -64,15 +64,15 @@ export default function QRCajasExport() {
   }, [isGenerating, selectedEventId]);
 
   const generateMutation = useMutation({
-    mutationFn: () => generateQRCajas({ event_id: selectedEventId!, size: qrSize }),
+    mutationFn: () => generateQRLibretas({ event_id: selectedEventId!, size: qrSize }),
     onSuccess: (data) => {
       setResult(data.data as typeof result);
       setIsGenerating(false);
-      toast.success(`${data.data?.cajas_processed} etiquetas QR de cajas generadas`);
+      toast.success(`${data.data?.libretas_processed} etiquetas QR de libretas generadas`);
     },
     onError: (err: any) => {
       setIsGenerating(false);
-      toast.error(err?.response?.data?.error || 'Error generando QR de cajas');
+      toast.error(err?.response?.data?.error || 'Error generando QR de libretas');
     },
   });
 
@@ -88,11 +88,11 @@ export default function QRCajasExport() {
   const handleDownload = async () => {
     if (!selectedEventId) return;
     try {
-      const blob = await downloadQRCajasZip(selectedEventId);
+      const blob = await downloadQRLibretasZip(selectedEventId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `QR_Cajas_${result?.event_name || 'evento'}.zip`;
+      a.download = `QR_Libretas_${result?.event_name || 'evento'}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -109,16 +109,16 @@ export default function QRCajasExport() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">QR de Cajas</h2>
+        <h2 className="text-2xl font-bold tracking-tight">QR de Libretas</h2>
         <p className="text-muted-foreground">
-          Genera etiquetas QR para cada caja con su codigo y rango de lotes
+          Genera etiquetas QR para cada libreta con su codigo y numero de serie
         </p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
+            <BookOpen className="h-5 w-5" />
             Configuracion
           </CardTitle>
         </CardHeader>
@@ -189,7 +189,7 @@ export default function QRCajasExport() {
             ) : (
               <>
                 <QrCode className="mr-2 h-4 w-4" />
-                Generar QR de Cajas
+                Generar QR de Libretas
               </>
             )}
           </Button>
@@ -230,10 +230,10 @@ export default function QRCajasExport() {
             <div className="flex items-start gap-3">
               <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
               <div className="flex-1 space-y-2">
-                <p className="font-medium">QR de cajas generados exitosamente</p>
+                <p className="font-medium">QR de libretas generados exitosamente</p>
                 <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
                   <span>Evento:</span><span className="font-medium text-foreground">{result.event_name}</span>
-                  <span>Cajas procesadas:</span><span className="font-medium text-foreground">{result.cajas_processed}</span>
+                  <span>Libretas procesadas:</span><span className="font-medium text-foreground">{result.libretas_processed}</span>
                   <span>Tamano QR:</span><span className="font-medium text-foreground">{result.qr_size}</span>
                   <span>ZIP:</span><span className="font-medium text-foreground">{result.zip_size_mb} MB</span>
                 </div>

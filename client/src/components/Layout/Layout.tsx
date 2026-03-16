@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   ScrollText,
   Package,
+  BookOpen,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -74,6 +75,7 @@ const navGroups = [
       { to: '/export/qr', icon: QrCode, label: 'QR Codes', permission: 'cards:export' },
       { to: '/export/barcode', icon: Barcode, label: 'Cod. Barras', permission: 'cards:export' },
       { to: '/export/qr-cajas', icon: Package, label: 'QR Cajas', permission: 'cards:export' },
+      { to: '/export/qr-libretas', icon: BookOpen, label: 'QR Libretas', permission: 'cards:export' },
     ],
   },
   {

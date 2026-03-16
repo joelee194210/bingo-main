@@ -164,12 +164,6 @@ export default function GamePlay() {
     onSuccess: (response) => {
       if (response.success && response.data) {
         setLastCalledBall(response.data.ball);
-        playSound(response.data.ball);
-        if (response.data.winners.length > 0) {
-          setWinners(response.data.winners);
-          setShowWinnerModal(true);
-        }
-        refetch();
       }
     },
   });
@@ -179,12 +173,6 @@ export default function GamePlay() {
     onSuccess: (response) => {
       if (response.success && response.data) {
         setLastCalledBall(response.data.ball);
-        playSound(response.data.ball);
-        if (response.data.winners.length > 0) {
-          setWinners(response.data.winners);
-          setShowWinnerModal(true);
-        }
-        refetch();
       }
     },
   });

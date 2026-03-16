@@ -36,6 +36,10 @@ export function useGameSocket({ gameId, onGameUpdate, onBallCalled, onWinnerFoun
     socket.on('connect', () => {
       socket.emit('join-game', gameId);
     });
+    // Guard: if socket already connected when listener is registered
+    if (socket.connected) {
+      socket.emit('join-game', gameId);
+    }
 
     socket.on('game-update', (data) => onGameUpdateRef.current(data));
     socket.on('ball-called', (data) => onBallCalledRef.current(data));

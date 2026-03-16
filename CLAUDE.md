@@ -19,7 +19,7 @@ npm run dev
 npm run dev:client    # Vite dev server on :5173
 npm run dev:server    # Express + Socket.IO on :3001 (tsx watch)
 
-# Initialize SQLite database (creates server/data/bingo.db)
+# Initialize PostgreSQL database
 npm run db:init
 
 # Build
@@ -33,12 +33,12 @@ No test framework is configured.
 ### Server (`server/src/`)
 
 - **Express + Socket.IO** API with JWT auth (Bearer tokens)
-- **SQLite** via `better-sqlite3` (WAL mode). DB file at `server/data/bingo.db`, schema at `server/src/database/schema.sql`. Designed for 1M+ cards with optimized indexes.
+- **PostgreSQL** via `pg` (Pool). Connection: `postgresql://slacker@localhost:5432/bingo`, schema at `server/src/database/schema.sql`. Designed for 1M+ cards with optimized indexes.
 - **Routes** (`routes/`): auth, events, cards, games, dashboard, export, reports. All routes except `/api/auth` require authentication.
 - **Services** (`services/`): `gameEngine.ts` (game lifecycle, ball calling, winner detection), `cardGenerator.ts` (card generation), `cardVerifier.ts` (winner verification), `authService.ts` (JWT, bcrypt), `reportService.ts`, `exportService.ts` (PDF/PNG via pdfkit+canvas).
 - **Auth middleware** (`middleware/auth.ts`): `authenticate`, `requireRole`, `requirePermission`. Extends Express Request with `req.user` and `req.jwtPayload`.
 - **Roles**: admin, moderator, seller, viewer — permissions defined in `types/auth.ts` (`ROLE_PERMISSIONS`).
-- Each route handler opens/closes its own DB connection via `getDatabase()`.
+- Each route handler uses a connection pool via `getDatabase()`.
 - Socket.IO emits real-time game events: `game-update`, `ball-called`, `winner-found` to room `game-{id}`.
 
 ### Client (`client/src/`)
@@ -58,4 +58,4 @@ No test framework is configured.
 - Bingo card: 5x5 grid, columns B(1-15), I(16-30), N(31-45), G(46-60), O(61-75). Optional FREE center.
 - Cards have `card_code` (5-char alphanumeric) and `validation_code` for verification.
 - Cards can be in practice mode (all cards participate) or real mode (only sold cards).
-- SQLite triggers auto-update event card counts on insert/sell.
+- PostgreSQL triggers auto-update event card counts on insert/sell.

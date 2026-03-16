@@ -309,21 +309,36 @@ export async function callBall(
  * Llama una balota aleatoria
  */
 export async function callRandomBall(pool: Pool, gameId: number): Promise<CallBallResult> {
-  const game = await getGameState(pool, gameId);
+  const MAX_RETRIES = 3;
 
-  if (!game) {
-    throw new Error('Juego no encontrado');
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const game = await getGameState(pool, gameId);
+
+    if (!game) {
+      throw new Error('Juego no encontrado');
+    }
+
+    if (game.availableBalls.length === 0) {
+      throw new Error('No quedan balotas disponibles');
+    }
+
+    // Seleccionar balota con CSPRNG (seguro para bingo televisado)
+    const randomIndex = randomInt(game.availableBalls.length);
+    const ball = game.availableBalls[randomIndex];
+
+    try {
+      return await callBall(pool, gameId, ball);
+    } catch (err: any) {
+      // Si la balota ya fue llamada por otra request concurrente, reintentar
+      if (err.message?.includes('ya fue llamada') && attempt < MAX_RETRIES - 1) {
+        continue;
+      }
+      throw err;
+    }
   }
 
-  if (game.availableBalls.length === 0) {
-    throw new Error('No quedan balotas disponibles');
-  }
-
-  // Seleccionar balota con CSPRNG (seguro para bingo televisado)
-  const randomIndex = randomInt(game.availableBalls.length);
-  const ball = game.availableBalls[randomIndex];
-
-  return callBall(pool, gameId, ball);
+  // No debería llegar aquí, pero satisface TypeScript
+  throw new Error('No se pudo llamar una balota después de múltiples intentos');
 }
 
 /**

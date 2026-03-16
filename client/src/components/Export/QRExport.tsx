@@ -46,7 +46,7 @@ export default function QRExport() {
     cards_processed: number;
     qr_size: string;
     url_template: string;
-    zip_size_mb: string;
+    zip_size_mb?: string;
     sample_url: string;
   } | null>(null);
 
@@ -61,7 +61,7 @@ export default function QRExport() {
 
     const poll = async () => {
       while (!stopped) {
-        await new Promise(r => setTimeout(r, 10000));
+        await new Promise(r => setTimeout(r, 3000));
         if (stopped) break;
         try {
           const response = await getQRProgress(selectedEventId);
@@ -70,6 +70,17 @@ export default function QRExport() {
             if (response.data.generated >= maxSeen) {
               maxSeen = response.data.generated;
               setProgress(response.data);
+            }
+            if (response.data.status === 'completed') {
+              setIsGenerating(false);
+              setResult(prev => prev ? { ...prev, cards_processed: response.data!.total } : prev);
+              toast.success(`${response.data.total.toLocaleString()} QR codes generados`);
+              break;
+            }
+            if (response.data.status === 'error') {
+              setIsGenerating(false);
+              toast.error('Error generando QR codes en el servidor');
+              break;
             }
           }
         } catch {
@@ -99,14 +110,19 @@ export default function QRExport() {
       return generateQRCodes(payload);
     },
     onSuccess: (data) => {
-      // El POST termina cuando todo esta listo (QRs + ZIP)
-      // Ahora si marcamos completado
+      // El POST ahora responde inmediato — la generación corre en background
+      // El polling detectará cuando termine
       if (data.data) {
-        setResult(data.data);
-        setProgress({ total: data.data.cards_processed, generated: data.data.cards_processed, status: 'completed' });
-        toast.success(`${data.data.cards_processed.toLocaleString()} QR codes generados`);
+        setResult({
+          event_name: data.data.event_name || '',
+          cards_processed: data.data.cards_total || 0,
+          qr_size: data.data.qr_size || '',
+          url_template: data.data.url_template || '',
+          sample_url: data.data.sample_url || '',
+        });
+        setProgress({ total: data.data.cards_total || 0, generated: 0, status: 'generating' });
       }
-      setIsGenerating(false);
+      // NO setIsGenerating(false) — el polling lo hará cuando termine
     },
     onError: (e: { response?: { data?: { error?: string } } }) => {
       setIsGenerating(false);
@@ -374,8 +390,10 @@ export default function QRExport() {
                   <span className="font-medium">{result.cards_processed.toLocaleString()}</span>
                   <span className="text-muted-foreground">Tamano:</span>
                   <span className="font-medium">{result.qr_size}</span>
-                  <span className="text-muted-foreground">ZIP:</span>
-                  <span className="font-medium">{result.zip_size_mb} MB</span>
+                  {result.zip_size_mb && <>
+                    <span className="text-muted-foreground">ZIP:</span>
+                    <span className="font-medium">{result.zip_size_mb} MB</span>
+                  </>}
                   <span className="text-muted-foreground">Archivo QR:</span>
                   <span className="font-mono text-xs">00001-01.png</span>
                   <span className="text-muted-foreground">URL ejemplo:</span>
@@ -391,7 +409,7 @@ export default function QRExport() {
               size="lg"
             >
               <Download className="mr-2 h-4 w-4" />
-              Descargar ZIP ({result.zip_size_mb} MB)
+              Descargar ZIP{result.zip_size_mb ? ` (${result.zip_size_mb} MB)` : ''}
             </Button>
           </CardContent>
         </Card>

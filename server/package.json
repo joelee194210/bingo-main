@@ -4,7 +4,7 @@
   "description": "Backend API para plataforma de Bingo",
   "main": "dist/app.js",
   "scripts": {
-    "dev": "tsx watch src/app.ts",
+    "dev": "NODE_OPTIONS='--max-old-space-size=4096' tsx watch src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
     "db:init": "tsx src/database/init.ts"

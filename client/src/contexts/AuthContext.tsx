@@ -4,7 +4,7 @@ import { hasPermission as hasPermissionDefault } from '../types/auth';
 import api from '../services/api';
 
 interface AuthContextType extends AuthState {
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<User | null>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
   isRole: (...roles: UserRole[]) => boolean;
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [verifyToken, clearAuth]);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<User | null> => {
     try {
       const response = await api.post('/auth/login', { username, password });
 
@@ -104,12 +104,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         loadDynamicPermissions();
 
-        return true;
+        return user;
       }
-      return false;
+      return null;
     } catch (error) {
       console.error('Error en login:', error);
-      return false;
+      return null;
     }
   };
 
@@ -119,14 +119,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAuth();
   };
 
-  const checkPermission = (permission: string): boolean => {
+  const checkPermission = useCallback((permission: string): boolean => {
     if (!state.user) return false;
     // Usar permisos dinámicos si están cargados, sino fallback a defaults
     if (dynamicPermissions.current) {
       return dynamicPermissions.current.includes(permission);
     }
     return hasPermissionDefault(state.user.role, permission);
-  };
+  }, [state.user]);
 
   const isRole = (...roles: UserRole[]): boolean => {
     if (!state.user) return false;

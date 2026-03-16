@@ -95,6 +95,8 @@ function downloadBlob(blob: Blob, filename: string) {
 // =====================================================
 function ProgressPanel({ jobId, onDone }: { jobId: string; onDone: (progress: BackupJobProgress) => void }) {
   const [progress, setProgress] = useState<BackupJobProgress | null>(null);
+  const onDoneRef = useRef(onDone);
+  useEffect(() => { onDoneRef.current = onDone; });
 
   useEffect(() => {
     let active = true;
@@ -105,7 +107,7 @@ function ProgressPanel({ jobId, onDone }: { jobId: string; onDone: (progress: Ba
         if (res.data) {
           setProgress(res.data);
           if (res.data.status === 'completed' || res.data.status === 'error') {
-            onDone(res.data);
+            onDoneRef.current(res.data);
             return; // stop polling
           }
         }
@@ -116,7 +118,7 @@ function ProgressPanel({ jobId, onDone }: { jobId: string; onDone: (progress: Ba
     };
     poll();
     return () => { active = false; };
-  }, [jobId, onDone]);
+  }, [jobId]);
 
   if (!progress) {
     return (

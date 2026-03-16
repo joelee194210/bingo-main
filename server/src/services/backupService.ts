@@ -1,5 +1,7 @@
 import type { Pool } from 'pg';
 import { spawn } from 'child_process';
+import { openSync, readSync, closeSync } from 'fs';
+import { randomBytes } from 'crypto';
 
 // =====================================================
 // SISTEMA DE PROGRESO DE BACKUP/RESTORE
@@ -22,7 +24,7 @@ export interface BackupProgress {
 const activeJobs = new Map<string, BackupProgress>();
 
 export function createJob(type: BackupProgress['type']): BackupProgress {
-  const jobId = `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const jobId = `${type}_${randomBytes(16).toString('hex')}`;
   const job: BackupProgress = {
     jobId,
     type,
@@ -313,31 +315,70 @@ export async function restoreEventBackup(pool: Pool, data: any, job?: BackupProg
       }
     }
 
-    // Restaurar cartones (los contadores se actualizan por trigger)
-    const totalCards = data.tables.cards?.length || 0;
+    // Restaurar cartones en batches (los contadores se actualizan por trigger)
+    const allCards = data.tables.cards || [];
+    const totalCards = allCards.length;
     if (job) updateJob(job, { step: `Restaurando cartones (0/${totalCards.toLocaleString()})...`, current: processedItems, details: `${totalCards.toLocaleString()} cartones por insertar` });
-    let cardCount = 0;
-    for (const card of data.tables.cards || []) {
+
+    const CARD_BATCH = 500;
+    for (let batchStart = 0; batchStart < totalCards; batchStart += CARD_BATCH) {
+      const batch = allCards.slice(batchStart, batchStart + CARD_BATCH);
+
+      // Construir multi-value INSERT
+      const values: unknown[] = [];
+      const valuePlaceholders: string[] = [];
+      let paramIdx = 1;
+
+      for (const card of batch) {
+        valuePlaceholders.push(`($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5}, $${paramIdx + 6}, $${paramIdx + 7}, $${paramIdx + 8}, $${paramIdx + 9}, $${paramIdx + 10}, $${paramIdx + 11}, $${paramIdx + 12}, $${paramIdx + 13}, $${paramIdx + 14}, $${paramIdx + 15}, $${paramIdx + 16})`);
+        values.push(
+          newEventId, card.card_number, card.serial, card.card_code + suffix, card.validation_code + suffix,
+          card.numbers, card.numbers_hash, card.promo_text, card.is_sold, card.sold_at,
+          card.buyer_name, card.buyer_phone, card.buyer_cedula, card.buyer_libreta,
+          almacenIdMap.get(card.almacen_id) || null, loteIdMap.get(card.lote_id) || null, card.created_at
+        );
+        paramIdx += 17;
+      }
+
       try {
         const { rows } = await client.query(
           `INSERT INTO cards (event_id, card_number, serial, card_code, validation_code, numbers, numbers_hash, promo_text, is_sold, sold_at, buyer_name, buyer_phone, buyer_cedula, buyer_libreta, almacen_id, lote_id, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
-          [newEventId, card.card_number, card.serial, card.card_code + suffix, card.validation_code + suffix, card.numbers, card.numbers_hash,
-           card.promo_text, card.is_sold, card.sold_at, card.buyer_name, card.buyer_phone, card.buyer_cedula, card.buyer_libreta,
-           almacenIdMap.get(card.almacen_id) || null, loteIdMap.get(card.lote_id) || null, card.created_at]
+           VALUES ${valuePlaceholders.join(', ')}
+           ON CONFLICT DO NOTHING
+           RETURNING id, card_number`,
+          values
         );
-        cardIdMap.set(card.id, rows[0].id);
-        processedItems++;
-        cardCount++;
-        if (job && cardCount % 500 === 0) updateJob(job, { step: `Restaurando cartones (${cardCount.toLocaleString()}/${totalCards.toLocaleString()})...`, current: processedItems, details: `${Math.round(cardCount / totalCards * 100)}% completado` });
-      } catch (cardErr: any) {
-        // Si es un duplicado de hash, saltar el cartón
-        if (cardErr.code === '23505') {
-          console.warn(`Cartón duplicado saltado: ${card.card_code} (constraint: ${cardErr.constraint})`);
-          continue;
+        // Mapear IDs viejos a nuevos (por card_number que es único por evento)
+        for (const row of rows) {
+          const oldCard = batch.find((c: any) => c.card_number === row.card_number);
+          if (oldCard) cardIdMap.set(oldCard.id, row.id);
         }
-        throw cardErr;
+      } catch (batchErr: any) {
+        if (batchErr.code === '23505') {
+          console.warn(`Batch con duplicados, insertando uno a uno (${batchStart}-${batchStart + batch.length})`);
+          for (const card of batch) {
+            try {
+              const { rows } = await client.query(
+                `INSERT INTO cards (event_id, card_number, serial, card_code, validation_code, numbers, numbers_hash, promo_text, is_sold, sold_at, buyer_name, buyer_phone, buyer_cedula, buyer_libreta, almacen_id, lote_id, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                 ON CONFLICT DO NOTHING RETURNING id`,
+                [newEventId, card.card_number, card.serial, card.card_code + suffix, card.validation_code + suffix, card.numbers, card.numbers_hash,
+                 card.promo_text, card.is_sold, card.sold_at, card.buyer_name, card.buyer_phone, card.buyer_cedula, card.buyer_libreta,
+                 almacenIdMap.get(card.almacen_id) || null, loteIdMap.get(card.lote_id) || null, card.created_at]
+              );
+              if (rows.length > 0) cardIdMap.set(card.id, rows[0].id);
+            } catch (singleErr: any) {
+              if (singleErr.code === '23505') continue;
+              throw singleErr;
+            }
+          }
+        } else {
+          throw batchErr;
+        }
       }
+
+      processedItems += batch.length;
+      if (job) updateJob(job, { step: `Restaurando cartones (${Math.min(batchStart + CARD_BATCH, totalCards).toLocaleString()}/${totalCards.toLocaleString()})...`, current: processedItems, details: `${Math.round(Math.min(batchStart + CARD_BATCH, totalCards) / totalCards * 100)}% completado` });
     }
 
     // Restaurar juegos
@@ -541,20 +582,39 @@ export async function restoreFullBackup(pool: Pool, data: any, job?: BackupProgr
 
     let totalRows = 0;
 
+    const FULL_BATCH = 500;
     for (let i = 0; i < insertOrder.length; i++) {
       const table = insertOrder[i];
       const rows = data.tables[table];
       if (!rows || rows.length === 0) continue;
 
       if (job) updateJob(job, { step: `Insertando ${table} (${rows.length} registros)...`, current: cleanOrder.length + i + 1, details: `Tabla ${i + 1} de ${insertOrder.length}` });
-      for (const row of rows) {
-        const columns = Object.keys(row);
-        validateColumnNames(columns);
-        const values = columns.map((_, i) => `$${i + 1}`);
+
+      const columns = Object.keys(rows[0]);
+      validateColumnNames(columns);
+      const colList = columns.join(', ');
+
+
+      for (let batchStart = 0; batchStart < rows.length; batchStart += FULL_BATCH) {
+        const batch = rows.slice(batchStart, batchStart + FULL_BATCH);
+        const values: unknown[] = [];
+        const placeholders: string[] = [];
+        let paramIdx = 1;
+
+        for (const row of batch) {
+          const rowPlaceholders = columns.map(() => `$${paramIdx++}`);
+          placeholders.push(`(${rowPlaceholders.join(', ')})`);
+          for (const col of columns) values.push(row[col]);
+        }
+
         await client.query(
-          `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')}) ON CONFLICT DO NOTHING`,
-          columns.map(col => row[col])
+          `INSERT INTO ${table} (${colList}) VALUES ${placeholders.join(', ')} ON CONFLICT DO NOTHING`,
+          values
         );
+
+        if (job && rows.length > FULL_BATCH) {
+          updateJob(job, { details: `${table}: ${Math.min(batchStart + FULL_BATCH, rows.length)}/${rows.length}` });
+        }
       }
       totalRows += rows.length;
     }
@@ -687,144 +747,142 @@ export function restoreFullDump(sqlBuffer: Buffer, job?: BackupProgress): Promis
 // DUMP SQL POR EVENTO
 // =====================================================
 
-function pgEscape(val: unknown): string {
-  if (val === null || val === undefined) return 'NULL';
-  if (typeof val === 'number' || typeof val === 'bigint') return String(val);
-  if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
-  if (val instanceof Date) return `'${val.toISOString()}'`;
-  const str = String(val).replace(/'/g, "''");
-  return `'${str}'`;
-}
-
-const BATCH_SIZE = 1000;
-
-/** Escape value for COPY FROM stdin format (tab-separated) */
-function copyEscape(val: unknown): string {
-  if (val === null || val === undefined) return '\\N';
-  if (typeof val === 'number' || typeof val === 'bigint') return String(val);
-  if (typeof val === 'boolean') return val ? 't' : 'f';
-  if (val instanceof Date) return val.toISOString();
-  return String(val).replace(/\\/g, '\\\\').replace(/\t/g, '\\t').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-}
 
 /**
- * Genera COPY FROM stdin para tablas grandes, INSERT para tablas pequeñas.
- * COPY es ~100x más rápido que INSERT para carga masiva.
+ * Stream event dump directo al response HTTP — cero buffering en memoria.
+ * Usa UN solo proceso psql con COPY TO STDOUT, pipeado directo al cliente.
  */
-function generateTableData(tableName: string, rows: Record<string, unknown>[]): string {
-  if (!rows || rows.length === 0) return `-- ${tableName}: 0 registros\n`;
-  const columns = Object.keys(rows[0]);
-  const colList = columns.join(', ');
-  const lines: string[] = [`-- ${tableName}: ${rows.length} registros`];
+export async function streamEventDump(pool: Pool, eventId: number, eventName: string, res: import('express').Response): Promise<void> {
+  const tables = [
+    { table: 'events', where: `id = ${eventId}` },
+    { table: 'centros', where: `event_id = ${eventId}` },
+    { table: 'almacenes', where: `event_id = ${eventId}` },
+    { table: 'cajas', where: `event_id = ${eventId}` },
+    { table: 'lotes', where: `event_id = ${eventId}` },
+    { table: 'cards', where: `event_id = ${eventId}` },
+    { table: 'games', where: `event_id = ${eventId}` },
+    { table: 'ball_history', where: `game_id IN (SELECT id FROM games WHERE event_id = ${eventId})` },
+    { table: 'game_winners', where: `game_id IN (SELECT id FROM games WHERE event_id = ${eventId})` },
+    { table: 'game_reports', where: `game_id IN (SELECT id FROM games WHERE event_id = ${eventId})` },
+    { table: 'verification_logs', where: `event_id = ${eventId}` },
+    { table: 'promo_config', where: `event_id = ${eventId}` },
+    { table: 'promo_prizes', where: `event_id = ${eventId}` },
+    { table: 'promo_fixed_rules', where: `event_id = ${eventId}` },
+    { table: 'inv_asignaciones', where: `event_id = ${eventId}` },
+    { table: 'inv_asignacion_cartones', where: `asignacion_id IN (SELECT id FROM inv_asignaciones WHERE event_id = ${eventId})` },
+    { table: 'inv_documentos', where: `event_id = ${eventId}` },
+    { table: 'inv_movimientos', where: `event_id = ${eventId}` },
+  ];
 
-  if (rows.length > 100) {
-    // COPY FROM stdin — carga masiva ultra-rápida
-    lines.push(`COPY ${tableName} (${colList}) FROM stdin;`);
-    for (const row of rows) {
-      lines.push(columns.map(col => copyEscape(row[col])).join('\t'));
-    }
-    lines.push('\\.');
-  } else {
-    // Multi-value INSERTs para tablas pequeñas
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
-      const valueRows = batch.map(row => `(${columns.map(col => pgEscape(row[col])).join(', ')})`);
-      lines.push(`INSERT INTO ${tableName} (${colList}) VALUES\n${valueRows.join(',\n')}\nON CONFLICT DO NOTHING;`);
-    }
+  // Obtener columnas de todas las tablas en UNA query
+  const tableNames = tables.map(t => t.table);
+  const colResult = await pool.query(
+    `SELECT table_name, string_agg(column_name, ', ' ORDER BY ordinal_position) as cols
+     FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = ANY($1)
+     GROUP BY table_name`,
+    [tableNames]
+  );
+  const columnMap = new Map<string, string>(colResult.rows.map((r: any) => [r.table_name, r.cols]));
+
+  // Conteos para header
+  const countResult = await pool.query(
+    `SELECT (SELECT COUNT(*) FROM cards WHERE event_id = $1)::int as total_cards,
+            (SELECT COUNT(*) FROM games WHERE event_id = $1)::int as total_games`,
+    [eventId]
+  );
+  const { total_cards, total_games } = countResult.rows[0];
+
+  // Escribir header directamente al response (no pasa por psql)
+  const header = [
+    `-- =========================================================`,
+    `-- Dump SQL del evento: ${eventName}`,
+    `-- Event ID: ${eventId}`,
+    `-- Generado: ${new Date().toISOString()}`,
+    `-- Total cartones: ${total_cards}`,
+    `-- Total juegos: ${total_games}`,
+    `-- =========================================================`,
+    '',
+    'BEGIN;',
+    '',
+    '-- Deshabilitar triggers para carga masiva (mucho más rápido)',
+    'ALTER TABLE cards DISABLE TRIGGER trg_update_event_total_cards;',
+    'ALTER TABLE cards DISABLE TRIGGER trg_update_event_sold_cards;',
+    'ALTER TABLE cards DISABLE TRIGGER trg_update_event_cards_delete;',
+    '',
+  ].join('\n');
+  res.write(header);
+
+  // Para cada tabla: escribir header COPY, ejecutar COPY TO STDOUT y pipear, escribir terminador
+  for (const { table, where } of tables) {
+    const columns = columnMap.get(table);
+    if (!columns) continue;
+
+    // Escribir header de la sección
+    res.write(`-- ${table}\nCOPY ${table} (${columns}) FROM stdin;\n`);
+
+    // Ejecutar COPY TO STDOUT y pipear directo al response
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn('psql', [DATABASE_URL, '-X', '-q', '-c',
+        `COPY (SELECT ${columns} FROM ${table} WHERE ${where}) TO STDOUT`]);
+
+      proc.stdout.on('data', (chunk: Buffer) => res.write(chunk));
+
+      let stderr = '';
+      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`COPY ${table} falló: ${stderr.slice(0, 200)}`));
+      });
+      proc.on('error', reject);
+    });
+
+    res.write('\\.\n\n');
   }
-  lines.push('');
-  return lines.join('\n');
-}
 
-export async function exportEventDump(pool: Pool, eventId: number, job?: BackupProgress): Promise<string> {
-  if (job) updateJob(job, { step: 'Consultando datos del evento...', current: 0, total: 18 });
-
-  const { rows: events } = await pool.query('SELECT * FROM events WHERE id = $1', [eventId]);
-  if (events.length === 0) throw new Error('Evento no encontrado');
-  const event = events[0];
-
-  if (job) updateJob(job, { step: `Exportando datos de "${event.name}"`, current: 1, total: 18, details: 'Consultando tablas...' });
-
-  const [
-    cards, games, ballHistory, gameWinners, gameReports, verificationLogs,
-    promoConfig, promoPrizes, promoFixedRules, almacenes, cajas, lotes,
-    asignaciones, asignacionCartones, documentos, movimientos, centros,
-  ] = await Promise.all([
-    pool.query('SELECT * FROM cards WHERE event_id = $1', [eventId]),
-    pool.query('SELECT * FROM games WHERE event_id = $1', [eventId]),
-    pool.query('SELECT bh.* FROM ball_history bh JOIN games g ON bh.game_id = g.id WHERE g.event_id = $1', [eventId]),
-    pool.query('SELECT gw.* FROM game_winners gw JOIN games g ON gw.game_id = g.id WHERE g.event_id = $1', [eventId]),
-    pool.query('SELECT gr.* FROM game_reports gr JOIN games g ON gr.game_id = g.id WHERE g.event_id = $1', [eventId]),
-    pool.query('SELECT * FROM verification_logs WHERE event_id = $1', [eventId]),
-    pool.query('SELECT * FROM promo_config WHERE event_id = $1', [eventId]),
-    pool.query('SELECT * FROM promo_prizes WHERE event_id = $1', [eventId]),
-    pool.query('SELECT * FROM promo_fixed_rules WHERE event_id = $1', [eventId]),
-    pool.query('SELECT * FROM almacenes WHERE event_id = $1', [eventId]),
-    pool.query('SELECT * FROM cajas WHERE event_id = $1', [eventId]),
-    pool.query('SELECT * FROM lotes WHERE event_id = $1', [eventId]),
-    pool.query('SELECT * FROM inv_asignaciones WHERE event_id = $1', [eventId]),
-    pool.query(`SELECT iac.* FROM inv_asignacion_cartones iac JOIN inv_asignaciones ia ON iac.asignacion_id = ia.id WHERE ia.event_id = $1`, [eventId]),
-    pool.query('SELECT * FROM inv_documentos WHERE event_id = $1', [eventId]),
-    pool.query('SELECT * FROM inv_movimientos WHERE event_id = $1', [eventId]),
-    pool.query('SELECT * FROM centros WHERE event_id = $1', [eventId]),
-  ]);
-
-  if (job) updateJob(job, { step: 'Generando SQL...', current: 18, total: 18 });
-
-  const parts: string[] = [];
-  parts.push(`-- =========================================================`);
-  parts.push(`-- Dump SQL del evento: ${event.name}`);
-  parts.push(`-- Event ID: ${eventId}`);
-  parts.push(`-- Generado: ${new Date().toISOString()}`);
-  parts.push(`-- Total cartones: ${cards.rows.length}`);
-  parts.push(`-- Total juegos: ${games.rows.length}`);
-  parts.push(`-- =========================================================`);
-  parts.push('');
-  parts.push('BEGIN;');
-  parts.push('');
-  parts.push(generateTableData('events', [event]));
-  parts.push(generateTableData('centros', centros.rows));
-  parts.push(generateTableData('almacenes', almacenes.rows));
-  parts.push(generateTableData('cajas', cajas.rows));
-  parts.push(generateTableData('lotes', lotes.rows));
-  parts.push(generateTableData('cards', cards.rows));
-  parts.push(generateTableData('games', games.rows));
-  parts.push(generateTableData('ball_history', ballHistory.rows));
-  parts.push(generateTableData('game_winners', gameWinners.rows));
-  parts.push(generateTableData('game_reports', gameReports.rows));
-  parts.push(generateTableData('verification_logs', verificationLogs.rows));
-  parts.push(generateTableData('promo_config', promoConfig.rows));
-  parts.push(generateTableData('promo_prizes', promoPrizes.rows));
-  parts.push(generateTableData('promo_fixed_rules', promoFixedRules.rows));
-  parts.push(generateTableData('inv_asignaciones', asignaciones.rows));
-  parts.push(generateTableData('inv_asignacion_cartones', asignacionCartones.rows));
-  parts.push(generateTableData('inv_documentos', documentos.rows));
-  parts.push(generateTableData('inv_movimientos', movimientos.rows));
-  parts.push('');
-  parts.push('COMMIT;');
-
-  if (job) updateJob(job, { status: 'completed', step: 'Dump SQL generado', current: 18, total: 18 });
-
-  return parts.join('\n');
+  // Rehabilitar triggers y actualizar contadores manualmente
+  const footer = [
+    '-- Rehabilitar triggers',
+    'ALTER TABLE cards ENABLE TRIGGER trg_update_event_total_cards;',
+    'ALTER TABLE cards ENABLE TRIGGER trg_update_event_sold_cards;',
+    'ALTER TABLE cards ENABLE TRIGGER trg_update_event_cards_delete;',
+    '',
+    `-- Actualizar contadores del evento (ya que triggers estaban deshabilitados)`,
+    `UPDATE events SET total_cards = (SELECT COUNT(*) FROM cards WHERE event_id = ${eventId}),`,
+    `  cards_sold = (SELECT COUNT(*) FROM cards WHERE event_id = ${eventId} AND is_sold = TRUE)`,
+    `  WHERE id = ${eventId};`,
+    '',
+    'COMMIT;',
+  ].join('\n');
+  res.write(footer);
+  res.end();
 }
 
 
 
-export function restoreEventDump(pool: Pool, sql: string, job?: BackupProgress): Promise<Record<string, unknown>> {
-  const eventNameMatch = sql.match(/-- Dump SQL del evento: (.+)/);
-  const eventIdMatch = sql.match(/-- Event ID: (\d+)/);
-  const cardsMatch = sql.match(/-- Total cartones: (\d+)/);
-  const gamesMatch = sql.match(/-- Total juegos: (\d+)/);
+/**
+ * Restaurar evento desde archivo SQL en disco — psql -f (cero RAM, máxima velocidad)
+ */
+export function restoreEventDumpFromFile(pool: Pool, filePath: string, job?: BackupProgress): Promise<Record<string, unknown>> {
+  // Leer hints del header (primeras líneas) sin cargar todo el archivo
+  const fd = openSync(filePath, 'r');
+  const buf = Buffer.alloc(512);
+  readSync(fd, buf, 0, 512, 0);
+  closeSync(fd);
+  const headerChunk = buf.toString('utf-8');
+  const eventNameMatch = headerChunk.match(/-- Dump SQL del evento: (.+)/);
+  const eventIdMatch = headerChunk.match(/-- Event ID: (\d+)/);
+  const cardsMatch = headerChunk.match(/-- Total cartones: (\d+)/);
+  const gamesMatch = headerChunk.match(/-- Total juegos: (\d+)/);
   const hintName = eventNameMatch?.[1] || 'Evento SQL';
   const hintEventId = eventIdMatch ? parseInt(eventIdMatch[1], 10) : null;
-  const sizeMB = (Buffer.byteLength(sql) / 1024 / 1024).toFixed(1);
 
-  if (job) updateJob(job, { step: `Restaurando "${hintName}"...`, current: 0, total: 1, details: `Ejecutando ${sizeMB} MB via psql...` });
-
-  const sqlBuffer = Buffer.from(sql, 'utf-8');
+  if (job) updateJob(job, { step: `Restaurando "${hintName}"...`, current: 0, total: 1, details: `Ejecutando via psql -f (nativo)...` });
 
   return new Promise((resolve, reject) => {
-    const proc = spawn('psql', [DATABASE_URL, '-v', 'ON_ERROR_STOP=1']);
+    // psql -f lee directo del disco — cero buffering en Node.js
+    const proc = spawn('psql', [DATABASE_URL, '-f', filePath]);
 
     let stderr = '';
     proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
@@ -836,7 +894,6 @@ export function restoreEventDump(pool: Pool, sql: string, job?: BackupProgress):
         return reject(new Error(errMsg));
       }
 
-      // Verificar qué se restauró
       let event_name = hintName;
       let event_id = hintEventId;
       let cards_restored = parseInt(cardsMatch?.[1] || '0', 10);
@@ -866,8 +923,5 @@ export function restoreEventDump(pool: Pool, sql: string, job?: BackupProgress):
       if (job) updateJob(job, { status: 'error', error: errMsg });
       reject(new Error(errMsg));
     });
-
-    proc.stdin.write(sqlBuffer);
-    proc.stdin.end();
   });
 }

@@ -142,7 +142,7 @@ router.post('/generate', requirePermission('cards:create'), async (req: Request,
       existingHashes.add(card.numbers_hash);
     }
 
-    // Obtener códigos existentes de TODOS los eventos (card_code es UNIQUE global)
+    // Obtener códigos existentes de TODOS los eventos (constraints son globales)
     const existingCodes = new Set<string>();
     const { rows: allCodes } = await pool.query('SELECT card_code, validation_code FROM cards');
     for (const card of allCodes) {

@@ -170,11 +170,11 @@ export const generateQRCodes = (data: {
 }) =>
   api.post<ApiResponse<{
     event_name: string;
-    cards_processed: number;
+    cards_total: number;
     qr_size: string;
     url_template: string;
-    zip_size_mb: string;
     sample_url: string;
+    message: string;
   }>>('/export/qr', data).then(r => r.data);
 
 export const getQRProgress = (eventId: number) =>
@@ -193,9 +193,9 @@ export const generateBarcodes = (data: {
 }) =>
   api.post<ApiResponse<{
     event_name: string;
-    cards_processed: number;
-    zip_size_mb: string;
+    cards_total: number;
     sample_serial: string;
+    message: string;
   }>>('/export/barcode', data).then(r => r.data);
 
 export const getBarcodeProgress = (eventId: number) =>
@@ -218,6 +218,21 @@ export const getQRCajasProgress = (eventId: number) =>
 
 export const downloadQRCajasZip = (eventId: number) =>
   api.get(`/export/qr-cajas/download/${eventId}`, { responseType: 'blob' }).then(r => r.data);
+
+// QR Libretas
+export const generateQRLibretas = (data: { event_id: number; size?: number }) =>
+  api.post<ApiResponse<{
+    event_name: string;
+    libretas_processed: number;
+    qr_size: string;
+    zip_size_mb: string;
+  }>>('/export/qr-libretas', data).then(r => r.data);
+
+export const getQRLibretasProgress = (eventId: number) =>
+  api.get<ApiResponse<{ total: number; generated: number; status: string } | null>>(`/export/qr-libretas/progress/${eventId}`).then(r => r.data);
+
+export const downloadQRLibretasZip = (eventId: number) =>
+  api.get(`/export/qr-libretas/download/${eventId}`, { responseType: 'blob' }).then(r => r.data);
 
 // =====================================================
 // PROMOCIONES / RASPADITO

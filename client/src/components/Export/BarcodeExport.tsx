@@ -34,7 +34,7 @@ export default function BarcodeExport() {
   const [result, setResult] = useState<{
     event_name: string;
     cards_processed: number;
-    zip_size_mb: string;
+    zip_size_mb?: string;
     sample_serial: string;
   } | null>(null);
 
@@ -49,7 +49,7 @@ export default function BarcodeExport() {
 
     const poll = async () => {
       while (!stopped) {
-        await new Promise(r => setTimeout(r, 5000));
+        await new Promise(r => setTimeout(r, 3000));
         if (stopped) break;
         try {
           const response = await getBarcodeProgress(selectedEventId);
@@ -58,6 +58,17 @@ export default function BarcodeExport() {
             if (response.data.generated >= maxSeen) {
               maxSeen = response.data.generated;
               setProgress(response.data);
+            }
+            if (response.data.status === 'completed') {
+              setIsGenerating(false);
+              setResult(prev => prev ? { ...prev, cards_processed: response.data!.total } : prev);
+              toast.success(`${response.data.total.toLocaleString()} codigos de barra generados`);
+              break;
+            }
+            if (response.data.status === 'error') {
+              setIsGenerating(false);
+              toast.error('Error generando codigos de barra en el servidor');
+              break;
             }
           }
         } catch {
@@ -85,12 +96,16 @@ export default function BarcodeExport() {
       return generateBarcodes(payload);
     },
     onSuccess: (data) => {
+      // POST responde inmediato — la generación corre en background
+      // El polling detectará cuando termine
       if (data.data) {
-        setResult(data.data);
-        setProgress({ total: data.data.cards_processed, generated: data.data.cards_processed, status: 'completed' });
-        toast.success(`${data.data.cards_processed.toLocaleString()} codigos de barra generados`);
+        setResult({
+          event_name: data.data.event_name || '',
+          cards_processed: data.data.cards_total || 0,
+          sample_serial: data.data.sample_serial || '',
+        });
+        setProgress({ total: data.data.cards_total || 0, generated: 0, status: 'generating' });
       }
-      setIsGenerating(false);
     },
     onError: (e: { response?: { data?: { error?: string } } }) => {
       setIsGenerating(false);
@@ -284,8 +299,10 @@ export default function BarcodeExport() {
                   <span className="font-medium">{result.cards_processed.toLocaleString()}</span>
                   <span className="text-muted-foreground">Formato:</span>
                   <span className="font-medium">Code 128</span>
-                  <span className="text-muted-foreground">ZIP:</span>
-                  <span className="font-medium">{result.zip_size_mb} MB</span>
+                  {result.zip_size_mb && <>
+                    <span className="text-muted-foreground">ZIP:</span>
+                    <span className="font-medium">{result.zip_size_mb} MB</span>
+                  </>}
                   <span className="text-muted-foreground">Archivo ejemplo:</span>
                   <span className="font-mono text-xs">{result.sample_serial}.png</span>
                 </div>
@@ -299,7 +316,7 @@ export default function BarcodeExport() {
               size="lg"
             >
               <Download className="mr-2 h-4 w-4" />
-              Descargar ZIP ({result.zip_size_mb} MB)
+              Descargar ZIP{result.zip_size_mb ? ` (${result.zip_size_mb} MB)` : ''}
             </Button>
           </CardContent>
         </Card>

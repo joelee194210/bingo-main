@@ -19,6 +19,7 @@ const Users = lazy(() => import('./pages/Users'));
 const QRExport = lazy(() => import('./components/Export/QRExport'));
 const BarcodeExport = lazy(() => import('./components/Export/BarcodeExport'));
 const QRCajasExport = lazy(() => import('./components/Export/QRCajasExport'));
+const QRLibretasExport = lazy(() => import('./components/Export/QRLibretasExport'));
 const PromoPage = lazy(() => import('./components/Promo/PromoPage'));
 const InventoryPage = lazy(() => import('./components/Inventory/InventoryPage'));
 const AsignacionDetail = lazy(() => import('./components/Inventory/AsignacionDetail'));
@@ -235,6 +236,16 @@ function App() {
           element={
             <ProtectedRoute permission="cards:export">
               <QRCajasExport />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* QR Libretas */}
+        <Route
+          path="export/qr-libretas"
+          element={
+            <ProtectedRoute permission="cards:export">
+              <QRLibretasExport />
             </ProtectedRoute>
           }
         />

@@ -24,9 +24,10 @@ import { getStatusColor } from '@/lib/badge-variants';
 import type { SortState } from '@/hooks/useTableControls';
 
 const EXPORT_COLUMNS = [
+  { key: 'serial', label: 'Serie' },
   { key: 'card_number', label: '#' },
   { key: 'card_code', label: 'Codigo' },
-  { key: 'serial', label: 'Serie' },
+  { key: 'validation_code', label: 'Validacion' },
   { key: 'caja_code', label: 'Caja' },
   { key: 'lote_code', label: 'Libreta' },
   { key: 'almacen_name', label: 'Ubicacion' },
@@ -202,15 +203,16 @@ export default function CardList() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>
+                  <SortableHeader label="Serie" column="serial" sort={sort} onSort={toggleSort} />
+                </TableHead>
                 <TableHead className="w-16">
                   <SortableHeader label="#" column="card_number" sort={sort} onSort={toggleSort} />
                 </TableHead>
                 <TableHead>
                   <SortableHeader label="Codigo" column="card_code" sort={sort} onSort={toggleSort} />
                 </TableHead>
-                <TableHead>
-                  <SortableHeader label="Serie" column="serial" sort={sort} onSort={toggleSort} />
-                </TableHead>
+                <TableHead>Validacion</TableHead>
                 <TableHead><div className="flex items-center gap-1"><Package className="h-3.5 w-3.5" /> Caja</div></TableHead>
                 <TableHead><div className="flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> Libreta</div></TableHead>
                 <TableHead><div className="flex items-center gap-1"><Warehouse className="h-3.5 w-3.5" /> Ubicacion</div></TableHead>
@@ -226,9 +228,10 @@ export default function CardList() {
             <TableBody>
               {cards.map((card) => (
                 <TableRow key={card.id} className={card.is_sold ? 'bg-green-50/50 dark:bg-green-950/10' : ''}>
+                  <TableCell className="font-mono text-sm text-muted-foreground">{card.serial}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{card.card_number}</TableCell>
                   <TableCell><span className="font-mono font-bold text-primary">{card.card_code}</span></TableCell>
-                  <TableCell className="font-mono text-sm text-muted-foreground">{card.serial}</TableCell>
+                  <TableCell><span className="font-mono text-xs text-muted-foreground">{card.validation_code}</span></TableCell>
                   <TableCell>
                     {card.caja_code ? <Badge variant="outline" className="font-mono text-xs">{card.caja_code}</Badge> : <span className="text-muted-foreground">-</span>}
                   </TableCell>
