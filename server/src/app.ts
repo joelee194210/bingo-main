@@ -31,6 +31,9 @@ import misUsuariosRouter from './routes/misUsuarios.js';
 
 const app = express();
 
+// Railway/Cloudflare usan proxy inverso — necesario para rate-limit y req.ip
+app.set('trust proxy', 1);
+
 // SSL certs for HTTPS (Railway/PaaS manejan SSL via proxy inverso)
 let httpServer: ReturnType<typeof createHttpsServer> | ReturnType<typeof createHttpServer>;
 const certsPath = resolve(process.cwd(), 'certs');
