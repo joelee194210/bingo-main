@@ -224,8 +224,19 @@ export default function BackupPage() {
       setResult({ type: 'success', message: 'Dump PostgreSQL completo descargado exitosamente' });
       refetchLogs();
     } catch (err: any) {
-      const serverMsg = err?.response?.data?.error;
-      setResult({ type: 'error', message: serverMsg || 'Error al generar el dump. Verifique que pg_dump este instalado en el servidor.' });
+      let serverMsg = '';
+      try {
+        // responseType: blob — si el server responde JSON error, viene como Blob
+        const blob = err?.response?.data;
+        if (blob instanceof Blob) {
+          const text = await blob.text();
+          const parsed = JSON.parse(text);
+          serverMsg = parsed.error || '';
+        } else {
+          serverMsg = err?.response?.data?.error || '';
+        }
+      } catch { /* ignore parse errors */ }
+      setResult({ type: 'error', message: serverMsg || 'Error al generar el dump. Verifique los logs del servidor.' });
       refetchLogs();
     } finally {
       setLoadingFull(false);
