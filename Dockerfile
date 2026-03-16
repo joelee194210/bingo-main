@@ -20,7 +20,7 @@ COPY package.json package-lock.json ./
 COPY server/package.json server/
 COPY client/package.json client/
 
-RUN npm ci --include=dev
+RUN npm ci --include=dev --legacy-peer-deps
 
 # Copiar source code
 COPY . .
