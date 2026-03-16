@@ -578,6 +578,11 @@ export async function ejecutarMovimientoBulk(
     origenName = origenResult.rows[0]?.name || null;
   }
 
+  // Validar que hay items antes de crear documento
+  if (!data.items || data.items.length === 0) {
+    return { documentoId: 0, exitosos: 0, errores: ['No se enviaron items para procesar'] };
+  }
+
   // Crear documento
   const docResult = await pool.query(`
     INSERT INTO inv_documentos (event_id, accion, de_almacen_id, a_almacen_id, de_nombre, a_nombre,
@@ -692,6 +697,13 @@ export async function ejecutarMovimientoBulk(
     } catch (err) {
       errores.push(`${item.referencia}: ${(err as Error).message}`);
     }
+  }
+
+  // Si no hubo items exitosos, eliminar el documento vacio
+  if (exitosos === 0) {
+    await pool.query('DELETE FROM inv_movimientos WHERE documento_id = $1', [documentoId]);
+    await pool.query('DELETE FROM inv_documentos WHERE id = $1', [documentoId]);
+    return { documentoId: 0, exitosos: 0, errores };
   }
 
   // Actualizar totales del documento

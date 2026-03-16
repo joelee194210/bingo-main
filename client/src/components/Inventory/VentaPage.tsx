@@ -236,7 +236,7 @@ export default function VentaPage() {
   };
 
   const validItems = items.filter(i => i.validado);
-  const canExecute = validItems.length > 0 && !!currentAlmacen && !!firmaEntrega;
+  const canExecute = validItems.length > 0 && !!currentAlmacen && !!buyerName && !!firmaEntrega;
 
   const countByType = items.reduce<Record<string, number>>((acc, i) => {
     acc[i.tipo] = (acc[i.tipo] || 0) + 1;

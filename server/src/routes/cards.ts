@@ -165,6 +165,12 @@ router.post('/generate', requirePermission('cards:create'), async (req: Request,
       if (match) cajaSeq = parseInt(match[1], 10);
     }
 
+    // Guardia de concurrencia: no permitir generación simultánea para el mismo evento
+    const currentProgress = generationProgress.get(event_id);
+    if (currentProgress && (currentProgress.status === 'generating' || currentProgress.status === 'inserting')) {
+      return res.status(409).json({ success: false, error: 'Ya hay una generación en progreso para este evento. Espere a que termine.' });
+    }
+
     // Iniciar progreso
     generationProgress.set(event_id, { total: qty, generated: 0, inserted: 0, status: 'generating' });
 

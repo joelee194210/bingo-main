@@ -53,6 +53,13 @@ export default function QRLibretasExport() {
           setProgress(res.data);
           if (res.data.status === 'completed') {
             setIsGenerating(false);
+            setResult({
+              event_name: '',
+              libretas_processed: res.data.total,
+              qr_size: `${qrSize}px`,
+              zip_size_mb: '',
+            });
+            toast.success(`${res.data.total} etiquetas QR de libretas generadas`);
           } else if (res.data.status === 'error') {
             setIsGenerating(false);
             setError('Error generando QR de libretas');
@@ -65,10 +72,9 @@ export default function QRLibretasExport() {
 
   const generateMutation = useMutation({
     mutationFn: () => generateQRLibretas({ event_id: selectedEventId!, size: qrSize }),
-    onSuccess: (data) => {
-      setResult(data.data as typeof result);
-      setIsGenerating(false);
-      toast.success(`${data.data?.libretas_processed} etiquetas QR de libretas generadas`);
+    onSuccess: () => {
+      // Generación iniciada en background, el polling se encarga del progreso
+      toast.success('Generación de QR iniciada en background');
     },
     onError: (err: any) => {
       setIsGenerating(false);

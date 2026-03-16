@@ -1044,51 +1044,57 @@ router.post('/qr-libretas', requirePermission('cards:export'), async (req: Reque
 
     qrLibretasExpected.set(event_id, { total: libretas.length, status: 'generating', folder: outputDir });
 
-    // Generar etiqueta para cada libreta
-    for (const libreta of libretas) {
-      const qrContent = libreta.lote_code;
-
-      const png = await generateLibretaLabel(
-        qrContent,
-        libreta.lote_code,
-        qrSize,
-      );
-
-      fs.writeFileSync(path.join(outputDir, `${libreta.lote_code}.png`), png);
-    }
-
-    // Crear ZIP
-    qrLibretasExpected.set(event_id, { total: libretas.length, status: 'zipping', folder: outputDir });
-    const zipPath = path.join(__dirname, '..', '..', 'data', 'qr-libretas', `${safeName}_${event_id}.zip`);
-    if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
-    await new Promise<void>((resolve, reject) => {
-      const output = fs.createWriteStream(zipPath);
-      const archive = archiver('zip', { zlib: { level: 6 } });
-      output.on('close', resolve);
-      archive.on('error', reject);
-      archive.pipe(output);
-      archive.directory(outputDir, `QR_Libretas_${safeName}`);
-      archive.finalize();
-    });
-
-    const zipSizeMB = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
-
-    qrLibretasExpected.set(event_id, { total: libretas.length, status: 'completed', folder: outputDir, zipPath });
-    setTimeout(() => qrLibretasExpected.delete(event_id), 5 * 60 * 1000);
-
-    logActivity(pool, auditFromReq(req, 'export_qr_libretas', 'export', {
-      event_id, event_name: event.name, libretas_count: libretas.length, qr_size: qrSize,
-    }));
-
+    // Responder inmediatamente — generación corre en background
     res.json({
       success: true,
       data: {
         event_name: event.name,
-        libretas_processed: libretas.length,
+        libretas_total: libretas.length,
         qr_size: `${qrSize}x${qrSize}px`,
-        zip_size_mb: zipSizeMB,
+        message: `Generando ${libretas.length} QR de libretas en background. Consulte progreso en /api/export/qr-libretas/progress/${event_id}`,
       },
     });
+
+    // Generar en background
+    (async () => {
+      try {
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < libretas.length; i += BATCH_SIZE) {
+          const batch = libretas.slice(i, i + BATCH_SIZE);
+          await Promise.all(batch.map(async (libreta) => {
+            const qrContent = libreta.lote_code;
+            const png = await generateLibretaLabel(qrContent, libreta.lote_code, qrSize);
+            fs.writeFileSync(path.join(outputDir, `${libreta.lote_code}.png`), png);
+          }));
+        }
+
+        // Crear ZIP
+        qrLibretasExpected.set(event_id, { total: libretas.length, status: 'zipping', folder: outputDir });
+        const zipPath = path.join(__dirname, '..', '..', 'data', 'qr-libretas', `${safeName}_${event_id}.zip`);
+        if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+        await new Promise<void>((resolve, reject) => {
+          const output = fs.createWriteStream(zipPath);
+          const archive = archiver('zip', { store: true });
+          output.on('close', resolve);
+          archive.on('error', reject);
+          archive.pipe(output);
+          archive.directory(outputDir, `QR_Libretas_${safeName}`);
+          archive.finalize();
+        });
+
+        const zipSizeMB = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
+        qrLibretasExpected.set(event_id, { total: libretas.length, status: 'completed', folder: outputDir, zipPath });
+        console.log(`QR libretas generados: ${libretas.length} libretas, ZIP: ${zipSizeMB} MB`);
+        setTimeout(() => qrLibretasExpected.delete(event_id), 30 * 60 * 1000);
+
+        logActivity(pool, auditFromReq(req, 'export_qr_libretas', 'export', {
+          event_id, event_name: event.name, libretas_count: libretas.length, qr_size: qrSize,
+        }));
+      } catch (err) {
+        console.error('Error en generación background de QR libretas:', err);
+        qrLibretasExpected.set(event_id, { total: libretas.length, status: 'error', folder: outputDir });
+      }
+    })();
   } catch (error) {
     console.error('Error generando QR libretas:', error);
     const eventIdKey = req.body?.event_id;
