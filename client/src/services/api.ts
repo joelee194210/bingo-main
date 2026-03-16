@@ -462,7 +462,7 @@ export const getBackupEvents = () =>
   api.get<ApiResponse<BackupEvent[]>>('/backup/events').then(r => r.data);
 
 export const downloadFullBackup = () =>
-  api.get('/backup/full', { responseType: 'blob' }).then(r => r.data);
+  api.get('/backup/full', { responseType: 'blob', timeout: 300000 }).then(r => r.data);
 
 export const downloadEventBackup = (eventId: number) =>
   api.get(`/backup/event/${eventId}`, { responseType: 'blob' }).then(r => r.data);

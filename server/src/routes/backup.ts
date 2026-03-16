@@ -54,25 +54,33 @@ router.get('/events', async (_req, res) => {
 // Backup completo - PostgreSQL dump (pg_dump)
 router.get('/full', async (req, res) => {
   const pool = getPool();
-  try {
-    const dumpBuffer = await exportFullDump();
-    const filename = `bingo_dump_full_${new Date().toISOString().slice(0, 10)}.sql`;
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', 'application/sql');
+  const { spawn } = await import('child_process');
+  const dbUrl = process.env.DATABASE_URL || 'postgresql://slacker@localhost:5432/bingo';
 
-    logActivity(pool, auditFromReq(req, 'backup_full_export', 'backup', {
-      filename,
-      format: 'pg_dump',
-      size_mb: (dumpBuffer.length / 1024 / 1024).toFixed(2),
-    }));
+  const filename = `bingo_dump_full_${new Date().toISOString().slice(0, 10)}.sql`;
+  const proc = spawn('pg_dump', [dbUrl, '--no-owner', '--no-privileges', '--clean', '--if-exists']);
 
-    res.send(dumpBuffer);
-  } catch (error) {
-    logActivity(pool, auditFromReq(req, 'backup_full_export_error', 'backup', {
-      error: (error as Error).message,
-    }));
-    res.status(500).json({ success: false, error: (error as Error).message });
-  }
+  let stderr = '';
+  proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+  proc.on('error', (err) => {
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: `No se pudo ejecutar pg_dump: ${err.message}` });
+    }
+  });
+
+  proc.on('close', (code) => {
+    if (code !== 0 && !res.headersSent) {
+      res.status(500).json({ success: false, error: `pg_dump finalizo con codigo ${code}: ${stderr}` });
+    } else if (code === 0) {
+      logActivity(pool, auditFromReq(req, 'backup_full_export', 'backup', { filename, format: 'pg_dump_stream' }));
+    }
+  });
+
+  // Stream directo: pg_dump stdout → HTTP response (sin acumular en memoria)
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Type', 'application/sql');
+  proc.stdout.pipe(res);
 });
 
 // Backup por evento (con progreso)
