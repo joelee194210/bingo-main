@@ -3,8 +3,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-// @ts-expect-error import.meta works at runtime with tsx/ESM
-const __filename = fileURLToPath((import.meta as { url: string }).url);
+const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://slacker@localhost:5432/bingo';

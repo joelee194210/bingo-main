@@ -216,8 +216,7 @@ async function start() {
 
     // Ejecutar migración de permisos/auditoría
     const pool = getPool();
-    // @ts-expect-error import.meta works at runtime with ESM
-    const __dirname_app = new URL('.', (import.meta as { url: string }).url).pathname;
+    const __dirname_app = new URL('.', import.meta.url).pathname;
     const migrationPath = resolve(__dirname_app, 'database/migration_roles_audit.sql');
     try {
       const migrationSQL = readFileSync(migrationPath, 'utf-8');

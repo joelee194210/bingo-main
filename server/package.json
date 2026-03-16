@@ -1,6 +1,7 @@
 {
   "name": "bingo-server",
   "version": "1.0.0",
+  "type": "module",
   "description": "Backend API para plataforma de Bingo",
   "main": "dist/app.js",
   "scripts": {
