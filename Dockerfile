@@ -1,6 +1,6 @@
 FROM node:20-slim AS base
 
-# Dependencias nativas para canvas, pdfkit, bwip-js
+# Dependencias nativas para canvas, pdfkit, bwip-js + PostgreSQL 18 client
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libcairo2-dev \
@@ -11,7 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpixman-1-dev \
     pkg-config \
     python3 \
-    postgresql-client \
+    curl \
+    ca-certificates \
+    gnupg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-18 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
