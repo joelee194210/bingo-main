@@ -182,6 +182,7 @@ export interface CallBallResult {
     cardId: number;
     cardCode: string;
     cardNumber: number;
+    serial: string;
     validationCode: string;
     winningPattern: string;
     buyerName?: string;
@@ -220,6 +221,7 @@ export async function callBall(
     cardId: number;
     cardCode: string;
     cardNumber: number;
+    serial: string;
     validationCode: string;
     winningPattern: string;
     buyerName?: string;

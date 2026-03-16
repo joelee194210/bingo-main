@@ -22,6 +22,7 @@ export interface WinnerEntry {
   id: number;
   card_id: number;
   card_number: number;
+  serial: string;
   card_code: string;
   validation_code: string;
   buyer_name: string | null;
@@ -147,12 +148,13 @@ export async function generateGameReport(pool: Pool | PoolClient, gameId: number
   `, [gameId]);
   const ballHistory = ballHistoryResult.rows as BallHistoryEntry[];
 
-  // Obtener ganadores
+  // Obtener ganadores (con serial del cartón)
   const winnersResult = await pool.query(`
-    SELECT *
-    FROM game_winners
-    WHERE game_id = $1
-    ORDER BY won_at ASC
+    SELECT gw.*, c.serial
+    FROM game_winners gw
+    LEFT JOIN cards c ON c.id = gw.card_id
+    WHERE gw.game_id = $1
+    ORDER BY gw.won_at ASC
   `, [gameId]);
   const winners = winnersResult.rows as WinnerEntry[];
 
@@ -269,8 +271,9 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
 
       report.winners.forEach((winner, index) => {
         doc.fontSize(12).font('Helvetica-Bold').text(`Ganador #${index + 1}`);
-        doc.font('Helvetica');
-        doc.text(`  Cartón #${winner.card_number}`);
+        doc.fontSize(16).font('Helvetica-Bold').text(`  ${winner.serial || 'N/A'}`);
+        doc.fontSize(12).font('Helvetica');
+        doc.text(`  No. de Control: ${winner.card_number}`);
         doc.text(`  Código: ${winner.card_code}`);
         doc.text(`  Código de Validación: ${winner.validation_code}`);
         if (winner.buyer_name) {
@@ -343,7 +346,9 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
  */
 export async function getGameWinners(pool: Pool, gameId: number): Promise<WinnerEntry[]> {
   const result = await pool.query(`
-    SELECT * FROM game_winners WHERE game_id = $1 ORDER BY won_at ASC
+    SELECT gw.*, c.serial FROM game_winners gw
+    LEFT JOIN cards c ON c.id = gw.card_id
+    WHERE gw.game_id = $1 ORDER BY gw.won_at ASC
   `, [gameId]);
   return result.rows as WinnerEntry[];
 }

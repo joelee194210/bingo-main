@@ -85,6 +85,7 @@ export interface Winner {
   cardId: number;
   cardCode: string;
   cardNumber: number;
+  serial: string;
   validationCode: string;
   winningPattern: string;
   buyerName?: string;
@@ -147,6 +148,7 @@ export interface GameWinner {
   game_id: number;
   card_id: number;
   card_number: number;
+  serial: string;
   card_code: string;
   validation_code: string;
   buyer_name: string | null;

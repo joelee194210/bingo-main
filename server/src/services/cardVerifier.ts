@@ -347,6 +347,7 @@ export async function findWinners(
   cardId: number;
   cardCode: string;
   cardNumber: number;
+  serial: string;
   validationCode: string;
   winningPattern: string;
   buyerName?: string;
@@ -356,6 +357,7 @@ export async function findWinners(
     cardId: number;
     cardCode: string;
     cardNumber: number;
+    serial: string;
     validationCode: string;
     winningPattern: string;
     buyerName?: string;
@@ -369,8 +371,8 @@ export async function findWinners(
   // Procesar cartones en batches para evitar OOM con muchos cartones (600K+)
   const BATCH_SIZE = 10000;
   const baseQuery = isPracticeMode
-    ? 'SELECT id, card_number, card_code, validation_code, numbers, buyer_name FROM cards WHERE event_id = $1'
-    : 'SELECT id, card_number, card_code, validation_code, numbers, buyer_name FROM cards WHERE event_id = $1 AND is_sold = TRUE';
+    ? 'SELECT id, card_number, serial, card_code, validation_code, numbers, buyer_name FROM cards WHERE event_id = $1'
+    : 'SELECT id, card_number, serial, card_code, validation_code, numbers, buyer_name FROM cards WHERE event_id = $1 AND is_sold = TRUE';
 
   let offset = 0;
   let hasMore = true;
@@ -383,6 +385,7 @@ export async function findWinners(
     const cards = cardsResult.rows as Array<{
       id: number;
       card_number: number;
+      serial: string;
       card_code: string;
       validation_code: string;
       numbers: string;
@@ -398,6 +401,7 @@ export async function findWinners(
           cardId: card.id,
           cardCode: card.card_code,
           cardNumber: card.card_number,
+          serial: card.serial,
           validationCode: card.validation_code,
           winningPattern: result.winningPattern!,
           buyerName: card.buyer_name || undefined,

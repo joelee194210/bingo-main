@@ -542,8 +542,9 @@ export default function GamePlay() {
               <div key={winner.cardId} className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900 rounded-lg p-4">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <Trophy className="text-yellow-500 h-6 w-6" />
-                  <span className="font-bold text-lg">Cartón #{winner.cardNumber}</span>
+                  <span className="font-bold text-xl font-mono">{winner.serial}</span>
                 </div>
+                <p className="text-sm text-muted-foreground">No. de control: {winner.cardNumber}</p>
                 <p className="text-sm text-muted-foreground">Código: <span className="font-mono font-bold">{winner.cardCode}</span></p>
                 {winner.buyerName && (
                   <p className="text-sm text-muted-foreground mt-1">{winner.buyerName}</p>
@@ -664,8 +665,8 @@ export default function GamePlay() {
                       <div key={winner.id} className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900 rounded-lg p-3">
                         <div className="flex justify-between items-center">
                           <div>
-                            <span className="font-bold">Cartón #{winner.card_number}</span>
-                            <span className="ml-2 text-sm text-muted-foreground">({winner.card_code})</span>
+                            <span className="font-bold font-mono">{winner.serial}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">Control: {winner.card_number} ({winner.card_code})</span>
                           </div>
                           <Badge variant="warning" className="text-xs">
                             {winner.balls_to_win} balotas
