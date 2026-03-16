@@ -28,9 +28,6 @@ COPY . .
 # Build server (TypeScript) y client (Vite)
 RUN npm run build
 
-# Limpiar devDependencies para imagen más ligera
-RUN npm prune --omit=dev --workspaces && npm prune --omit=dev
-
 EXPOSE ${PORT:-3000}
 
 ENV NODE_ENV=production
