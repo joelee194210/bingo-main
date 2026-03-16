@@ -32,4 +32,5 @@ EXPOSE ${PORT:-3000}
 
 ENV NODE_ENV=production
 
-CMD ["node", "server/dist/app.js"]
+WORKDIR /app/server
+CMD ["node", "dist/app.js"]
