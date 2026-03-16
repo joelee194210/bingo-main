@@ -26,6 +26,7 @@ import inventarioRouter from './routes/inventario.js';
 import backupRouter, { backupProgressRouter } from './routes/backup.js';
 import permissionsRouter from './routes/permissions.js';
 import activityLogRouter from './routes/activityLog.js';
+import verificarRouter from './routes/verificar.js';
 
 const app = express();
 
@@ -104,7 +105,8 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Rutas API públicas
+// Rutas públicas
+app.use('/verificar', verificarRouter); // verificación de cartón vía QR (sin auth)
 app.use('/api/auth', authRouter);
 app.use('/api/backup', backupProgressRouter); // progreso sin auth (jobId es secreto)
 
