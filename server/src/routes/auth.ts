@@ -19,16 +19,45 @@ import { logActivity, getClientIp } from '../services/auditService.js';
 
 const router = Router();
 
+// Verificar Cloudflare Turnstile token
+async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret) return true; // Skip en desarrollo si no está configurado
+  try {
+    const resp = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret, response: token, remoteip: ip }),
+    });
+    const data = await resp.json() as { success: boolean };
+    return data.success;
+  } catch {
+    console.error('Error verificando Turnstile');
+    return false;
+  }
+}
+
 // POST /api/auth/login - Iniciar sesión
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, turnstileToken } = req.body;
 
     if (!username || !password) {
       return res.status(400).json({
         success: false,
         error: 'Usuario y contraseña son requeridos',
       });
+    }
+
+    // Validar captcha en producción
+    if (process.env.TURNSTILE_SECRET_KEY) {
+      if (!turnstileToken) {
+        return res.status(400).json({ success: false, error: 'Verificación de seguridad requerida' });
+      }
+      const valid = await verifyTurnstile(turnstileToken, getClientIp(req));
+      if (!valid) {
+        return res.status(403).json({ success: false, error: 'Verificación de seguridad fallida. Intente de nuevo.' });
+      }
     }
 
     const pool = getPool();

@@ -4,7 +4,7 @@ import { hasPermission as hasPermissionDefault } from '../types/auth';
 import api from '../services/api';
 
 interface AuthContextType extends AuthState {
-  login: (username: string, password: string) => Promise<User | null>;
+  login: (username: string, password: string, turnstileToken?: string) => Promise<User | null>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
   isRole: (...roles: UserRole[]) => boolean;
@@ -85,9 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [verifyToken, clearAuth]);
 
-  const login = async (username: string, password: string): Promise<User | null> => {
+  const login = async (username: string, password: string, turnstileToken?: string): Promise<User | null> => {
     try {
-      const response = await api.post('/auth/login', { username, password });
+      const response = await api.post('/auth/login', { username, password, turnstileToken });
 
       if (response.data.success) {
         const { user } = response.data.data;

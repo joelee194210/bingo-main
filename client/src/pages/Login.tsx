@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertCircle, Loader2 } from 'lucide-react';
@@ -103,6 +103,8 @@ function FloatingBall({ n, letter, x, y, size, dur, del, hue }: typeof FLOATING_
   );
 }
 
+const TURNSTILE_SITE_KEY = '0x4AAAAAACr1cvPWEPjunkjl';
+
 /* ─── Main Login ─── */
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -110,6 +112,9 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -122,21 +127,67 @@ export default function Login() {
     return () => clearTimeout(t);
   }, []);
 
+  // Cargar Turnstile script
+  useEffect(() => {
+    if (document.getElementById('cf-turnstile-script')) return;
+    const script = document.createElement('script');
+    script.id = 'cf-turnstile-script';
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.onload = () => renderTurnstile();
+    document.head.appendChild(script);
+    return () => { script.remove(); };
+  }, []);
+
+  const renderTurnstile = useCallback(() => {
+    const w = window as unknown as { turnstile?: { render: (el: HTMLElement, opts: Record<string, unknown>) => string; reset: (id: string) => void } };
+    if (!w.turnstile || !turnstileRef.current) {
+      setTimeout(renderTurnstile, 200);
+      return;
+    }
+    if (widgetIdRef.current) return;
+    widgetIdRef.current = w.turnstile.render(turnstileRef.current, {
+      sitekey: TURNSTILE_SITE_KEY,
+      theme: 'dark',
+      callback: (token: string) => setTurnstileToken(token),
+      'expired-callback': () => setTurnstileToken(null),
+      'error-callback': () => setTurnstileToken(null),
+    });
+  }, []);
+
+  useEffect(() => { renderTurnstile(); }, [renderTurnstile]);
+
+  const resetTurnstile = () => {
+    const w = window as unknown as { turnstile?: { reset: (id: string) => void } };
+    if (w.turnstile && widgetIdRef.current) {
+      w.turnstile.reset(widgetIdRef.current);
+      setTurnstileToken(null);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!turnstileToken) {
+      setError('Complete la verificacion de seguridad');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const user = await login(username, password);
+      const user = await login(username, password, turnstileToken);
       if (user) {
         const destination = user.role === 'inventory' ? '/inventory' : from;
         navigate(destination, { replace: true });
       } else {
         setError('Usuario o contrasena incorrectos');
+        resetTurnstile();
       }
     } catch {
       setError('Error al iniciar sesion. Intente de nuevo.');
+      resetTurnstile();
     } finally {
       setIsLoading(false);
     }
@@ -310,6 +361,9 @@ export default function Login() {
                   className="h-11 bg-white/[0.04] border-white/[0.08] text-white placeholder:text-slate-600 focus:border-blue-500/40 focus:ring-blue-500/15 rounded-xl text-[15px]"
                 />
               </div>
+
+              {/* Turnstile CAPTCHA */}
+              <div ref={turnstileRef} className="flex justify-center" />
 
               {/* Submit */}
               <div className="pt-1">
