@@ -24,6 +24,7 @@ import {
   ScrollText,
   Package,
   BookOpen,
+  ClipboardList,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -66,6 +67,7 @@ const navGroups = [
       { to: '/inventory/mi-inventario', icon: PackageOpen, label: 'Mi Inventario', permission: 'inventory:read' },
       { to: '/inventory/venta', icon: ShoppingCart, label: 'Punto de Venta', permission: 'inventory:read' },
       { to: '/loteria', icon: BarChart3, label: 'Dashboard Loteria', permission: 'inventory:read' },
+      { to: '/reportes/ventas', icon: ClipboardList, label: 'Reporte Ventas', permission: 'reports:read' },
       { to: '/inventory/usuarios', icon: UserCog, label: 'Usuarios Inv.', permission: 'inventory:manage' },
     ],
   },

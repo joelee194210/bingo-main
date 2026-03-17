@@ -445,6 +445,47 @@ export const getLoteriaDashboard = (eventId: number) =>
   api.get<ApiResponse<LoteriaDashboardData>>(`/inventario/loteria-dashboard/${eventId}`).then(r => r.data);
 
 // =====================================================
+// REPORTES DE VENTAS
+// =====================================================
+
+export interface ReporteVentasResumen {
+  fecha: string;
+  almacen_id: number;
+  almacen_nombre: string;
+  vendedor_id: number;
+  vendedor_nombre: string;
+  cartones_vendidos: number;
+}
+
+export interface ReporteVentasDetalle {
+  documento_id: number;
+  fecha: string;
+  almacen_id: number;
+  almacen_nombre: string;
+  comprador: string;
+  cedula: string | null;
+  libreta: string | null;
+  total_items: number;
+  total_cartones: number;
+  vendedor_id: number;
+  vendedor_nombre: string;
+  pdf_path: string | null;
+  items: { tipo: string; referencia: string; cantidad: number }[];
+}
+
+export interface ReporteVentasData {
+  resumen: ReporteVentasResumen[];
+  detalle: ReporteVentasDetalle[];
+  totales: { cartones: number; documentos: number };
+}
+
+export const getReporteVentas = (eventId: number, params: { desde: string; hasta: string; almacen_id?: number; vendedor_id?: number }) =>
+  api.get<ApiResponse<ReporteVentasData>>(`/reports/sales/${eventId}`, { params }).then(r => r.data);
+
+export const downloadReporteVentasPdf = (eventId: number, params: { desde: string; hasta: string; almacen_id?: number; vendedor_id?: number }) =>
+  api.get(`/reports/sales/${eventId}/pdf`, { params, responseType: 'blob', timeout: 60000 }).then(r => r.data);
+
+// =====================================================
 // BACKUP / RESTORE
 // =====================================================
 
