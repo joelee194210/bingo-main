@@ -247,6 +247,13 @@ function renderPage(card: CardRow | null, error: string | null): string {
       margin-top: 24px;
       padding-bottom: 8px;
     }
+    .footer .fecha {
+      color: #6b7280;
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      text-transform: capitalize;
+    }
     .error-box {
       text-align: center;
       padding: 40px 20px;
@@ -332,7 +339,8 @@ function renderPage(card: CardRow | null, error: string | null): string {
     </div>
 
     <div class="footer">
-      Mega Bingo Mundial &copy; ${new Date().getFullYear()}
+      <p class="fecha">${new Date().toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' })}</p>
+      <p>Mega Bingo Mundial &copy; ${new Date().getFullYear()}</p>
     </div>
   </div>
 </body>
