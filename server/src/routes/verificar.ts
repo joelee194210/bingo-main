@@ -82,12 +82,6 @@ function renderNumbers(numbersJson: string, useFreeCenter: boolean): string {
 }
 
 function renderPage(card: CardRow | null, error: string | null): string {
-  const statusColor = card?.is_sold ? '#16a34a' : '#9ca3af';
-  const statusBg = card?.is_sold ? '#dcfce7' : '#f3f4f6';
-  const statusText = card?.is_sold ? 'ACTIVO' : 'INACTIVO';
-  const statusIcon = card?.is_sold ? '✅' : '⏳';
-
-  // Servir logo desde el cliente (en producción) o público
   const logoUrl = '/logo.png';
 
   return `<!DOCTYPE html>
@@ -153,10 +147,33 @@ function renderPage(card: CardRow | null, error: string | null): string {
       font-size: 18px;
       font-weight: 800;
       letter-spacing: 1.5px;
+      margin-bottom: 12px;
+    }
+    .status-badge.active {
+      background: #dcfce7;
+      border: 2px solid #16a34a;
+      color: #16a34a;
+    }
+    .status-badge.inactive {
+      background: #fef3c7;
+      border: 2px solid #d97706;
+      color: #b45309;
+    }
+    .message {
+      border-radius: 12px;
+      padding: 14px 18px;
       margin-bottom: 20px;
-      background: ${statusBg};
-      border: 2px solid ${statusColor};
-      color: ${statusColor};
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .message p { margin: 0; }
+    .message.success {
+      background: #f0fdf4;
+      color: #166534;
+    }
+    .message.warning {
+      background: #fffbeb;
+      color: #92400e;
     }
     .info-grid {
       display: grid;
@@ -276,9 +293,21 @@ function renderPage(card: CardRow | null, error: string | null): string {
         <h2>${escapeHtml(error)}</h2>
         <p>El codigo escaneado no corresponde a ningun carton registrado.</p>
       </div>`) : `
-      <div class="status-badge">
-        ${statusIcon} ${statusText}
+      ${card!.is_sold ? `
+      <div class="status-badge active">
+        ✅ CARTON ACTIVO
       </div>
+      <div class="message success">
+        <p>🎉 <strong>Enhorabuena!</strong> Tu carton se encuentra activo y listo para jugar. Buena suerte!</p>
+      </div>
+      ` : `
+      <div class="status-badge inactive">
+        ⏳ CARTON INACTIVO
+      </div>
+      <div class="message warning">
+        <p>Este carton aun no ha sido activado. Contacta a un <strong>punto de venta certificado</strong> para activarlo y poder participar.</p>
+      </div>
+      `}
 
       <div class="info-grid">
         <div class="info-row">
@@ -289,13 +318,9 @@ function renderPage(card: CardRow | null, error: string | null): string {
           <span class="info-label">Serial</span>
           <span class="info-value">${escapeHtml(card!.serial)}</span>
         </div>
-        <div class="info-row">
-          <span class="info-label">Evento</span>
-          <span class="info-value">${escapeHtml(card!.event_name)}</span>
-        </div>
         ${card!.buyer_name ? `
         <div class="info-row">
-          <span class="info-label">Comprador</span>
+          <span class="info-label">Titular</span>
           <span class="info-value">${escapeHtml(card!.buyer_name)}</span>
         </div>` : ''}
       </div>
