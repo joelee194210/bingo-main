@@ -24,6 +24,27 @@ router.get('/', (_req: Request, res: Response) => {
   res.send(renderPage(null, 'Escanea el QR de tu cartón para verificarlo'));
 });
 
+// Preview temporal — simula cartón activo sin modificar DB
+router.get('/preview/:card_code', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query<CardRow>(
+      `SELECT c.card_code, c.serial, c.is_sold, c.buyer_name, c.numbers, c.promo_text,
+              e.name AS event_name, e.created_at AS event_created_at, e.use_free_center
+       FROM cards c
+       JOIN events e ON e.id = c.event_id
+       WHERE c.card_code = $1
+       LIMIT 1`,
+      [(req.params.card_code as string).toUpperCase()]
+    );
+    if (result.rows.length === 0) return res.status(404).send(renderPage(null, 'Cartón no encontrado'));
+    const card = { ...result.rows[0], is_sold: true, buyer_name: result.rows[0].buyer_name || 'Juan Perez' };
+    return res.send(renderPage(card, null));
+  } catch (err) {
+    return res.status(500).send(renderPage(null, 'Error del servidor'));
+  }
+});
+
 router.get('/:card_code', async (req: Request, res: Response) => {
   const { card_code } = req.params;
 
