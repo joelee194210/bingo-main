@@ -95,21 +95,27 @@ export async function getAlmacenes(pool: Pool, eventId: number): Promise<Almacen
 }
 
 export async function getLoteriaDashboard(pool: Pool, eventId: number) {
-  // Resumen global del evento
+  // Resumen SOLO de cartones asignados a agencias (no todos los del evento)
   const globalResult = await pool.query(`
     SELECT
       COUNT(*) AS total_cartones,
-      COUNT(*) FILTER (WHERE is_sold = true) AS cartones_vendidos,
-      COUNT(*) FILTER (WHERE is_sold = false) AS cartones_disponibles
-    FROM cards WHERE event_id = $1
+      COUNT(*) FILTER (WHERE c.is_sold = true) AS cartones_vendidos,
+      COUNT(*) FILTER (WHERE c.is_sold = false) AS cartones_disponibles
+    FROM cards c
+    JOIN almacenes a ON c.almacen_id = a.id AND a.es_agencia_loteria = true
+    WHERE c.event_id = $1
   `, [eventId]);
   const global = globalResult.rows[0];
 
   const cajasResult = await pool.query(`
-    SELECT COUNT(*) AS total_cajas FROM cajas WHERE event_id = $1
+    SELECT COUNT(*) AS total_cajas FROM cajas c
+    JOIN almacenes a ON c.almacen_id = a.id AND a.es_agencia_loteria = true
+    WHERE c.event_id = $1
   `, [eventId]);
   const lotesResult = await pool.query(`
-    SELECT COUNT(*) AS total_lotes FROM lotes WHERE event_id = $1
+    SELECT COUNT(*) AS total_lotes FROM lotes l
+    JOIN almacenes a ON l.almacen_id = a.id AND a.es_agencia_loteria = true
+    WHERE l.event_id = $1
   `, [eventId]);
 
   // Stats por agencia (solo almacenes marcados como agencia de lotería)
