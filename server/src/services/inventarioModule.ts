@@ -7,7 +7,7 @@ import type {
   InvMovimiento,
   BingoCard,
 } from '../types/index.js';
-import { generateMovimientoPdf, generateDocumentoPdf, type DocumentoItemDetalle } from './movimientoPdfService.js';
+import { generateMovimientoPdf, generateDocumentoPdf, type DocumentoItemDetalle, type LoteDetalle } from './movimientoPdfService.js';
 
 export interface FirmaData {
   firma_entrega?: string;
@@ -729,31 +729,56 @@ export async function ejecutarMovimientoBulk(
       };
 
       if (item.tipo === 'caja') {
-        // Lotes de la caja
+        // Lotes de la caja con rangos de seriales
         const lotesRes = await pool.query(
-          `SELECT lote_code, total_cards, cards_sold FROM lotes WHERE caja_id = (SELECT id FROM cajas WHERE caja_code = $1 AND event_id = $2) ORDER BY lote_code`,
+          `SELECT l.lote_code, l.total_cards, l.cards_sold, MIN(c.serial) as serial_desde, MAX(c.serial) as serial_hasta
+           FROM lotes l LEFT JOIN cards c ON c.lote_id = l.id
+           WHERE l.caja_id = (SELECT id FROM cajas WHERE caja_code = $1 AND event_id = $2)
+           GROUP BY l.id, l.lote_code, l.total_cards, l.cards_sold
+           ORDER BY l.lote_code`,
           [item.referencia, eventId]
         );
         detalle.lotes = lotesRes.rows;
-        // Cartones de la caja (limitar a 100 en el PDF)
-        const cardsRes = await pool.query(
-          `SELECT c.card_code, c.serial, c.is_sold FROM cards c JOIN lotes l ON l.id = c.lote_id JOIN cajas ca ON ca.id = l.caja_id WHERE ca.caja_code = $1 AND ca.event_id = $2 ORDER BY c.card_number LIMIT 100`,
+        // Rango general de la caja
+        const cajaRange = await pool.query(
+          `SELECT MIN(c.serial) as serial_desde, MAX(c.serial) as serial_hasta
+           FROM cards c JOIN lotes l ON c.lote_id = l.id
+           JOIN cajas ca ON ca.id = l.caja_id
+           WHERE ca.caja_code = $1 AND ca.event_id = $2`,
           [item.referencia, eventId]
         );
-        detalle.cartonesDetalle = cardsRes.rows;
+        if (cajaRange.rows[0]) {
+          detalle.serial_desde = cajaRange.rows[0].serial_desde;
+          detalle.serial_hasta = cajaRange.rows[0].serial_hasta;
+        }
       } else if (item.tipo === 'libreta') {
-        // Cartones de la libreta
-        const cardsRes = await pool.query(
-          `SELECT c.card_code, c.serial, c.is_sold FROM cards c JOIN lotes l ON l.id = c.lote_id WHERE l.lote_code = $1 AND l.event_id = $2 ORDER BY c.card_number`,
+        // Rango de seriales de la libreta
+        const loteRange = await pool.query(
+          `SELECT l.total_cards, l.cards_sold, MIN(c.serial) as serial_desde, MAX(c.serial) as serial_hasta
+           FROM lotes l LEFT JOIN cards c ON c.lote_id = l.id
+           WHERE l.lote_code = $1 AND l.event_id = $2
+           GROUP BY l.id, l.total_cards, l.cards_sold`,
           [item.referencia, eventId]
         );
-        detalle.cartonesDetalle = cardsRes.rows;
+        const lr = loteRange.rows[0];
+        if (lr) {
+          detalle.serial_desde = lr.serial_desde;
+          detalle.serial_hasta = lr.serial_hasta;
+          detalle.cartonesDetalle = [{
+            card_code: '', serial: item.referencia, is_sold: false,
+            total_cards: lr.total_cards, cards_sold: lr.cards_sold,
+          }];
+        }
       } else if (item.tipo === 'carton') {
         const cardRes = await pool.query(
           `SELECT card_code, serial, is_sold FROM cards WHERE card_code = $1 AND event_id = $2`,
           [item.referencia, eventId]
         );
         detalle.cartonesDetalle = cardRes.rows;
+        if (cardRes.rows[0]) {
+          detalle.serial_desde = cardRes.rows[0].serial;
+          detalle.serial_hasta = cardRes.rows[0].serial;
+        }
       }
 
       pdfItems.push(detalle);
@@ -865,16 +890,32 @@ export async function ejecutarVenta(
           [caja.id]
         );
 
+        // Obtener libretas con rangos de seriales (desde-hasta)
         const lotesInfo = await client.query(
           `SELECT l.lote_code, l.total_cards, l.cards_sold,
-            (l.total_cards - l.cards_sold) as disponibles
-           FROM lotes l WHERE l.caja_id = $1 ORDER BY l.lote_code`,
+            MIN(c.serial) as serial_desde, MAX(c.serial) as serial_hasta
+           FROM lotes l
+           LEFT JOIN cards c ON c.lote_id = l.id
+           WHERE l.caja_id = $1
+           GROUP BY l.id, l.lote_code, l.total_cards, l.cards_sold
+           ORDER BY l.lote_code`,
           [caja.id]
         );
-        detalle.cartonesDetalle = lotesInfo.rows.map(l => ({
-          card_code: '', serial: l.lote_code, is_sold: true,
-          total_cards: l.total_cards, cards_sold: l.cards_sold, disponibles: l.disponibles,
+        detalle.lotes = lotesInfo.rows.map((l: any): LoteDetalle => ({
+          lote_code: l.lote_code, total_cards: l.total_cards, cards_sold: l.cards_sold,
+          serial_desde: l.serial_desde, serial_hasta: l.serial_hasta,
         }));
+
+        // Rango general de toda la caja
+        const cajaRange = await client.query(
+          `SELECT MIN(c.serial) as serial_desde, MAX(c.serial) as serial_hasta
+           FROM cards c JOIN lotes l ON c.lote_id = l.id WHERE l.caja_id = $1`,
+          [caja.id]
+        );
+        if (cajaRange.rows[0]) {
+          detalle.serial_desde = cajaRange.rows[0].serial_desde;
+          detalle.serial_hasta = cajaRange.rows[0].serial_hasta;
+        }
 
       } else if (item.tipo === 'libreta') {
         const loteRes = await client.query(
@@ -899,10 +940,19 @@ export async function ejecutarVenta(
           [lote.id]
         );
 
-        const totalInfo = await client.query('SELECT total_cards, cards_sold FROM lotes WHERE id = $1', [lote.id]);
+        // Obtener rango de seriales de la libreta
+        const loteRange = await client.query(
+          `SELECT l.total_cards, l.cards_sold, MIN(c.serial) as serial_desde, MAX(c.serial) as serial_hasta
+           FROM lotes l LEFT JOIN cards c ON c.lote_id = l.id
+           WHERE l.id = $1 GROUP BY l.id, l.total_cards, l.cards_sold`,
+          [lote.id]
+        );
+        const lr = loteRange.rows[0];
+        detalle.serial_desde = lr?.serial_desde;
+        detalle.serial_hasta = lr?.serial_hasta;
         detalle.cartonesDetalle = [{
           card_code: '', serial: item.referencia, is_sold: true,
-          total_cards: totalInfo.rows[0].total_cards, cards_sold: totalInfo.rows[0].cards_sold,
+          total_cards: lr?.total_cards || 0, cards_sold: lr?.cards_sold || 0,
         }];
 
       } else if (item.tipo === 'carton') {
@@ -912,7 +962,7 @@ export async function ejecutarVenta(
           serialSearch = serialMatch[1].padStart(5, '0') + '-' + serialMatch[2].padStart(2, '0');
         }
         const cardRes = await client.query(
-          'SELECT id, lote_id, is_sold, almacen_id FROM cards WHERE (card_code = $1 OR serial = $3) AND event_id = $2',
+          'SELECT id, lote_id, is_sold, almacen_id, serial, card_code FROM cards WHERE (card_code = $1 OR serial = $3) AND event_id = $2',
           [item.referencia, eventId, serialSearch]
         );
         if (cardRes.rows.length === 0) throw new Error(`Carton "${item.referencia}" no encontrado`);
@@ -926,6 +976,11 @@ export async function ejecutarVenta(
         );
         totalCartones += 1;
         detalle.cartones = 1;
+        detalle.serial_desde = card.serial;
+        detalle.serial_hasta = card.serial;
+        detalle.cartonesDetalle = [{
+          card_code: card.card_code, serial: card.serial, is_sold: true,
+        }];
 
         if (card.lote_id) {
           await client.query(

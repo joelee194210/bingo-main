@@ -233,11 +233,22 @@ export function generateMovimientoPdf(data: MovimientoPdfData): Promise<string> 
 // PDF para documentos con múltiples items y detalle jerárquico
 // =====================================================
 
+export interface LoteDetalle {
+  lote_code: string;
+  total_cards: number;
+  cards_sold: number;
+  serial_desde?: string; // primer serial de la libreta (ej: "00001-01")
+  serial_hasta?: string; // último serial (ej: "00001-50")
+}
+
 export interface DocumentoItemDetalle {
   tipo: string; // caja | libreta | carton
   referencia: string;
   cartones: number;
-  lotes?: { lote_code: string; total_cards: number; cards_sold: number }[];
+  // Rangos generales del item
+  serial_desde?: string; // primer serial del conjunto
+  serial_hasta?: string; // último serial del conjunto
+  lotes?: LoteDetalle[];
   cartonesDetalle?: { card_code: string; serial: string; is_sold: boolean; total_cards?: number; cards_sold?: number }[];
 }
 
@@ -318,6 +329,14 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
     doc.text(`Total: ${data.totalItems} items — ${data.totalCartones.toLocaleString()} cartones`, margin + 10, summaryY + 9);
     doc.y = summaryY + 38;
 
+    // Helper para formatear serial legible (quitar ceros iniciales)
+    const fmtSerial = (s: string) => {
+      if (!s) return '';
+      const parts = s.split('-');
+      if (parts.length === 2) return `${parseInt(parts[0], 10)}-${parseInt(parts[1], 10).toString().padStart(2, '0')}`;
+      return s;
+    };
+
     // ---- DETALLE POR ITEM ----
     for (let idx = 0; idx < data.items.length; idx++) {
       const item = data.items[idx];
@@ -325,25 +344,37 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
       // Check page space
       if (doc.y > doc.page.height - 200) doc.addPage();
 
-      // Item header
+      // Item header con rango general
       const itemHeaderY = doc.y;
       const tipoLabel = item.tipo === 'caja' ? 'CAJA' : item.tipo === 'libreta' ? 'LIBRETA' : 'CARTON';
-      doc.rect(margin, itemHeaderY, pageWidth, 22).fill('#e8edf2');
+      const headerHeight = 22;
+      doc.rect(margin, itemHeaderY, pageWidth, headerHeight).fill('#e8edf2');
       doc.fillColor('#1a1a1a').fontSize(9).font('Helvetica-Bold');
       doc.text(`${idx + 1}. ${tipoLabel}: ${item.referencia}`, margin + 8, itemHeaderY + 6, { continued: true });
       doc.font('Helvetica').text(`  —  ${item.cartones.toLocaleString()} cartones`);
-      doc.y = itemHeaderY + 28;
+      doc.y = itemHeaderY + headerHeight + 4;
+
+      // Rango general del item (desde - hasta)
+      if (item.serial_desde && item.serial_hasta) {
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333')
+          .text('Rango: ', margin + 12, doc.y, { continued: true });
+        doc.font('Helvetica')
+          .text(`Serie ${fmtSerial(item.serial_desde)}  →  Serie ${fmtSerial(item.serial_hasta)}`);
+        doc.moveDown(0.2);
+      }
 
       // Detalle jerarquico segun tipo
       if (item.tipo === 'caja' && item.lotes && item.lotes.length > 0) {
-        // CAJA: mostrar libretas con conteo de cartones
+        // CAJA: tabla de libretas con rangos de seriales
         const loteTableY = doc.y;
         doc.rect(margin + 10, loteTableY, pageWidth - 20, 14).fill('#f5f5f5');
         doc.fillColor('#333333').fontSize(7).font('Helvetica-Bold');
-        doc.text('Libreta', margin + 15, loteTableY + 3, { width: 120 });
-        doc.text('Cartones', margin + 160, loteTableY + 3, { width: 60 });
-        doc.text('Vendidos', margin + 230, loteTableY + 3, { width: 60 });
-        doc.text('Disponibles', margin + 300, loteTableY + 3, { width: 70 });
+        doc.text('Libreta', margin + 15, loteTableY + 3, { width: 80 });
+        doc.text('Desde', margin + 100, loteTableY + 3, { width: 75 });
+        doc.text('Hasta', margin + 180, loteTableY + 3, { width: 75 });
+        doc.text('Cartones', margin + 260, loteTableY + 3, { width: 50 });
+        doc.text('Vendidos', margin + 315, loteTableY + 3, { width: 50 });
+        doc.text('Disp.', margin + 370, loteTableY + 3, { width: 50 });
         doc.y = loteTableY + 16;
 
         doc.font('Helvetica').fontSize(7);
@@ -355,27 +386,29 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
             doc.rect(margin + 10, rowY - 1, pageWidth - 20, 12).fill('#fafafa');
             doc.fillColor('#333333');
           }
-          doc.text(lote.lote_code, margin + 15, rowY, { width: 120 });
-          doc.text(lote.total_cards.toString(), margin + 160, rowY, { width: 60 });
-          doc.text(lote.cards_sold.toString(), margin + 230, rowY, { width: 60 });
-          doc.text((lote.total_cards - lote.cards_sold).toString(), margin + 300, rowY, { width: 70 });
+          doc.text(lote.lote_code, margin + 15, rowY, { width: 80 });
+          doc.text(lote.serial_desde ? fmtSerial(lote.serial_desde) : '-', margin + 100, rowY, { width: 75 });
+          doc.text(lote.serial_hasta ? fmtSerial(lote.serial_hasta) : '-', margin + 180, rowY, { width: 75 });
+          doc.text(lote.total_cards.toString(), margin + 260, rowY, { width: 50 });
+          doc.text(lote.cards_sold.toString(), margin + 315, rowY, { width: 50 });
+          doc.text((lote.total_cards - lote.cards_sold).toString(), margin + 370, rowY, { width: 50 });
           doc.y = rowY + 12;
         }
         doc.moveDown(0.3);
 
       } else if (item.tipo === 'libreta') {
-        // LIBRETA: mostrar resumen de cartones (total, vendidos, disponibles)
-        const totalCards = item.cartonesDetalle?.length || 0;
-        const soldCards = item.cartonesDetalle?.filter(c => c.is_sold).length || 0;
+        // LIBRETA: resumen con rango de cartones
+        const totalCards = item.cartonesDetalle?.[0]?.total_cards || item.cartones;
+        const soldCards = item.cartonesDetalle?.[0]?.cards_sold || 0;
         doc.fontSize(8).font('Helvetica')
           .text(`${totalCards} cartones total — ${soldCards} vendidos — ${totalCards - soldCards} disponibles`, margin + 15);
         doc.moveDown(0.2);
 
       } else if (item.tipo === 'carton' && item.cartonesDetalle && item.cartonesDetalle.length > 0) {
-        // CARTON: mostrar serie y estado
+        // CARTON: serie y estado
         const c = item.cartonesDetalle[0];
         doc.fontSize(8).font('Helvetica')
-          .text(`Serie: ${c.serial}  |  Estado: ${c.is_sold ? 'Vendido' : 'Disponible'}`, margin + 15);
+          .text(`Serie: ${fmtSerial(c.serial)}  |  Estado: ${c.is_sold ? 'Vendido' : 'Disponible'}`, margin + 15);
         doc.moveDown(0.2);
       }
 
