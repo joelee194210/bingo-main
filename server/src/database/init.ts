@@ -25,6 +25,18 @@ export function getPool(): Pool {
 export async function initializeDatabase(): Promise<Pool> {
   const p = getPool();
 
+  // Retry conexión (Railway internal DNS puede tardar)
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    try {
+      await p.query('SELECT 1');
+      break;
+    } catch (err) {
+      console.log(`⏳ Intento ${attempt}/10 conectando a PostgreSQL...`);
+      if (attempt === 10) throw err;
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+
   // Execute schema
   const schemaPath = join(__dirname, 'schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
