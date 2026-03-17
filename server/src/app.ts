@@ -230,10 +230,10 @@ function renderPublicLanding(): string {
     </div>
     <div class="divider"></div>
     <div class="card">
-      <h2>🎱 Verifica Tu Carton</h2>
-      <p class="subtitle">Plataforma de verificacion de cartones de bingo</p>
+      <h2>🎱 Verifica Tu Cart&oacute;n</h2>
+      <p class="subtitle">Plataforma de verificaci&oacute;n de cartones de bingo</p>
       <div class="info">
-        <p>Para verificar la autenticidad de tu carton, escanea el <strong>codigo QR</strong> que se encuentra en la <strong>parte inferior derecha</strong> de tu carton de bingo.</p>
+        <p>Para verificar la autenticidad de tu cart&oacute;n, escanea el <strong>c&oacute;digo QR</strong> que se encuentra en la <strong>parte inferior derecha</strong> de tu cart&oacute;n de bingo.</p>
       </div>
     </div>
     <div class="footer">Mega Bingo Mundial &copy; ${new Date().getFullYear()}</div>
@@ -248,7 +248,7 @@ function renderPublic404(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pagina no encontrada - Mega Bingo Mundial</title>
+  <title>P&aacute;gina no encontrada - Mega Bingo Mundial</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -273,8 +273,8 @@ function renderPublic404(): string {
     <div class="divider"></div>
     <div class="card">
       <div class="num">404</div>
-      <h2>Pagina no encontrada</h2>
-      <p>La pagina que buscas no existe o ha sido movida.</p>
+      <h2>P&aacute;gina no encontrada</h2>
+      <p>La p&aacute;gina que buscas no existe o ha sido movida.</p>
       <a href="/">Volver al inicio</a>
     </div>
     <div class="footer">Mega Bingo Mundial &copy; ${new Date().getFullYear()}</div>

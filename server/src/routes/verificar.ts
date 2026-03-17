@@ -110,7 +110,7 @@ function renderPage(card: CardRow | null, error: string | null): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Verificar Carton - Mega Bingo Mundial</title>
+  <title>Verificar Cart&oacute;n - Mega Bingo Mundial</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -305,7 +305,7 @@ function renderPage(card: CardRow | null, error: string | null): string {
   <div class="container">
     <div class="logo-section">
       <img src="${logoUrl}" alt="Mega Bingo Mundial" onerror="this.style.display='none'">
-      <p class="subtitle">Verificacion de Carton</p>
+      <p class="subtitle">Verificaci&oacute;n de Cart&oacute;n</p>
     </div>
     <div class="divider"></div>
 
@@ -313,33 +313,33 @@ function renderPage(card: CardRow | null, error: string | null): string {
     ${error ? (error === 'Escanea el QR de tu cartón para verificarlo' ? `
       <div class="info-box">
         <div class="icon">🎱</div>
-        <h2>Verifica Tu Carton</h2>
-        <p>Para verificar la autenticidad de tu carton, escanea el <strong>codigo QR</strong> que se encuentra en la <strong>parte inferior derecha</strong> de tu carton de bingo.</p>
+        <h2>Verifica Tu Cart&oacute;n</h2>
+        <p>Para verificar la autenticidad de tu cart&oacute;n, escanea el <strong>c&oacute;digo QR</strong> que se encuentra en la <strong>parte inferior derecha</strong> de tu cart&oacute;n de bingo.</p>
       </div>` : `
       <div class="error-box">
         <div class="icon">🔍</div>
         <h2>${escapeHtml(error)}</h2>
-        <p>El codigo escaneado no corresponde a ningun carton registrado.</p>
+        <p>El c&oacute;digo escaneado no corresponde a ning&uacute;n cart&oacute;n registrado.</p>
       </div>`) : `
       ${card!.is_sold ? `
       <div class="status-badge active">
-        ✅ CARTON ACTIVO
+        ✅ CART&Oacute;N ACTIVO
       </div>
       <div class="message success">
-        <p>🎉 <strong>Enhorabuena!</strong> Tu carton se encuentra activo y listo para jugar. Buena suerte!</p>
+        <p>🎉 <strong>&iexcl;Enhorabuena!</strong> Tu cart&oacute;n se encuentra activo y listo para jugar. &iexcl;Buena suerte!</p>
       </div>
       ` : `
       <div class="status-badge inactive">
-        ⏳ CARTON INACTIVO
+        ⏳ CART&Oacute;N INACTIVO
       </div>
       <div class="message warning">
-        <p>Este carton aun no ha sido activado. Contacta a un <strong>punto de venta certificado</strong> para activarlo y poder participar.</p>
+        <p>Este cart&oacute;n a&uacute;n no ha sido activado. Contacta a un <strong>punto de venta certificado</strong> para activarlo y poder participar.</p>
       </div>
       `}
 
       <div class="info-grid">
         <div class="info-row">
-          <span class="info-label">Codigo</span>
+          <span class="info-label">C&oacute;digo</span>
           <span class="info-value">${escapeHtml(card!.card_code)}</span>
         </div>
         <div class="info-row">
