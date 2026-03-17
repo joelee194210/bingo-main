@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { spawn } from 'child_process';
 import { getPool } from '../database/init.js';
 import { requireRole } from '../middleware/auth.js';
 import {
@@ -8,8 +9,6 @@ import {
   getEventsForBackup,
   createJob,
   getJob,
-  exportFullDump,
-  restoreFullDump,
   streamEventDump,
   restoreEventDumpFromFile,
 } from '../services/backupService.js';
@@ -25,9 +24,12 @@ try {
 } catch {}
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } }); // 500MB max
-// Para archivos SQL grandes: guardar en disco y pipear directo a psql (sin cargar en RAM)
+// Todos los uploads van a disco para no cargar RAM
 const uploadDisk = multer({ dest: '/tmp/bingo-uploads/', limits: { fileSize: 500 * 1024 * 1024 } });
+
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://slacker@localhost:5432/bingo';
+// Timeout para procesos pg_dump/psql (5 minutos)
+const PG_PROCESS_TIMEOUT = 5 * 60 * 1000;
 
 // Router publico para progreso (se monta sin authenticate en app.ts)
 export const backupProgressRouter = Router();
@@ -51,32 +53,49 @@ router.get('/events', async (_req, res) => {
   }
 });
 
-// Backup completo - PostgreSQL dump (pg_dump)
+// Backup completo - PostgreSQL dump streaming (cero buffering en RAM)
 router.get('/full', async (req, res) => {
   const pool = getPool();
-  const { execFile } = await import('child_process');
-  const dbUrl = process.env.DATABASE_URL || 'postgresql://slacker@localhost:5432/bingo';
-
   const filename = `bingo_dump_full_${new Date().toISOString().slice(0, 10)}.sql`;
 
-  execFile('pg_dump', [dbUrl, '--no-owner', '--no-privileges', '--clean', '--if-exists'], {
-    maxBuffer: 500 * 1024 * 1024, // 500MB
-    timeout: 120000, // 2 minutos
-  }, (error, stdout, stderr) => {
-    if (error) {
-      const errMsg = stderr || error.message;
-      logActivity(pool, auditFromReq(req, 'backup_full_export_error', 'backup', { error: errMsg }));
-      return res.status(500).json({ success: false, error: `pg_dump error: ${errMsg}` });
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Type', 'application/sql');
+
+  const proc = spawn('pg_dump', [DATABASE_URL, '--no-owner', '--no-privileges', '--clean', '--if-exists']);
+
+  // Kill si tarda demasiado
+  const timer = setTimeout(() => { proc.kill('SIGTERM'); }, PG_PROCESS_TIMEOUT);
+
+  let stderr = '';
+  let bytesSent = 0;
+  proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+  proc.stdout.on('data', (chunk: Buffer) => { bytesSent += chunk.length; });
+
+  // Pipear stdout de pg_dump directo al response HTTP
+  proc.stdout.pipe(res);
+
+  proc.on('close', (code) => {
+    clearTimeout(timer);
+    if (code === 0) {
+      logActivity(pool, auditFromReq(req, 'backup_full_export', 'backup', {
+        filename, format: 'pg_dump_stream', size_mb: (bytesSent / 1024 / 1024).toFixed(2),
+      }));
+    } else {
+      console.error(`pg_dump falló (code ${code}): ${stderr}`);
+      logActivity(pool, auditFromReq(req, 'backup_full_export_error', 'backup', { error: stderr.slice(0, 500) }));
+      // Si aún no se envió nada, podemos mandar error
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: `pg_dump error: ${stderr.slice(0, 300)}` });
+      }
     }
+  });
 
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', 'application/sql');
-
-    logActivity(pool, auditFromReq(req, 'backup_full_export', 'backup', {
-      filename, format: 'pg_dump', size_mb: (Buffer.byteLength(stdout) / 1024 / 1024).toFixed(2),
-    }));
-
-    res.send(stdout);
+  proc.on('error', (err) => {
+    clearTimeout(timer);
+    console.error('pg_dump spawn error:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: `pg_dump no disponible: ${err.message}` });
+    }
   });
 });
 
@@ -112,16 +131,21 @@ router.get('/event/:eventId', async (req, res) => {
 });
 
 // Restaurar evento desde backup (async con job)
-router.post('/restore-event', upload.single('file'), async (req, res) => {
+router.post('/restore-event', uploadDisk.single('file'), async (req, res) => {
   const pool = getPool();
   if (!req.file) return res.status(400).json({ success: false, error: 'Archivo de backup requerido' });
 
   let data: any;
   try {
-    data = JSON.parse(req.file.buffer.toString('utf-8'));
+    const { readFileSync } = await import('fs');
+    data = JSON.parse(readFileSync(req.file.path, 'utf-8'));
   } catch {
+    // Limpiar archivo temporal
+    import('fs').then(fs => fs.unlink(req.file!.path, () => {}));
     return res.status(400).json({ success: false, error: 'El archivo no es un JSON válido' });
   }
+  // Limpiar archivo temporal (ya lo parseamos)
+  import('fs').then(fs => fs.unlink(req.file!.path, () => {}));
 
   const job = createJob('restore_event');
   // Devolver jobId inmediatamente para que el cliente haga polling
@@ -165,19 +189,50 @@ router.post('/restore-event', upload.single('file'), async (req, res) => {
   }
 });
 
-// Restaurar backup completo - PostgreSQL dump (psql)
-router.post('/restore-full', upload.single('file'), async (req, res) => {
+// Restaurar backup completo - PostgreSQL dump via disco (cero RAM)
+router.post('/restore-full', uploadDisk.single('file'), async (req, res) => {
   const pool = getPool();
   if (!req.file) return res.status(400).json({ success: false, error: 'Archivo de backup requerido' });
 
+  const filePath = req.file.path;
   const job = createJob('restore_full');
   res.json({ success: true, data: { jobId: job.jobId } });
 
   try {
-    const result = await restoreFullDump(req.file.buffer, job);
+    // psql -f lee directo del disco — cero buffering en Node.js
+    const result = await new Promise<{ message: string }>((resolve, reject) => {
+      job.step = 'Restaurando dump PostgreSQL...';
+      job.details = `Procesando ${(req.file!.size / 1024 / 1024).toFixed(2)} MB...`;
+      job.updatedAt = Date.now();
+
+      const proc = spawn('psql', [DATABASE_URL, '-f', filePath]);
+      const timer = setTimeout(() => { proc.kill('SIGTERM'); }, PG_PROCESS_TIMEOUT);
+
+      let stderr = '';
+      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (code === 0) {
+          resolve({ message: 'Dump PostgreSQL restaurado exitosamente' });
+        } else {
+          reject(new Error(`psql finalizó con código ${code}: ${stderr.slice(0, 500)}`));
+        }
+      });
+      proc.on('error', (err) => {
+        clearTimeout(timer);
+        reject(new Error(`No se pudo ejecutar psql: ${err.message}`));
+      });
+    });
+
+    job.status = 'completed';
+    job.step = 'Restauración completada';
+    job.details = result.message;
+    job.updatedAt = Date.now();
+    job.result = result;
 
     logActivity(pool, auditFromReq(req, 'backup_full_restore', 'backup', {
-      format: 'pg_dump',
+      format: 'pg_dump_disk',
       file_name: req.file!.originalname,
       file_size_mb: (req.file!.size / 1024 / 1024).toFixed(2),
       message: result.message,
@@ -190,11 +245,15 @@ router.post('/restore-full', upload.single('file'), async (req, res) => {
     job.error = err.message;
     job.step = 'Error';
     job.details = err.message;
+    job.updatedAt = Date.now();
 
     logActivity(pool, auditFromReq(req, 'backup_full_restore_error', 'backup', {
       file_name: req.file?.originalname,
       error: err.message,
     }));
+  } finally {
+    // Limpiar archivo temporal
+    import('fs').then(fs => fs.unlink(filePath, () => {}));
   }
 });
 
@@ -215,7 +274,7 @@ router.get('/event/:eventId/dump', async (req, res) => {
     res.setHeader('Content-Type', 'application/sql');
 
     // Streamear dump directamente via psql → response HTTP (cero buffering)
-    streamEventDump(pool, eventId, eventName, res);
+    await streamEventDump(pool, eventId, eventName, res);
 
     logActivity(pool, auditFromReq(req, 'backup_event_export', 'backup', {
       event_id: eventId,
