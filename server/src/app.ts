@@ -175,6 +175,7 @@ if (existsSync(clientDistPath)) {
   // Assets estáticos (JS, CSS, imágenes) se sirven a todos los hosts
   app.use('/assets', express.static(resolve(clientDistPath, 'assets')));
   app.use('/bingo.svg', express.static(resolve(clientDistPath, 'bingo.svg')));
+  app.use('/logo.png', express.static(resolve(clientDistPath, 'logo.png')));
 
   // SPA catch-all SOLO para admin subdomain
   app.get('*', (_req, res, next) => {
@@ -205,29 +206,41 @@ function renderPublicLanding(): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Verifica Tu Bingo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; color: #e2e8f0; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 48px 32px; max-width: 480px; width: 100%; box-shadow: 0 25px 50px rgba(0,0,0,0.5); text-align: center; }
-    h1 { font-size: 32px; font-weight: 700; background: linear-gradient(90deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 12px; }
-    .subtitle { color: #94a3b8; font-size: 16px; margin-bottom: 32px; }
-    .info { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
-    .info p { color: #cbd5e1; font-size: 14px; line-height: 1.6; }
-    .info strong { color: #3b82f6; }
-    .footer { color: #475569; font-size: 12px; margin-top: 24px; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #ffffff; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; color: #1f2937; }
+    .container { max-width: 440px; width: 100%; text-align: center; }
+    .logo img { max-width: 240px; height: auto; margin-bottom: 16px; }
+    .divider { height: 3px; background: linear-gradient(90deg, #e53e3e, #dd6b20, #ecc94b, #38a169, #3182ce, #805ad5); border-radius: 2px; margin-bottom: 28px; }
+    .card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 40px 28px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+    h2 { font-size: 22px; font-weight: 800; color: #111827; margin-bottom: 8px; }
+    .subtitle { color: #6b7280; font-size: 14px; margin-bottom: 28px; }
+    .info { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: 12px; padding: 20px; margin-bottom: 16px; text-align: left; }
+    .info p { color: #4b5563; font-size: 14px; line-height: 1.6; }
+    .info strong { color: #3182ce; }
+    .url-box { display: inline-block; padding: 10px 20px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; color: #1d4ed8; font-weight: 700; font-size: 14px; margin-top: 8px; }
+    .footer { color: #9ca3af; font-size: 11px; margin-top: 24px; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>🎱 Verifica Tu Bingo</h1>
-    <p class="subtitle">Plataforma de verificación de cartones</p>
-    <div class="info">
-      <p>Escanea el <strong>código QR</strong> de tu cartón de bingo para verificar su autenticidad y estado.</p>
+  <div class="container">
+    <div class="logo">
+      <img src="/logo.png" alt="Mega Bingo Mundial" onerror="this.style.display='none'">
     </div>
-    <div class="info">
-      <p>Si tienes el código de tu cartón, ingresa a:<br><strong>verificatubingo.com/verificar/TU-CODIGO</strong></p>
+    <div class="divider"></div>
+    <div class="card">
+      <h2>🎱 Verifica Tu Carton</h2>
+      <p class="subtitle">Plataforma de verificacion de cartones de bingo</p>
+      <div class="info">
+        <p>Escanea el <strong>codigo QR</strong> de tu carton de bingo para verificar su autenticidad y estado.</p>
+      </div>
+      <div class="info">
+        <p>Si tienes el codigo de tu carton, ingresa a:</p>
+      </div>
+      <div class="url-box">verificatubingo.com/verificar/TU-CODIGO</div>
     </div>
-    <div class="footer">Bingo Manager &copy; ${new Date().getFullYear()}</div>
+    <div class="footer">Mega Bingo Mundial &copy; ${new Date().getFullYear()}</div>
   </div>
 </body>
 </html>`;
@@ -239,24 +252,36 @@ function renderPublic404(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Página no encontrada — Verifica Tu Bingo</title>
+  <title>Pagina no encontrada - Mega Bingo Mundial</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; color: #e2e8f0; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 48px 32px; max-width: 400px; width: 100%; box-shadow: 0 25px 50px rgba(0,0,0,0.5); text-align: center; }
-    h1 { font-size: 64px; margin-bottom: 12px; }
-    h2 { font-size: 20px; margin-bottom: 8px; }
-    p { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
-    a { color: #3b82f6; text-decoration: none; font-weight: 600; }
-    a:hover { text-decoration: underline; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #ffffff; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; color: #1f2937; }
+    .container { max-width: 420px; width: 100%; text-align: center; }
+    .logo img { max-width: 200px; height: auto; margin-bottom: 16px; }
+    .divider { height: 3px; background: linear-gradient(90deg, #e53e3e, #dd6b20, #ecc94b, #38a169, #3182ce, #805ad5); border-radius: 2px; margin-bottom: 28px; }
+    .card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 40px 28px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+    .num { font-size: 72px; font-weight: 800; color: #e5e7eb; line-height: 1; margin-bottom: 8px; }
+    h2 { font-size: 18px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+    p { color: #6b7280; font-size: 14px; margin-bottom: 24px; }
+    a { display: inline-block; padding: 10px 24px; background: #3182ce; color: #fff; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 10px; transition: background 0.2s; }
+    a:hover { background: #2563eb; }
+    .footer { color: #9ca3af; font-size: 11px; margin-top: 24px; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>404</h1>
-    <h2>Página no encontrada</h2>
-    <p>La página que buscas no existe.</p>
-    <a href="/">Volver al inicio</a>
+  <div class="container">
+    <div class="logo">
+      <img src="/logo.png" alt="Mega Bingo Mundial" onerror="this.style.display='none'">
+    </div>
+    <div class="divider"></div>
+    <div class="card">
+      <div class="num">404</div>
+      <h2>Pagina no encontrada</h2>
+      <p>La pagina que buscas no existe o ha sido movida.</p>
+      <a href="/">Volver al inicio</a>
+    </div>
+    <div class="footer">Mega Bingo Mundial &copy; ${new Date().getFullYear()}</div>
   </div>
 </body>
 </html>`;

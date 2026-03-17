@@ -59,9 +59,10 @@ function renderNumbers(numbersJson: string, useFreeCenter: boolean): string {
   try {
     const numbers: number[][] = JSON.parse(numbersJson);
     const cols = ['B', 'I', 'N', 'G', 'O'];
+    const colColors = ['#e53e3e', '#dd6b20', '#38a169', '#3182ce', '#805ad5'];
     let html = '<table class="bingo-table"><thead><tr>';
-    for (const col of cols) {
-      html += `<th>${col}</th>`;
+    for (let i = 0; i < cols.length; i++) {
+      html += `<th style="background:${colColors[i]}">${cols[i]}</th>`;
     }
     html += '</tr></thead><tbody>';
     for (let row = 0; row < 5; row++) {
@@ -81,186 +82,233 @@ function renderNumbers(numbersJson: string, useFreeCenter: boolean): string {
 }
 
 function renderPage(card: CardRow | null, error: string | null): string {
-  const statusColor = card?.is_sold ? '#22c55e' : '#64748b';
+  const statusColor = card?.is_sold ? '#16a34a' : '#9ca3af';
+  const statusBg = card?.is_sold ? '#dcfce7' : '#f3f4f6';
   const statusText = card?.is_sold ? 'ACTIVO' : 'INACTIVO';
   const statusIcon = card?.is_sold ? '✅' : '⏳';
+
+  // Servir logo desde el cliente (en producción) o público
+  const logoUrl = '/logo.png';
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Verificar Cartón — Bingo</title>
+  <title>Verificar Carton - Mega Bingo Mundial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #ffffff;
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 20px;
-      color: #e2e8f0;
+      padding: 20px 16px;
+      color: #1f2937;
     }
-    .card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 16px;
-      padding: 32px 24px;
-      max-width: 400px;
+    .container {
+      max-width: 420px;
       width: 100%;
-      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
     }
-    .logo {
+    .logo-section {
       text-align: center;
+      margin-bottom: 20px;
+      padding-top: 8px;
+    }
+    .logo-section img {
+      max-width: 220px;
+      height: auto;
+    }
+    .logo-section .subtitle {
+      color: #6b7280;
+      font-size: 13px;
+      font-weight: 500;
+      margin-top: 8px;
+      letter-spacing: 0.5px;
+    }
+    .divider {
+      height: 3px;
+      background: linear-gradient(90deg, #e53e3e, #dd6b20, #ecc94b, #38a169, #3182ce, #805ad5);
+      border-radius: 2px;
       margin-bottom: 24px;
     }
-    .logo h1 {
-      font-size: 24px;
-      font-weight: 700;
-      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .logo p {
-      color: #94a3b8;
-      font-size: 13px;
-      margin-top: 4px;
+    .main-card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      padding: 24px 20px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
     }
     .status-badge {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      padding: 12px 20px;
+      padding: 14px 20px;
       border-radius: 12px;
       font-size: 18px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      margin-bottom: 24px;
-      background: ${statusColor}15;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      margin-bottom: 20px;
+      background: ${statusBg};
       border: 2px solid ${statusColor};
       color: ${statusColor};
     }
     .info-grid {
       display: grid;
-      gap: 12px;
-      margin-bottom: 24px;
+      gap: 8px;
+      margin-bottom: 20px;
     }
     .info-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 10px 14px;
-      background: #0f172a;
-      border-radius: 8px;
-      border: 1px solid #334155;
+      padding: 12px 16px;
+      background: #f9fafb;
+      border-radius: 10px;
+      border: 1px solid #f3f4f6;
     }
     .info-label {
-      color: #94a3b8;
+      color: #6b7280;
       font-size: 13px;
+      font-weight: 500;
     }
     .info-value {
-      color: #f1f5f9;
-      font-weight: 600;
+      color: #111827;
+      font-weight: 700;
       font-size: 14px;
     }
     .bingo-table {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 3px;
       margin-bottom: 20px;
     }
     .bingo-table th {
-      background: linear-gradient(180deg, #3b82f6, #2563eb);
       color: white;
       padding: 10px 0;
-      font-size: 16px;
-      font-weight: 700;
+      font-size: 17px;
+      font-weight: 800;
+      border-radius: 8px 8px 4px 4px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.2);
     }
-    .bingo-table th:first-child { border-radius: 8px 0 0 0; }
-    .bingo-table th:last-child { border-radius: 0 8px 0 0; }
     .bingo-table td {
       text-align: center;
       padding: 10px 0;
       font-size: 15px;
       font-weight: 600;
-      color: #e2e8f0;
-      background: #0f172a;
-      border: 1px solid #1e293b;
+      color: #1f2937;
+      background: #f9fafb;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
     }
     .bingo-table td.free {
-      color: #fbbf24;
-      font-size: 18px;
+      color: #d97706;
+      font-size: 20px;
+      background: #fffbeb;
+      border-color: #fcd34d;
     }
     .promo {
       text-align: center;
-      padding: 10px 14px;
-      background: linear-gradient(90deg, #7c3aed20, #ec489920);
-      border: 1px solid #7c3aed40;
-      border-radius: 8px;
-      color: #c084fc;
-      font-weight: 600;
-      font-size: 13px;
-      margin-bottom: 20px;
+      padding: 14px 16px;
+      background: linear-gradient(135deg, #fef3c7, #fce7f3);
+      border: 1px solid #fbbf24;
+      border-radius: 12px;
+      color: #92400e;
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 16px;
     }
     .footer {
       text-align: center;
-      color: #475569;
+      color: #9ca3af;
       font-size: 11px;
-      margin-top: 16px;
+      margin-top: 24px;
+      padding-bottom: 8px;
     }
     .error-box {
       text-align: center;
       padding: 40px 20px;
     }
     .error-box .icon { font-size: 48px; margin-bottom: 16px; }
-    .error-box h2 { color: #f87171; margin-bottom: 8px; }
-    .error-box p { color: #94a3b8; }
+    .error-box h2 { color: #dc2626; margin-bottom: 8px; font-size: 18px; }
+    .error-box p { color: #6b7280; font-size: 14px; line-height: 1.5; }
+    .info-box {
+      text-align: center;
+      padding: 32px 20px;
+    }
+    .info-box .icon { font-size: 48px; margin-bottom: 12px; }
+    .info-box h2 { color: #1f2937; font-size: 16px; margin-bottom: 8px; }
+    .info-box p { color: #6b7280; font-size: 13px; line-height: 1.6; }
+    .info-box .url {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 8px 16px;
+      background: #f3f4f6;
+      border-radius: 8px;
+      font-weight: 600;
+      color: #3182ce;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="logo">
-      <h1>🎱 Bingo Manager</h1>
-      <p>Verificación de Cartón</p>
+  <div class="container">
+    <div class="logo-section">
+      <img src="${logoUrl}" alt="Mega Bingo Mundial" onerror="this.style.display='none'">
+      <p class="subtitle">Verificacion de Carton</p>
     </div>
-    ${error ? `
-    <div class="error-box">
-      <div class="icon">🔍</div>
-      <h2>${escapeHtml(error)}</h2>
-      <p>El código escaneado no corresponde a ningún cartón registrado.</p>
-    </div>` : `
-    <div class="status-badge">
-      ${statusIcon} ${statusText}
-    </div>
+    <div class="divider"></div>
 
-    <div class="info-grid">
-      <div class="info-row">
-        <span class="info-label">Código</span>
-        <span class="info-value">${escapeHtml(card!.card_code)}</span>
+    <div class="main-card">
+    ${error ? (error === 'Escanea el QR de tu cartón para verificarlo' ? `
+      <div class="info-box">
+        <div class="icon">🎱</div>
+        <h2>Verifica Tu Carton</h2>
+        <p>Escanea el <strong>codigo QR</strong> de tu carton de bingo para verificar su autenticidad y estado.</p>
+        <span class="url">verificatubingo.com/verificar/TU-CODIGO</span>
+      </div>` : `
+      <div class="error-box">
+        <div class="icon">🔍</div>
+        <h2>${escapeHtml(error)}</h2>
+        <p>El codigo escaneado no corresponde a ningun carton registrado.</p>
+      </div>`) : `
+      <div class="status-badge">
+        ${statusIcon} ${statusText}
       </div>
-      <div class="info-row">
-        <span class="info-label">Serial</span>
-        <span class="info-value">${escapeHtml(card!.serial)}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Evento</span>
-        <span class="info-value">${escapeHtml(card!.event_name)}</span>
-      </div>
-      ${card!.buyer_name ? `
-      <div class="info-row">
-        <span class="info-label">Comprador</span>
-        <span class="info-value">${escapeHtml(card!.buyer_name)}</span>
-      </div>` : ''}
-    </div>
 
-    ${card!.numbers ? renderNumbers(card!.numbers, card!.use_free_center) : ''}
+      <div class="info-grid">
+        <div class="info-row">
+          <span class="info-label">Codigo</span>
+          <span class="info-value">${escapeHtml(card!.card_code)}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Serial</span>
+          <span class="info-value">${escapeHtml(card!.serial)}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Evento</span>
+          <span class="info-value">${escapeHtml(card!.event_name)}</span>
+        </div>
+        ${card!.buyer_name ? `
+        <div class="info-row">
+          <span class="info-label">Comprador</span>
+          <span class="info-value">${escapeHtml(card!.buyer_name)}</span>
+        </div>` : ''}
+      </div>
 
-    ${card!.promo_text ? `<div class="promo">🎁 ${escapeHtml(card!.promo_text)}</div>` : ''}
+      ${card!.numbers ? renderNumbers(card!.numbers, card!.use_free_center) : ''}
+
+      ${card!.promo_text ? `<div class="promo">🎁 ${escapeHtml(card!.promo_text)}</div>` : ''}
     `}
+    </div>
+
     <div class="footer">
-      Bingo Manager &copy; ${new Date().getFullYear()}
+      Mega Bingo Mundial &copy; ${new Date().getFullYear()}
     </div>
   </div>
 </body>
