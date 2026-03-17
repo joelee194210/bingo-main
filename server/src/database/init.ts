@@ -139,12 +139,12 @@ async function runMigrations(p: Pool): Promise<void> {
     console.log('✅ Migración aplicada: almacen_id agregado a cajas');
   }
 
-  // Migration: add 'inventory' to users role constraint
+  // Migration: users role constraint (incluye todos los roles)
   try {
     await p.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
-    await p.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('admin', 'moderator', 'seller', 'viewer', 'inventory'))`);
+    await p.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('admin', 'moderator', 'seller', 'viewer', 'inventory', 'loteria'))`);
   } catch {
-    // constraint may already include 'inventory'
+    // constraint already exists
   }
 
   // Create serial index if not exists
@@ -248,21 +248,17 @@ async function runMigrations(p: Pool): Promise<void> {
   }
 
   // Backfill: lotes/cards que tienen caja con almacen pero ellos no
-  await p.query(`
-    UPDATE lotes SET almacen_id = c.almacen_id
-    FROM cajas c WHERE c.id = lotes.caja_id AND c.almacen_id IS NOT NULL AND lotes.almacen_id IS NULL
-  `);
-  await p.query(`
-    UPDATE cards SET almacen_id = l.almacen_id
-    FROM lotes l WHERE l.id = cards.lote_id AND l.almacen_id IS NOT NULL AND cards.almacen_id IS NULL
-  `);
-
-  // Migration: add 'loteria' to users role constraint
-  try {
-    await p.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
-    await p.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('admin', 'moderator', 'seller', 'viewer', 'inventory', 'loteria'))`);
-  } catch {
-    // constraint may already include 'loteria'
+  // Solo ejecutar si hay cajas con almacen asignado (evita UPDATE masivo innecesario)
+  const cajasConAlmacen = await p.query('SELECT COUNT(*) as c FROM cajas WHERE almacen_id IS NOT NULL');
+  if (Number(cajasConAlmacen.rows[0].c) > 0) {
+    await p.query(`
+      UPDATE lotes SET almacen_id = c.almacen_id
+      FROM cajas c WHERE c.id = lotes.caja_id AND c.almacen_id IS NOT NULL AND lotes.almacen_id IS NULL
+    `);
+    await p.query(`
+      UPDATE cards SET almacen_id = l.almacen_id
+      FROM lotes l WHERE l.id = cards.lote_id AND l.almacen_id IS NOT NULL AND cards.almacen_id IS NULL
+    `);
   }
 
   // Migration: created_by on users (para sub-usuarios de loteria)
