@@ -269,8 +269,7 @@ function renderPage(card: CardRow | null, error: string | null): string {
       <div class="info-box">
         <div class="icon">🎱</div>
         <h2>Verifica Tu Carton</h2>
-        <p>Escanea el <strong>codigo QR</strong> de tu carton de bingo para verificar su autenticidad y estado.</p>
-        <span class="url">verificatubingo.com/verificar/TU-CODIGO</span>
+        <p>Para verificar la autenticidad de tu carton, escanea el <strong>codigo QR</strong> que se encuentra en la <strong>parte inferior derecha</strong> de tu carton de bingo.</p>
       </div>` : `
       <div class="error-box">
         <div class="icon">🔍</div>

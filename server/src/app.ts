@@ -233,12 +233,8 @@ function renderPublicLanding(): string {
       <h2>🎱 Verifica Tu Carton</h2>
       <p class="subtitle">Plataforma de verificacion de cartones de bingo</p>
       <div class="info">
-        <p>Escanea el <strong>codigo QR</strong> de tu carton de bingo para verificar su autenticidad y estado.</p>
+        <p>Para verificar la autenticidad de tu carton, escanea el <strong>codigo QR</strong> que se encuentra en la <strong>parte inferior derecha</strong> de tu carton de bingo.</p>
       </div>
-      <div class="info">
-        <p>Si tienes el codigo de tu carton, ingresa a:</p>
-      </div>
-      <div class="url-box">verificatubingo.com/verificar/TU-CODIGO</div>
     </div>
     <div class="footer">Mega Bingo Mundial &copy; ${new Date().getFullYear()}</div>
   </div>
