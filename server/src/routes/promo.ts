@@ -628,7 +628,8 @@ router.get('/events/:eventId/winners', async (req: Request, res: Response) => {
     const eventId = parseInt(String(req.params.eventId), 10);
     const { page = '1', limit = '50', prize } = req.query;
     const pageNum = Math.max(1, parseInt(page as string, 10));
-    const limitNum = Math.min(200, Math.max(1, parseInt(limit as string, 10)));
+    const requestedLimit = Math.max(1, parseInt(limit as string, 10));
+    const limitNum = requestedLimit > 200 ? Math.min(100000, requestedLimit) : requestedLimit;
     const offset = (pageNum - 1) * limitNum;
 
     const pool = getPool();
