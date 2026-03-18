@@ -314,7 +314,7 @@ function renderPage(card: CardRow | null, error: string | null): string {
       <div class="info-box">
         <div class="icon">🎱</div>
         <h2>Verifica Tu Cart&oacute;n</h2>
-        <p>Para verificar la autenticidad de tu cart&oacute;n, escanea el <strong>c&oacute;digo QR</strong> que se encuentra en la <strong>parte inferior derecha</strong> de tu cart&oacute;n de bingo.</p>
+        <p>Para verificar la autenticidad de tu cart&oacute;n, escanea el <strong>c&oacute;digo QR</strong> que se encuentra en la <strong>parte inferior izquierda</strong> de tu cart&oacute;n de bingo.</p>
       </div>` : `
       <div class="error-box">
         <div class="icon">🔍</div>
