@@ -685,4 +685,15 @@ router.get('/dashboard-general/:eventId', requirePermission('inventory:manage'),
   }
 });
 
+// Vista informativa (solo lectura) — misma data, permiso menor
+router.get('/dashboard-ventas/:eventId', requirePermission('inventory:read'), async (req, res) => {
+  try {
+    const pool = getPool();
+    const data = await inv.getDashboardGeneral(pool, parseInt(req.params.eventId as string, 10));
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
 export default router;

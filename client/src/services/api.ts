@@ -476,6 +476,9 @@ export interface DashboardGeneralData {
 export const getDashboardGeneral = (eventId: number) =>
   api.get<ApiResponse<DashboardGeneralData>>(`/inventario/dashboard-general/${eventId}`).then(r => r.data);
 
+export const getDashboardVentas = (eventId: number) =>
+  api.get<ApiResponse<DashboardGeneralData>>(`/inventario/dashboard-ventas/${eventId}`).then(r => r.data);
+
 // =====================================================
 // REPORTES DE VENTAS
 // =====================================================
