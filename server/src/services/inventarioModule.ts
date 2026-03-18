@@ -207,6 +207,115 @@ export async function getLoteriaDashboard(pool: Pool, eventId: number) {
   };
 }
 
+export async function getDashboardGeneral(pool: Pool, eventId: number) {
+  // Resumen global de TODOS los cartones del evento
+  const globalResult = await pool.query(`
+    SELECT
+      COUNT(*) AS total_cartones,
+      COUNT(*) FILTER (WHERE c.is_sold = true) AS cartones_vendidos,
+      COUNT(*) FILTER (WHERE c.is_sold = false) AS cartones_disponibles
+    FROM cards c
+    WHERE c.event_id = $1
+  `, [eventId]);
+  const global = globalResult.rows[0];
+
+  const cajasResult = await pool.query(`
+    SELECT COUNT(*) AS total_cajas FROM cajas WHERE event_id = $1
+  `, [eventId]);
+  const lotesResult = await pool.query(`
+    SELECT COUNT(*) AS total_lotes FROM lotes WHERE event_id = $1
+  `, [eventId]);
+
+  // Stats por almacen (TODOS los almacenes activos)
+  const almacenesResult = await pool.query(`
+    SELECT
+      a.id, a.name, a.code, a.es_agencia_loteria,
+      COALESCE(stock.total_cajas, 0) AS total_cajas,
+      COALESCE(stock.total_lotes, 0) AS total_lotes,
+      COALESCE(stock.total_cartones, 0) AS total_cartones,
+      COALESCE(sold.vendidos, 0) AS cartones_vendidos
+    FROM almacenes a
+    LEFT JOIN (
+      SELECT c.almacen_id,
+        COUNT(DISTINCT c.id) AS total_cajas,
+        COUNT(DISTINCT l.id) AS total_lotes,
+        COUNT(DISTINCT ca.id) AS total_cartones
+      FROM cajas c
+      LEFT JOIN lotes l ON l.caja_id = c.id
+      LEFT JOIN cards ca ON ca.lote_id = l.id
+      WHERE c.event_id = $1 AND c.almacen_id IS NOT NULL
+      GROUP BY c.almacen_id
+    ) stock ON stock.almacen_id = a.id
+    LEFT JOIN (
+      SELECT almacen_id, COUNT(*) AS vendidos
+      FROM cards WHERE event_id = $1 AND is_sold = true
+      GROUP BY almacen_id
+    ) sold ON sold.almacen_id = a.id
+    WHERE a.event_id = $1 AND a.is_active = true
+    ORDER BY a.name
+  `, [eventId]);
+
+  // Ventas por día (últimos 30 días)
+  const ventasPorDiaResult = await pool.query(`
+    SELECT
+      DATE(sold_at) AS fecha,
+      COUNT(*) AS vendidos
+    FROM cards
+    WHERE event_id = $1 AND is_sold = true AND sold_at >= NOW() - INTERVAL '30 days'
+    GROUP BY DATE(sold_at)
+    ORDER BY fecha
+  `, [eventId]);
+
+  // Ventas por almacen por día (últimos 7 días)
+  const ventasAlmacenDiaResult = await pool.query(`
+    SELECT
+      a.name AS almacen,
+      DATE(c.sold_at) AS fecha,
+      COUNT(*) AS vendidos
+    FROM cards c
+    JOIN almacenes a ON a.id = c.almacen_id
+    WHERE c.event_id = $1 AND c.is_sold = true AND c.sold_at >= NOW() - INTERVAL '7 days'
+    GROUP BY a.name, DATE(c.sold_at)
+    ORDER BY fecha, a.name
+  `, [eventId]);
+
+  return {
+    resumen: {
+      total_cartones: parseInt(global.total_cartones),
+      cartones_vendidos: parseInt(global.cartones_vendidos),
+      cartones_disponibles: parseInt(global.cartones_disponibles),
+      total_cajas: parseInt(cajasResult.rows[0].total_cajas),
+      total_lotes: parseInt(lotesResult.rows[0].total_lotes),
+      porcentaje_vendido: parseInt(global.total_cartones) > 0
+        ? Math.round((parseInt(global.cartones_vendidos) / parseInt(global.total_cartones)) * 100)
+        : 0,
+    },
+    almacenes: almacenesResult.rows.map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      code: a.code,
+      es_agencia_loteria: a.es_agencia_loteria,
+      total_cajas: parseInt(a.total_cajas),
+      total_lotes: parseInt(a.total_lotes),
+      total_cartones: parseInt(a.total_cartones),
+      cartones_vendidos: parseInt(a.cartones_vendidos),
+      cartones_disponibles: parseInt(a.total_cartones) - parseInt(a.cartones_vendidos),
+      porcentaje: parseInt(a.total_cartones) > 0
+        ? Math.round((parseInt(a.cartones_vendidos) / parseInt(a.total_cartones)) * 100)
+        : 0,
+    })),
+    ventas_por_dia: ventasPorDiaResult.rows.map((r: any) => ({
+      fecha: r.fecha,
+      vendidos: parseInt(r.vendidos),
+    })),
+    ventas_almacen_dia: ventasAlmacenDiaResult.rows.map((r: any) => ({
+      almacen: r.almacen,
+      fecha: r.fecha,
+      vendidos: parseInt(r.vendidos),
+    })),
+  };
+}
+
 export async function getAlmacenTree(pool: Pool, eventId: number): Promise<Almacen[]> {
   const result = await pool.query(`
     SELECT a.*,

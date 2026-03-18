@@ -445,6 +445,38 @@ export const getLoteriaDashboard = (eventId: number) =>
   api.get<ApiResponse<LoteriaDashboardData>>(`/inventario/loteria-dashboard/${eventId}`).then(r => r.data);
 
 // =====================================================
+// DASHBOARD GENERAL (todos los almacenes)
+// =====================================================
+
+export interface DashboardGeneralData {
+  resumen: {
+    total_cartones: number;
+    cartones_vendidos: number;
+    cartones_disponibles: number;
+    total_cajas: number;
+    total_lotes: number;
+    porcentaje_vendido: number;
+  };
+  almacenes: {
+    id: number;
+    name: string;
+    code: string;
+    es_agencia_loteria: boolean;
+    total_cajas: number;
+    total_lotes: number;
+    total_cartones: number;
+    cartones_vendidos: number;
+    cartones_disponibles: number;
+    porcentaje: number;
+  }[];
+  ventas_por_dia: { fecha: string; vendidos: number }[];
+  ventas_almacen_dia: { almacen: string; fecha: string; vendidos: number }[];
+}
+
+export const getDashboardGeneral = (eventId: number) =>
+  api.get<ApiResponse<DashboardGeneralData>>(`/inventario/dashboard-general/${eventId}`).then(r => r.data);
+
+// =====================================================
 // REPORTES DE VENTAS
 // =====================================================
 

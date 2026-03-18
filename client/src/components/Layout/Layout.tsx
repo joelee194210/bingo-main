@@ -67,6 +67,7 @@ const navGroups = [
       { to: '/inventory/mi-inventario', icon: PackageOpen, label: 'Mi Inventario', permission: 'inventory:read' },
       { to: '/inventory/venta', icon: ShoppingCart, label: 'Punto de Venta', permission: 'inventory:read' },
       { to: '/inventory/venta-general', icon: ShoppingCart, label: 'Venta General', permission: 'inventory:read' },
+      { to: '/dashboard-general', icon: BarChart3, label: 'Dashboard General', permission: 'inventory:manage' },
       { to: '/loteria', icon: BarChart3, label: 'Dashboard Loteria', permission: 'inventory:read' },
       { to: '/reportes/ventas', icon: ClipboardList, label: 'Reporte Ventas', permission: 'reports:read' },
       { to: '/inventory/usuarios', icon: UserCog, label: 'Usuarios Inv.', permission: 'inventory:manage' },

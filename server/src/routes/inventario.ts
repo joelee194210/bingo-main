@@ -671,4 +671,18 @@ router.get('/loteria-dashboard/:eventId', requirePermission('inventory:read'), a
   }
 });
 
+// =====================================================
+// DASHBOARD GENERAL (todos los almacenes)
+// =====================================================
+
+router.get('/dashboard-general/:eventId', requirePermission('inventory:manage'), async (req, res) => {
+  try {
+    const pool = getPool();
+    const data = await inv.getDashboardGeneral(pool, parseInt(req.params.eventId as string, 10));
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
 export default router;

@@ -27,6 +27,7 @@ const InventarioUsuarios = lazy(() => import('./components/Inventory/InventarioU
 const MiInventario = lazy(() => import('./components/Inventory/MiInventario'));
 const VentaPage = lazy(() => import('./components/Inventory/VentaPage'));
 const VentaGeneralPage = lazy(() => import('./components/Inventory/VentaGeneralPage'));
+const DashboardGeneral = lazy(() => import('./components/Inventory/DashboardGeneral'));
 const LoteriaDashboard = lazy(() => import('./components/Inventory/LoteriaDashboard'));
 const BackupPage = lazy(() => import('./components/Backup/BackupPage'));
 const Permissions = lazy(() => import('./pages/Permissions'));
@@ -197,6 +198,16 @@ function App() {
           element={
             <ProtectedRoute permission="inventory:read">
               <LoteriaDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Dashboard General */}
+        <Route
+          path="dashboard-general"
+          element={
+            <ProtectedRoute permission="inventory:manage">
+              <DashboardGeneral />
             </ProtectedRoute>
           }
         />
