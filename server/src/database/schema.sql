@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE,
     password_hash TEXT NOT NULL,
     full_name TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'viewer' CHECK(role IN ('admin', 'moderator', 'seller', 'viewer', 'inventory')),
+    role TEXT NOT NULL DEFAULT 'viewer' CHECK(role IN ('admin', 'moderator', 'seller', 'viewer', 'inventory', 'loteria')),
     is_active BOOLEAN DEFAULT TRUE,
     last_login TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
