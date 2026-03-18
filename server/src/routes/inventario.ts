@@ -439,7 +439,7 @@ router.post('/movimiento-bulk', requirePermission('inventory:manage'), async (re
 });
 
 // Ejecutar venta
-router.post('/venta', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/venta', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
     const userId = (req as unknown as { user: { id: number } }).user.id;
