@@ -777,6 +777,11 @@ export default function PromoPage() {
                       data={filteredWinners as unknown as Record<string, unknown>[]}
                       columns={WINNERS_EXPORT_COLUMNS}
                       filename="ganadores_promo"
+                      onFetchAll={async () => {
+                        // Traer TODOS los ganadores sin paginación
+                        const res = await getPromoWinners(selectedEventId!, { page: 1, limit: 999999, prize: prizeFilter || undefined });
+                        return (res.data || []) as unknown as Record<string, unknown>[];
+                      }}
                     />
                   </div>
                 </div>
