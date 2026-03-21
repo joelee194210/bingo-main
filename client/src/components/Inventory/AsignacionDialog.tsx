@@ -73,8 +73,11 @@ export default function AsignacionDialog({ eventId, open, onOpenChange }: Asigna
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asignaciones', eventId] });
       queryClient.invalidateQueries({ queryKey: ['asignaciones-recientes', eventId] });
-      queryClient.invalidateQueries({ queryKey: ['resumen-inventario', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['resumen-inventario'] });
       queryClient.invalidateQueries({ queryKey: ['movimientos'] });
+      queryClient.invalidateQueries({ queryKey: ['almacen-tree'] });
+      queryClient.invalidateQueries({ queryKey: ['cajas'] });
+      queryClient.invalidateQueries({ queryKey: ['documentos'] });
       toast.success('Asignacion creada exitosamente');
       resetForm();
       onOpenChange(false);

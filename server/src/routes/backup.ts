@@ -28,6 +28,9 @@ const router = Router();
 const uploadDisk = multer({ dest: '/tmp/bingo-uploads/', limits: { fileSize: 500 * 1024 * 1024 } });
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://slacker@localhost:5432/bingo';
+function backupTimestamp() {
+  return new Date().toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
+}
 // Timeout para procesos pg_dump/psql (5 minutos)
 const PG_PROCESS_TIMEOUT = 5 * 60 * 1000;
 
@@ -56,7 +59,7 @@ router.get('/events', async (_req, res) => {
 // Backup completo - PostgreSQL dump streaming (cero buffering en RAM)
 router.get('/full', async (req, res) => {
   const pool = getPool();
-  const filename = `bingo_dump_full_${new Date().toISOString().slice(0, 10)}.sql`;
+  const filename = `bingo_dump_full_${backupTimestamp()}.sql`;
 
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Content-Type', 'application/sql');
@@ -108,7 +111,7 @@ router.get('/event/:eventId', async (req, res) => {
     if (!eventId) return res.status(400).json({ success: false, error: 'eventId inválido' });
     const backup = await exportEventBackup(pool, eventId, job);
     const safeName = (backup.event.name || 'evento').replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `bingo_backup_${safeName}_${new Date().toISOString().slice(0, 10)}.json`;
+    const filename = `bingo_backup_${safeName}_${backupTimestamp()}.json`;
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'application/json');
 
@@ -269,7 +272,7 @@ router.get('/event/:eventId/dump', async (req, res) => {
     const eventName = rows[0].name;
 
     const safeName = (eventName || 'evento').replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `bingo_dump_${safeName}_${new Date().toISOString().slice(0, 10)}.sql`;
+    const filename = `bingo_dump_${safeName}_${backupTimestamp()}.sql`;
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'application/sql');
 

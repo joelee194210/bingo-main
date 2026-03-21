@@ -61,6 +61,10 @@ function formatDateTime(d: string) {
   return new Date(d).toLocaleString('es-VE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+function backupTimestamp() {
+  return new Date().toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
+}
+
 function formatElapsed(ms: number) {
   const secs = Math.floor(ms / 1000);
   if (secs < 60) return `${secs}s`;
@@ -219,7 +223,7 @@ export default function BackupPage() {
     setResult(null);
     try {
       const blob = await downloadFullBackup();
-      const filename = `bingo_dump_full_${new Date().toISOString().slice(0, 10)}.sql`;
+      const filename = `bingo_dump_full_${backupTimestamp()}.sql`;
       downloadBlob(blob, filename);
       setResult({ type: 'success', message: 'Dump PostgreSQL completo descargado exitosamente' });
       refetchLogs();
@@ -249,7 +253,7 @@ export default function BackupPage() {
     try {
       const blob = await downloadEventBackup(event.id);
       const safeName = event.name.replace(/[^a-zA-Z0-9]/g, '_');
-      const filename = `bingo_backup_${safeName}_${new Date().toISOString().slice(0, 10)}.json`;
+      const filename = `bingo_backup_${safeName}_${backupTimestamp()}.json`;
       downloadBlob(blob, filename);
       setResult({ type: 'success', message: `Backup del evento "${event.name}" descargado` });
       refetchLogs();
@@ -267,7 +271,7 @@ export default function BackupPage() {
     try {
       const blob = await downloadEventDump(event.id);
       const safeName = event.name.replace(/[^a-zA-Z0-9]/g, '_');
-      const filename = `bingo_dump_${safeName}_${new Date().toISOString().slice(0, 10)}.sql`;
+      const filename = `bingo_dump_${safeName}_${backupTimestamp()}.sql`;
       downloadBlob(blob, filename);
       setResult({ type: 'success', message: `Dump SQL del evento "${event.name}" descargado` });
       refetchLogs();

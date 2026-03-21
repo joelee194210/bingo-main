@@ -507,7 +507,7 @@ export default function InventoryPage() {
         contact_phone: almacenForm.contact_phone || undefined,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['almacen-tree', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['almacen-tree'] });
 
       toast.success('Almacen creado exitosamente');
       setShowAlmacenDialog(false);
@@ -528,7 +528,7 @@ export default function InventoryPage() {
         es_agencia_loteria: almacenForm.es_agencia_loteria,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['almacen-tree', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['almacen-tree'] });
 
       toast.success('Almacen actualizado');
       setShowAlmacenDialog(false);
@@ -540,11 +540,12 @@ export default function InventoryPage() {
   });
 
   const invalidateInventario = () => {
-    queryClient.invalidateQueries({ queryKey: ['almacen-tree', eventId] });
-    queryClient.invalidateQueries({ queryKey: ['resumen-inventario', eventId] });
-    queryClient.invalidateQueries({ queryKey: ['cajas-disponibles', eventId] });
-    queryClient.invalidateQueries({ queryKey: ['cajas', eventId] });
-    queryClient.invalidateQueries({ queryKey: ['movimientos', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['almacen-tree'] });
+    queryClient.invalidateQueries({ queryKey: ['resumen-inventario'] });
+    queryClient.invalidateQueries({ queryKey: ['cajas-disponibles'] });
+    queryClient.invalidateQueries({ queryKey: ['cajas'] });
+    queryClient.invalidateQueries({ queryKey: ['movimientos'] });
+    queryClient.invalidateQueries({ queryKey: ['documentos'] });
   };
 
   const cargarMutation = useMutation({

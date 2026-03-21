@@ -126,13 +126,14 @@ export default function MovimientoDialog({ eventId, open, onOpenChange }: Movimi
   }, [isAdmin, miAlmacen, almacenOrigenId, almacenDestinoId, tipoMovimiento]);
 
   const invalidateAll = () => {
-    queryClient.invalidateQueries({ queryKey: ['almacen-tree', eventId] });
-    queryClient.invalidateQueries({ queryKey: ['almacenes', eventId] });
-    queryClient.invalidateQueries({ queryKey: ['resumen-inventario', eventId] });
-    queryClient.invalidateQueries({ queryKey: ['cajas-disponibles', eventId] });
-    queryClient.invalidateQueries({ queryKey: ['cajas', eventId] });
-    queryClient.invalidateQueries({ queryKey: ['asignaciones', eventId] });
-    queryClient.invalidateQueries({ queryKey: ['movimientos', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['almacen-tree'] });
+    queryClient.invalidateQueries({ queryKey: ['almacenes'] });
+    queryClient.invalidateQueries({ queryKey: ['resumen-inventario'] });
+    queryClient.invalidateQueries({ queryKey: ['cajas-disponibles'] });
+    queryClient.invalidateQueries({ queryKey: ['cajas'] });
+    queryClient.invalidateQueries({ queryKey: ['asignaciones'] });
+    queryClient.invalidateQueries({ queryKey: ['movimientos'] });
+    queryClient.invalidateQueries({ queryKey: ['documentos'] });
   };
 
   const resetForm = () => {

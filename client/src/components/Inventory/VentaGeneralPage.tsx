@@ -209,6 +209,7 @@ export default function VentaGeneralPage() {
       queryClient.invalidateQueries({ queryKey: ['mis-almacenes'] });
       queryClient.invalidateQueries({ queryKey: ['documentos'] });
       queryClient.invalidateQueries({ queryKey: ['movimientos'] });
+      queryClient.invalidateQueries({ queryKey: ['almacen-tree'] });
 
       if (errores.length === 0) {
         toast.success(`${exitosos} items vendidos — ${totalCartones} cartones`);

@@ -122,22 +122,26 @@ export async function getLoteriaDashboard(pool: Pool, eventId: number) {
   const agenciasResult = await pool.query(`
     SELECT
       a.id, a.name, a.code,
-      COALESCE(stock.total_cajas, 0) AS total_cajas,
-      COALESCE(stock.total_lotes, 0) AS total_lotes,
-      COALESCE(stock.total_cartones, 0) AS total_cartones,
+      COALESCE(cajas_stock.total_cajas, 0) AS total_cajas,
+      COALESCE(lotes_stock.total_lotes, 0) AS total_lotes,
+      COALESCE(cards_stock.total_cartones, 0) AS total_cartones,
       COALESCE(sold.vendidos, 0) AS cartones_vendidos
     FROM almacenes a
     LEFT JOIN (
-      SELECT c.almacen_id,
-        COUNT(DISTINCT c.id) AS total_cajas,
-        COUNT(DISTINCT l.id) AS total_lotes,
-        COUNT(DISTINCT ca.id) AS total_cartones
-      FROM cajas c
-      LEFT JOIN lotes l ON l.caja_id = c.id
-      LEFT JOIN cards ca ON ca.lote_id = l.id
-      WHERE c.event_id = $1 AND c.almacen_id IS NOT NULL
-      GROUP BY c.almacen_id
-    ) stock ON stock.almacen_id = a.id
+      SELECT almacen_id, COUNT(*) AS total_cajas
+      FROM cajas WHERE event_id = $1 AND almacen_id IS NOT NULL
+      GROUP BY almacen_id
+    ) cajas_stock ON cajas_stock.almacen_id = a.id
+    LEFT JOIN (
+      SELECT almacen_id, COUNT(*) AS total_lotes
+      FROM lotes WHERE event_id = $1 AND almacen_id IS NOT NULL
+      GROUP BY almacen_id
+    ) lotes_stock ON lotes_stock.almacen_id = a.id
+    LEFT JOIN (
+      SELECT almacen_id, COUNT(*) AS total_cartones
+      FROM cards WHERE event_id = $1 AND almacen_id IS NOT NULL
+      GROUP BY almacen_id
+    ) cards_stock ON cards_stock.almacen_id = a.id
     LEFT JOIN (
       SELECT almacen_id, COUNT(*) AS vendidos
       FROM cards WHERE event_id = $1 AND is_sold = true
@@ -230,22 +234,26 @@ export async function getDashboardGeneral(pool: Pool, eventId: number) {
   const almacenesResult = await pool.query(`
     SELECT
       a.id, a.name, a.code, a.es_agencia_loteria,
-      COALESCE(stock.total_cajas, 0) AS total_cajas,
-      COALESCE(stock.total_lotes, 0) AS total_lotes,
-      COALESCE(stock.total_cartones, 0) AS total_cartones,
+      COALESCE(cajas_stock.total_cajas, 0) AS total_cajas,
+      COALESCE(lotes_stock.total_lotes, 0) AS total_lotes,
+      COALESCE(cards_stock.total_cartones, 0) AS total_cartones,
       COALESCE(sold.vendidos, 0) AS cartones_vendidos
     FROM almacenes a
     LEFT JOIN (
-      SELECT c.almacen_id,
-        COUNT(DISTINCT c.id) AS total_cajas,
-        COUNT(DISTINCT l.id) AS total_lotes,
-        COUNT(DISTINCT ca.id) AS total_cartones
-      FROM cajas c
-      LEFT JOIN lotes l ON l.caja_id = c.id
-      LEFT JOIN cards ca ON ca.lote_id = l.id
-      WHERE c.event_id = $1 AND c.almacen_id IS NOT NULL
-      GROUP BY c.almacen_id
-    ) stock ON stock.almacen_id = a.id
+      SELECT almacen_id, COUNT(*) AS total_cajas
+      FROM cajas WHERE event_id = $1 AND almacen_id IS NOT NULL
+      GROUP BY almacen_id
+    ) cajas_stock ON cajas_stock.almacen_id = a.id
+    LEFT JOIN (
+      SELECT almacen_id, COUNT(*) AS total_lotes
+      FROM lotes WHERE event_id = $1 AND almacen_id IS NOT NULL
+      GROUP BY almacen_id
+    ) lotes_stock ON lotes_stock.almacen_id = a.id
+    LEFT JOIN (
+      SELECT almacen_id, COUNT(*) AS total_cartones
+      FROM cards WHERE event_id = $1 AND almacen_id IS NOT NULL
+      GROUP BY almacen_id
+    ) cards_stock ON cards_stock.almacen_id = a.id
     LEFT JOIN (
       SELECT almacen_id, COUNT(*) AS vendidos
       FROM cards WHERE event_id = $1 AND is_sold = true
@@ -319,28 +327,30 @@ export async function getDashboardGeneral(pool: Pool, eventId: number) {
 export async function getAlmacenTree(pool: Pool, eventId: number): Promise<Almacen[]> {
   const result = await pool.query(`
     SELECT a.*,
-      COALESCE(stock.total_cajas, 0) AS inv_cajas,
-      COALESCE(stock.total_lotes, 0) AS inv_libretas,
-      COALESCE(stock.total_cartones, 0) AS inv_cartones,
+      COALESCE(cajas_stock.total_cajas, 0) AS inv_cajas,
+      COALESCE(lotes_stock.total_lotes, 0) AS inv_libretas,
+      COALESCE(cards_stock.total_cartones, 0) AS inv_cartones,
       COALESCE(sold.vendidos, 0) AS inv_vendidos
     FROM almacenes a
     LEFT JOIN (
-      SELECT c.almacen_id,
-        COUNT(DISTINCT c.id) AS total_cajas,
-        COUNT(DISTINCT l.id) AS total_lotes,
-        COUNT(DISTINCT ca.id) AS total_cartones
-      FROM cajas c
-      LEFT JOIN lotes l ON l.caja_id = c.id
-      LEFT JOIN cards ca ON ca.lote_id = l.id
-      WHERE c.event_id = $1 AND c.almacen_id IS NOT NULL
-      GROUP BY c.almacen_id
-    ) stock ON stock.almacen_id = a.id
+      SELECT almacen_id, COUNT(*) AS total_cajas
+      FROM cajas WHERE event_id = $1 AND almacen_id IS NOT NULL
+      GROUP BY almacen_id
+    ) cajas_stock ON cajas_stock.almacen_id = a.id
     LEFT JOIN (
-      SELECT ca.almacen_id,
-        COUNT(*) AS vendidos
-      FROM cards ca
-      WHERE ca.event_id = $1 AND ca.is_sold = true
-      GROUP BY ca.almacen_id
+      SELECT almacen_id, COUNT(*) AS total_lotes
+      FROM lotes WHERE event_id = $1 AND almacen_id IS NOT NULL
+      GROUP BY almacen_id
+    ) lotes_stock ON lotes_stock.almacen_id = a.id
+    LEFT JOIN (
+      SELECT almacen_id, COUNT(*) AS total_cartones
+      FROM cards WHERE event_id = $1 AND almacen_id IS NOT NULL
+      GROUP BY almacen_id
+    ) cards_stock ON cards_stock.almacen_id = a.id
+    LEFT JOIN (
+      SELECT almacen_id, COUNT(*) AS vendidos
+      FROM cards WHERE event_id = $1 AND is_sold = true
+      GROUP BY almacen_id
     ) sold ON sold.almacen_id = a.id
     WHERE a.event_id = $1
     ORDER BY a.name
