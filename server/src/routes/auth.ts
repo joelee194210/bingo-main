@@ -37,6 +37,18 @@ async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
   }
 }
 
+// GET /api/auth/config - Config pública (captcha habilitado?)
+router.get('/config', (_req: Request, res: Response) => {
+  const captchaEnabled = process.env.CAPTCHA_ENABLED === '1';
+  res.json({
+    success: true,
+    data: {
+      captchaEnabled,
+      captchaSiteKey: captchaEnabled ? '0x4AAAAAACr1cvPWEPjunkjl' : null,
+    },
+  });
+});
+
 // POST /api/auth/login - Iniciar sesión
 router.post('/login', async (req: Request, res: Response) => {
   try {
@@ -49,8 +61,8 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
-    // Validar captcha en producción
-    if (process.env.TURNSTILE_SECRET_KEY) {
+    // Validar captcha solo si CAPTCHA_ENABLED=1
+    if (process.env.CAPTCHA_ENABLED === '1' && process.env.TURNSTILE_SECRET_KEY) {
       if (!turnstileToken) {
         return res.status(400).json({ success: false, error: 'Verificación de seguridad requerida' });
       }

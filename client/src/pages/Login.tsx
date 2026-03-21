@@ -103,8 +103,6 @@ function FloatingBall({ n, letter, x, y, size, dur, del, hue }: typeof FLOATING_
   );
 }
 
-const TURNSTILE_SITE_KEY = '0x4AAAAAACr1cvPWEPjunkjl';
-
 /* ─── Main Login ─── */
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -113,6 +111,8 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [captchaEnabled, setCaptchaEnabled] = useState<boolean | null>(null);
+  const [captchaSiteKey, setCaptchaSiteKey] = useState<string | null>(null);
   const turnstileRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
@@ -127,8 +127,20 @@ export default function Login() {
     return () => clearTimeout(t);
   }, []);
 
-  // Cargar Turnstile script
+  // Consultar si captcha esta habilitado
   useEffect(() => {
+    fetch('/api/auth/config')
+      .then(r => r.json())
+      .then(d => {
+        setCaptchaEnabled(d.data?.captchaEnabled ?? false);
+        setCaptchaSiteKey(d.data?.captchaSiteKey ?? null);
+      })
+      .catch(() => setCaptchaEnabled(false));
+  }, []);
+
+  // Cargar Turnstile script solo si captcha esta habilitado
+  useEffect(() => {
+    if (!captchaEnabled || !captchaSiteKey) return;
     if (document.getElementById('cf-turnstile-script')) return;
     const script = document.createElement('script');
     script.id = 'cf-turnstile-script';
@@ -137,9 +149,10 @@ export default function Login() {
     script.onload = () => renderTurnstile();
     document.head.appendChild(script);
     return () => { script.remove(); };
-  }, []);
+  }, [captchaEnabled, captchaSiteKey]);
 
   const renderTurnstile = useCallback(() => {
+    if (!captchaSiteKey) return;
     const w = window as unknown as { turnstile?: { render: (el: HTMLElement, opts: Record<string, unknown>) => string; reset: (id: string) => void } };
     if (!w.turnstile || !turnstileRef.current) {
       setTimeout(renderTurnstile, 200);
@@ -147,13 +160,13 @@ export default function Login() {
     }
     if (widgetIdRef.current) return;
     widgetIdRef.current = w.turnstile.render(turnstileRef.current, {
-      sitekey: TURNSTILE_SITE_KEY,
+      sitekey: captchaSiteKey,
       theme: 'dark',
       callback: (token: string) => setTurnstileToken(token),
       'expired-callback': () => setTurnstileToken(null),
       'error-callback': () => setTurnstileToken(null),
     });
-  }, []);
+  }, [captchaSiteKey]);
 
   useEffect(() => { renderTurnstile(); }, [renderTurnstile]);
 
@@ -169,7 +182,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
 
-    if (!turnstileToken) {
+    if (captchaEnabled && !turnstileToken) {
       setError('Complete la verificacion de seguridad');
       return;
     }
@@ -177,17 +190,17 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const user = await login(username, password, turnstileToken);
+      const user = await login(username, password, turnstileToken || undefined);
       if (user) {
         const destination = user.role === 'inventory' ? '/inventory' : from;
         navigate(destination, { replace: true });
       } else {
         setError('Usuario o contrasena incorrectos');
-        resetTurnstile();
+        if (captchaEnabled) resetTurnstile();
       }
     } catch {
       setError('Error al iniciar sesion. Intente de nuevo.');
-      resetTurnstile();
+      if (captchaEnabled) resetTurnstile();
     } finally {
       setIsLoading(false);
     }
@@ -362,8 +375,8 @@ export default function Login() {
                 />
               </div>
 
-              {/* Turnstile CAPTCHA */}
-              <div ref={turnstileRef} className="flex justify-center" />
+              {/* Turnstile CAPTCHA — solo si está habilitado */}
+              {captchaEnabled && <div ref={turnstileRef} className="flex justify-center" />}
 
               {/* Submit */}
               <div className="pt-1">
