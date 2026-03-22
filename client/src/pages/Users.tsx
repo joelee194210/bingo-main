@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, UserCheck, UserX, Search, Loader2 } from 'lucide-react';
+import { Plus, Edit2, UserCheck, UserX, Search, Loader2, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import api from '@/services/api';
 import type { User, UserRole } from '@/types/auth';
 import { ROLE_LABELS } from '@/types/auth';
@@ -108,6 +109,26 @@ export default function Users() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/auth/users/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success('Usuario eliminado');
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      toast.error(err.response?.data?.error || 'Error al eliminar usuario');
+    },
+  });
+
+  const handleDelete = (user: User) => {
+    if (confirm(`¿Eliminar al usuario "${user.full_name}" (@${user.username})? Esta accion no se puede deshacer.`)) {
+      deleteMutation.mutate(user.id);
+    }
+  };
 
   const openCreateModal = () => {
     setEditingUser(null);
@@ -296,6 +317,15 @@ export default function Users() {
                           className={u.is_active ? 'hover:text-destructive' : 'hover:text-green-600'}
                         >
                           {u.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          onClick={() => handleDelete(u)}
+                          title="Eliminar"
+                          className="hover:text-destructive"
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>

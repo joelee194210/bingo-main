@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL DEFAULT 'viewer' CHECK(role IN ('admin', 'moderator', 'seller', 'viewer', 'inventory', 'loteria')),
     is_active BOOLEAN DEFAULT TRUE,
     last_login TIMESTAMP,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

@@ -5,8 +5,22 @@ import { requirePermission, requireRole } from '../middleware/auth.js';
 import * as inv from '../services/inventarioModule.js';
 import { getMovimientoPdfPath } from '../services/movimientoPdfService.js';
 import { logActivity, auditFromReq } from '../services/auditService.js';
+import { createUser, validatePassword } from '../services/authService.js';
 
 const router = Router();
+
+// Helper: verifica si el usuario tiene acceso al almacen (admin/moderator bypasean)
+async function verificarAccesoAlmacen(pool: ReturnType<typeof getPool>, userId: number, userRole: string, almacenIds: number[]): Promise<boolean> {
+  if (userRole === 'admin' || userRole === 'moderator') return true;
+  if (almacenIds.length === 0) return true;
+  const validIds = almacenIds.filter(id => id);
+  if (validIds.length === 0) return true;
+  const result = await pool.query(
+    `SELECT almacen_id FROM almacen_usuarios WHERE user_id = $1 AND almacen_id = ANY($2) AND is_active = TRUE`,
+    [userId, validIds]
+  );
+  return result.rows.length >= validIds.length;
+}
 
 // =====================================================
 // ALMACENES
@@ -79,6 +93,37 @@ router.get('/mis-almacenes', requirePermission('inventory:read'), async (req, re
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// =====================================================
+// CREAR USUARIO DE INVENTARIO (no requiere admin, solo inventory:manage)
+// =====================================================
+
+router.post('/crear-usuario', requirePermission('inventory:manage'), async (req, res) => {
+  try {
+    const pool = getPool();
+    const { username, password, full_name, email } = req.body;
+    if (!username || !password || !full_name) {
+      return res.status(400).json({ success: false, error: 'Usuario, contraseña y nombre completo son requeridos' });
+    }
+    const pwError = validatePassword(password);
+    if (pwError) return res.status(400).json({ success: false, error: pwError });
+
+    const user = await createUser(pool, { username, password, full_name, email, role: 'inventory' });
+
+    const reqUser = (req as any).user;
+    logActivity(pool, auditFromReq(req, 'inventory_user_created', 'users', {
+      created_user: username, created_by: reqUser?.username,
+    }));
+
+    res.status(201).json({ success: true, data: user });
+  } catch (error) {
+    const msg = (error as Error).message;
+    if (msg.includes('ya existe') || msg.includes('ya está registrado')) {
+      return res.status(400).json({ success: false, error: msg });
+    }
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 });
 
@@ -244,10 +289,15 @@ router.get('/cajas-disponibles/:eventId', requirePermission('inventory:read'), a
 router.post('/cargar-por-referencia', requirePermission('inventory:manage'), async (req, res) => {
   try {
     const pool = getPool();
-    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const reqUser = (req as any).user;
+    const userId = reqUser.id;
     const { event_id, almacen_id, tipo_entidad, referencia, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body;
     if (!event_id || !almacen_id || !tipo_entidad || !referencia) {
       return res.status(400).json({ success: false, error: 'event_id, almacen_id, tipo_entidad y referencia son requeridos' });
+    }
+    // Verificar acceso al almacen
+    if (!await verificarAccesoAlmacen(pool, userId, reqUser.role, [almacen_id])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
     }
     const firmas = (firma_entrega || firma_recibe) ? { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } : undefined;
     const data = await inv.cargarInventarioPorReferencia(pool, event_id, almacen_id, tipo_entidad, referencia, userId, firmas);
@@ -261,10 +311,15 @@ router.post('/cargar-por-referencia', requirePermission('inventory:manage'), asy
 router.post('/cargar-inventario', requirePermission('inventory:manage'), async (req, res) => {
   try {
     const pool = getPool();
-    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const reqUser = (req as any).user;
+    const userId = reqUser.id;
     const { event_id, almacen_id, caja_ids } = req.body;
     if (!event_id || !almacen_id || !caja_ids?.length) {
       return res.status(400).json({ success: false, error: 'event_id, almacen_id y caja_ids son requeridos' });
+    }
+    // Verificar acceso al almacen
+    if (!await verificarAccesoAlmacen(pool, userId, reqUser.role, [almacen_id])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
     }
     const data = await inv.cargarInventario(pool, event_id, almacen_id, caja_ids, userId);
     res.json({ success: true, data });
@@ -346,8 +401,13 @@ router.get('/asignaciones/:eventId', requirePermission('inventory:read'), async 
 router.post('/asignaciones', requirePermission('inventory:manage'), async (req, res) => {
   try {
     const pool = getPool();
-    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const reqUser = (req as any).user;
+    const userId = reqUser.id;
     const { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe, ...asignacionData } = req.body;
+    // Verificar acceso al almacen
+    if (asignacionData.almacen_id && !await verificarAccesoAlmacen(pool, userId, reqUser.role, [asignacionData.almacen_id])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
+    }
     const firmas = (firma_entrega || firma_recibe) ? { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } : undefined;
     const data = await inv.createAsignacion(pool, { ...asignacionData, asignado_por: userId }, firmas);
     logActivity(pool, auditFromReq(req, 'asignacion_created', 'inventory', { asignacion_id: data.id, referencia: asignacionData.referencia }));
@@ -419,10 +479,16 @@ router.post('/vender/todos/:asignacionId', requirePermission('inventory:manage')
 router.post('/movimiento-bulk', requirePermission('inventory:manage'), async (req, res) => {
   try {
     const pool = getPool();
-    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const reqUser = (req as any).user;
+    const userId = reqUser.id;
     const { event_id, accion, almacen_destino_id, almacen_origen_id, items, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body;
     if (!event_id || !almacen_destino_id || !items?.length) {
       return res.status(400).json({ success: false, error: 'event_id, almacen_destino_id e items son requeridos' });
+    }
+    // Verificar acceso al almacen origen y/o destino
+    const almacenesToCheck = [almacen_destino_id, almacen_origen_id].filter(Boolean);
+    if (!await verificarAccesoAlmacen(pool, userId, reqUser.role, almacenesToCheck)) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
     }
     const firmas = (firma_entrega || firma_recibe) ? { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } : undefined;
     const data = await inv.ejecutarMovimientoBulk(pool, event_id, {
@@ -442,10 +508,15 @@ router.post('/movimiento-bulk', requirePermission('inventory:manage'), async (re
 router.post('/venta', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const reqUser = (req as any).user;
+    const userId = reqUser.id;
     const { event_id, almacen_id, items, buyer_name, buyer_cedula, buyer_libreta, buyer_phone, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body;
     if (!event_id || !almacen_id || !items?.length) {
       return res.status(400).json({ success: false, error: 'event_id, almacen_id e items son requeridos' });
+    }
+    // Verificar acceso al almacen
+    if (!await verificarAccesoAlmacen(pool, userId, reqUser.role, [almacen_id])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
     }
     const firmas = (firma_entrega || firma_recibe) ? { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } : undefined;
     const data = await inv.ejecutarVenta(pool, event_id, {

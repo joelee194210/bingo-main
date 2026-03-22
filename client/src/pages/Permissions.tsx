@@ -25,15 +25,16 @@ const PERMISSION_LABELS: Record<string, string> = {
   'games:finish': 'Finalizar juegos',
   'reports:read': 'Ver reportes',
   'reports:export': 'Exportar reportes',
-  'inventory:read': 'Ver inventario',
-  'inventory:manage': 'Gestionar inventario',
-  'dashboard:read': 'Ver dashboard',
+  'inventory:read': 'Ver inventario, Mi Inventario, Venta, Dashboard Loteria, Resumen Ventas',
+  'inventory:manage': 'Movimientos, Asignaciones, Dashboard General, Usuarios Inv.',
+  'dashboard:read': 'Ver dashboard principal',
   'permissions:manage': 'Gestionar permisos',
   'audit:read': 'Ver log de auditoria',
+  'sub_users:manage': 'Crear y gestionar sub-usuarios (Mis Usuarios)',
 };
 
 const PERMISSION_GROUPS: Record<string, string[]> = {
-  'Usuarios': ['users:read', 'users:create', 'users:update', 'users:delete'],
+  'Usuarios': ['users:read', 'users:create', 'users:update', 'users:delete', 'sub_users:manage'],
   'Eventos': ['events:read', 'events:create', 'events:update', 'events:delete'],
   'Cartones': ['cards:read', 'cards:create', 'cards:sell', 'cards:export'],
   'Juegos': ['games:read', 'games:create', 'games:play', 'games:finish'],

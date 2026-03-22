@@ -106,13 +106,12 @@ export default function InventarioUsuarios() {
   // Create new user + assign to almacen
   const createAndAssignMutation = useMutation({
     mutationFn: async () => {
-      // 1. Create user with role 'inventory' (only inventory permissions)
-      const res = await api.post('/auth/users', {
+      // 1. Create user with role 'inventory' via inventario endpoint (no requiere admin)
+      const res = await api.post('/inventario/crear-usuario', {
         username: newUsername,
         password: newPassword,
         full_name: newFullName,
         email: newEmail || undefined,
-        role: 'inventory',
       });
       const newUser = res.data.data;
       // 2. Assign to almacen

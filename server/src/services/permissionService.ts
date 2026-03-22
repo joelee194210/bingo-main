@@ -15,6 +15,7 @@ const ALL_PERMISSIONS = [
   'dashboard:read',
   'permissions:manage',
   'audit:read',
+  'sub_users:manage',
 ];
 
 // Permisos default extendidos (agrega los nuevos al hardcodeado)
