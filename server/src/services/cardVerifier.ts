@@ -399,7 +399,8 @@ export async function findWinners(
   }
 
   const soldFilter = isPracticeMode ? '' : 'AND is_sold = TRUE';
-  const calledArray = `{${calledBalls.join(',')}}`;
+  const calledArray = calledBalls;
+  const COLUMNS = ['B', 'I', 'N', 'G', 'O'];
   const winners: Array<{
     cardId: number;
     cardCode: string;
@@ -410,20 +411,34 @@ export async function findWinners(
     buyerName?: string;
   }> = [];
 
-  // Verificar cada patrón con SQL — PostgreSQL escanea sin cargar filas a Node
+  // Verificar cada patrón con condiciones JSONB nativas (mucho más rápido que función PL/pgSQL)
   for (const pattern of patterns) {
-    // Convertir posiciones a formato PostgreSQL: {{row,col},{row,col},...}
-    const pgPattern = `{${pattern.positions.map(([r, c]) => `{${r},${c}}`).join(',')}}`;
+    // Construir condiciones WHERE para cada posición del patrón
+    const conditions: string[] = [];
+    for (const [row, col] of pattern.positions) {
+      // FREE center: siempre cuenta como match
+      if (row === 2 && col === 2 && useFreeCenter) {
+        continue;
+      }
+      const colName = COLUMNS[col];
+      // Para columna N con FREE center (4 elementos), ajustar índice
+      let idx = row;
+      if (col === 2 && useFreeCenter) {
+        idx = row < 2 ? row : row - 1;
+      }
+      conditions.push(`(numbers->'${colName}'->>${idx})::int = ANY($2::int[])`);
+    }
+
+    if (conditions.length === 0) continue;
 
     const result = await pool.query(`
       SELECT id, card_code, card_number, serial, validation_code, buyer_name
       FROM cards
       WHERE event_id = $1 ${soldFilter}
-        AND bingo_check_pattern(numbers, $2::INT[], $3::INT[][], $4)
-    `, [eventId, calledArray, pgPattern, useFreeCenter]);
+        AND ${conditions.join(' AND ')}
+    `, [eventId, calledArray]);
 
     for (const row of result.rows) {
-      // Evitar duplicados si un cartón gana por múltiples patrones
       if (!winners.some(w => w.cardId === row.id)) {
         winners.push({
           cardId: row.id,
