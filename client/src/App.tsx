@@ -147,7 +147,7 @@ function App() {
         <Route
           path="inventory/usuarios"
           element={
-            <ProtectedRoute permission="inventory:manage">
+            <ProtectedRoute permission="inventory:users">
               <InventarioUsuarios />
             </ProtectedRoute>
           }
@@ -163,7 +163,7 @@ function App() {
         <Route
           path="inventory/venta"
           element={
-            <ProtectedRoute permission="inventory:read">
+            <ProtectedRoute permission="inventory:sell">
               <VentaPage />
             </ProtectedRoute>
           }
@@ -171,7 +171,7 @@ function App() {
         <Route
           path="inventory/venta-general"
           element={
-            <ProtectedRoute permission="inventory:read">
+            <ProtectedRoute permission="inventory:sell">
               <VentaGeneralPage />
             </ProtectedRoute>
           }
@@ -197,7 +197,7 @@ function App() {
         <Route
           path="loteria"
           element={
-            <ProtectedRoute permission="inventory:read">
+            <ProtectedRoute permission="loteria:dashboard">
               <LoteriaDashboard />
             </ProtectedRoute>
           }
@@ -207,7 +207,7 @@ function App() {
         <Route
           path="dashboard-general"
           element={
-            <ProtectedRoute permission="inventory:manage">
+            <ProtectedRoute permission="inventory:dashboard">
               <DashboardGeneral />
             </ProtectedRoute>
           }
@@ -217,7 +217,7 @@ function App() {
         <Route
           path="resumen-ventas"
           element={
-            <ProtectedRoute permission="inventory:read">
+            <ProtectedRoute permission="inventory:dashboard">
               <DashboardVentas />
             </ProtectedRoute>
           }

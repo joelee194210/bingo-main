@@ -97,10 +97,10 @@ router.get('/mis-almacenes', requirePermission('inventory:read'), async (req, re
 });
 
 // =====================================================
-// CREAR USUARIO DE INVENTARIO (no requiere admin, solo inventory:manage)
+// CREAR USUARIO DE INVENTARIO
 // =====================================================
 
-router.post('/crear-usuario', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/crear-usuario', requirePermission('inventory:users'), async (req, res) => {
   try {
     const pool = getPool();
     const { username, password, full_name, email } = req.body;
@@ -141,7 +141,7 @@ router.get('/almacenes/:id/usuarios', requirePermission('inventory:read'), async
   }
 });
 
-router.post('/almacenes/:id/usuarios', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/almacenes/:id/usuarios', requirePermission('inventory:users'), async (req, res) => {
   try {
     const pool = getPool();
     const { user_id, rol } = req.body;
@@ -164,7 +164,7 @@ router.get('/usuarios/:eventId', requirePermission('inventory:read'), async (req
   }
 });
 
-router.put('/almacenes/:id/usuarios/:userId', requirePermission('inventory:manage'), async (req, res) => {
+router.put('/almacenes/:id/usuarios/:userId', requirePermission('inventory:users'), async (req, res) => {
   try {
     const pool = getPool();
     const almacenId = parseInt(req.params.id as string, 10);
@@ -194,7 +194,7 @@ router.put('/almacenes/:id/usuarios/:userId', requirePermission('inventory:manag
   }
 });
 
-router.delete('/almacenes/:id/usuarios/:userId', requirePermission('inventory:manage'), async (req, res) => {
+router.delete('/almacenes/:id/usuarios/:userId', requirePermission('inventory:users'), async (req, res) => {
   try {
     const pool = getPool();
     await inv.removeUsuarioFromAlmacen(pool, parseInt(req.params.id as string, 10), parseInt(req.params.userId as string, 10));
@@ -286,7 +286,7 @@ router.get('/cajas-disponibles/:eventId', requirePermission('inventory:read'), a
 });
 
 // Cargar por referencia (caja/libreta/carton code)
-router.post('/cargar-por-referencia', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/cargar-por-referencia', requirePermission('inventory:move'), async (req, res) => {
   try {
     const pool = getPool();
     const reqUser = (req as any).user;
@@ -308,7 +308,7 @@ router.post('/cargar-por-referencia', requirePermission('inventory:manage'), asy
 });
 
 // Cargar cajas a un almacen (bulk)
-router.post('/cargar-inventario', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/cargar-inventario', requirePermission('inventory:move'), async (req, res) => {
   try {
     const pool = getPool();
     const reqUser = (req as any).user;
@@ -398,7 +398,7 @@ router.get('/asignaciones/:eventId', requirePermission('inventory:read'), async 
   }
 });
 
-router.post('/asignaciones', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/asignaciones', requirePermission('inventory:move'), async (req, res) => {
   try {
     const pool = getPool();
     const reqUser = (req as any).user;
@@ -417,7 +417,7 @@ router.post('/asignaciones', requirePermission('inventory:manage'), async (req, 
   }
 });
 
-router.post('/asignaciones/:id/devolver', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/asignaciones/:id/devolver', requirePermission('inventory:move'), async (req, res) => {
   try {
     const pool = getPool();
     const userId = (req as unknown as { user: { id: number } }).user.id;
@@ -432,7 +432,7 @@ router.post('/asignaciones/:id/devolver', requirePermission('inventory:manage'),
   }
 });
 
-router.post('/asignaciones/:id/cancelar', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/asignaciones/:id/cancelar', requirePermission('inventory:move'), async (req, res) => {
   try {
     const pool = getPool();
     const userId = (req as unknown as { user: { id: number } }).user.id;
@@ -449,7 +449,7 @@ router.post('/asignaciones/:id/cancelar', requirePermission('inventory:manage'),
 // VENTAS
 // =====================================================
 
-router.post('/vender/carton/:cartonId', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/vender/carton/:cartonId', requirePermission('inventory:sell'), async (req, res) => {
   try {
     const pool = getPool();
     const userId = (req as unknown as { user: { id: number } }).user.id;
@@ -460,7 +460,7 @@ router.post('/vender/carton/:cartonId', requirePermission('inventory:manage'), a
   }
 });
 
-router.post('/vender/todos/:asignacionId', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/vender/todos/:asignacionId', requirePermission('inventory:sell'), async (req, res) => {
   try {
     const pool = getPool();
     const userId = (req as unknown as { user: { id: number } }).user.id;
@@ -476,7 +476,7 @@ router.post('/vender/todos/:asignacionId', requirePermission('inventory:manage')
 // =====================================================
 
 // Ejecutar movimiento bulk (nuevo endpoint principal)
-router.post('/movimiento-bulk', requirePermission('inventory:manage'), async (req, res) => {
+router.post('/movimiento-bulk', requirePermission('inventory:move'), async (req, res) => {
   try {
     const pool = getPool();
     const reqUser = (req as any).user;
@@ -505,7 +505,7 @@ router.post('/movimiento-bulk', requirePermission('inventory:manage'), async (re
 });
 
 // Ejecutar venta
-router.post('/venta', requirePermission('inventory:read'), async (req, res) => {
+router.post('/venta', requirePermission('inventory:sell'), async (req, res) => {
   try {
     const pool = getPool();
     const reqUser = (req as any).user;
@@ -732,7 +732,7 @@ router.get('/escanear/:eventId/:codigo', requirePermission('inventory:read'), as
 // DASHBOARD LOTERÍA
 // =====================================================
 
-router.get('/loteria-dashboard/:eventId', requirePermission('inventory:read'), async (req, res) => {
+router.get('/loteria-dashboard/:eventId', requirePermission('loteria:dashboard'), async (req, res) => {
   try {
     const pool = getPool();
     const data = await inv.getLoteriaDashboard(pool, parseInt(req.params.eventId as string, 10));
@@ -746,7 +746,7 @@ router.get('/loteria-dashboard/:eventId', requirePermission('inventory:read'), a
 // DASHBOARD GENERAL (todos los almacenes)
 // =====================================================
 
-router.get('/dashboard-general/:eventId', requirePermission('inventory:manage'), async (req, res) => {
+router.get('/dashboard-general/:eventId', requirePermission('inventory:dashboard'), async (req, res) => {
   try {
     const pool = getPool();
     const data = await inv.getDashboardGeneral(pool, parseInt(req.params.eventId as string, 10));
@@ -757,7 +757,7 @@ router.get('/dashboard-general/:eventId', requirePermission('inventory:manage'),
 });
 
 // Vista informativa (solo lectura) — misma data, permiso menor
-router.get('/dashboard-ventas/:eventId', requirePermission('inventory:read'), async (req, res) => {
+router.get('/dashboard-ventas/:eventId', requirePermission('inventory:dashboard'), async (req, res) => {
   try {
     const pool = getPool();
     const data = await inv.getDashboardGeneral(pool, parseInt(req.params.eventId as string, 10));

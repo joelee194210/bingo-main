@@ -6,9 +6,6 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  ShieldCheck,
-  User,
-  Phone,
   CreditCard,
   Tag,
   Hash,
@@ -18,28 +15,33 @@ import { toast } from 'sonner';
 import { searchCard, sellCard } from '@/services/api';
 import type { BingoCard, CardNumbers } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-
-type SearchMode = 'code' | 'security';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function CardActivation() {
-  const [mode, setMode] = useState<SearchMode>('code');
   const [searchValue, setSearchValue] = useState('');
   const [card, setCard] = useState<BingoCard | null>(null);
   const [error, setError] = useState('');
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerPhone, setBuyerPhone] = useState('');
   const [sold, setSold] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus input on mount and mode change
   useEffect(() => {
     inputRef.current?.focus();
-  }, [mode]);
+  }, []);
 
   const searchMutation = useMutation({
     mutationFn: () => searchCard(searchValue.trim()),
@@ -48,26 +50,24 @@ export default function CardActivation() {
         setCard(data.data);
         setError('');
         setSold(false);
-        setBuyerName(data.data.buyer_name || '');
-        setBuyerPhone(data.data.buyer_phone || '');
       }
     },
     onError: () => {
       setCard(null);
-      setError('Carton no encontrado. Verifica el codigo e intenta de nuevo.');
+      setError('Carton no encontrado. Verifica el numero de serie e intenta de nuevo.');
     },
   });
 
   const sellMutation = useMutation({
     mutationFn: () => {
       if (!card) throw new Error('No card');
-      return sellCard(card.id, { buyer_name: buyerName.trim() || undefined, buyer_phone: buyerPhone.trim() || undefined });
+      return sellCard(card.id, {});
     },
     onSuccess: (data) => {
       if (data.success && data.data) {
         setCard(data.data);
         setSold(true);
-        toast.success(`Carton #${data.data.card_number} activado exitosamente`);
+        toast.success(`Carton #${data.data.card_number} (${data.data.serial}) activado como vendido`);
       }
     },
     onError: (err: Error & { response?: { data?: { error?: string } } }) => {
@@ -84,13 +84,8 @@ export default function CardActivation() {
     searchMutation.mutate();
   };
 
-  const handleActivate = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!card) return;
-    if (!buyerName.trim()) {
-      toast.error('El nombre del comprador es obligatorio');
-      return;
-    }
+  const handleConfirmActivate = () => {
+    setShowConfirm(false);
     sellMutation.mutate();
   };
 
@@ -99,12 +94,9 @@ export default function CardActivation() {
     setCard(null);
     setError('');
     setSold(false);
-    setBuyerName('');
-    setBuyerPhone('');
     inputRef.current?.focus();
   };
 
-  // Handle QR scanner input (rapid keystrokes ending with Enter)
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && searchValue.trim().length >= 3) {
       e.preventDefault();
@@ -163,40 +155,16 @@ export default function CardActivation() {
       <div className="page-header">
         <h2 className="text-2xl font-bold tracking-tight">Activar Carton</h2>
         <p className="text-muted-foreground text-sm mt-1">
-          Escanea el QR o ingresa el codigo para vender un carton
+          Ingresa el numero de serie del carton para activarlo como vendido
         </p>
       </div>
 
       {/* Search Section */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex gap-2">
-            <Button
-              variant={mode === 'code' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => { setMode('code'); handleReset(); }}
-            >
-              <ScanLine className="mr-2 h-4 w-4" />
-              Codigo / QR
-            </Button>
-            <Button
-              variant={mode === 'security' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => { setMode('security'); handleReset(); }}
-            >
-              <ShieldCheck className="mr-2 h-4 w-4" />
-              Codigo de Seguridad
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <form onSubmit={handleSearch} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="search-input">
-                {mode === 'code'
-                  ? 'Codigo del Carton (escanea QR o escribe)'
-                  : 'Codigo de Seguridad / Validacion'}
-              </Label>
+              <Label htmlFor="search-input">Numero de Serie</Label>
               <div className="relative">
                 <Input
                   id="search-input"
@@ -205,7 +173,7 @@ export default function CardActivation() {
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value.toUpperCase())}
                   onKeyDown={handleKeyDown}
-                  placeholder={mode === 'code' ? 'Escanea o escribe el codigo...' : 'Ingresa codigo de seguridad...'}
+                  placeholder="Ej: 00001-01"
                   autoComplete="off"
                   autoFocus
                 />
@@ -214,9 +182,7 @@ export default function CardActivation() {
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                {mode === 'code'
-                  ? 'Usa el lector de QR o escribe el codigo impreso en el carton'
-                  : 'Ingresa el codigo de seguridad oculto del carton'}
+                Escribe el numero de serie impreso en el carton o escanea el QR
               </p>
             </div>
 
@@ -243,7 +209,7 @@ export default function CardActivation() {
         </Card>
       )}
 
-      {/* Card Found - Info + Activation Form */}
+      {/* Card Found */}
       {card && (
         <Card className={sold ? 'border-emerald-500/50 shadow-emerald-500/10 shadow-lg' : ''}>
           <CardContent className="pt-6 space-y-6">
@@ -254,7 +220,7 @@ export default function CardActivation() {
                 <div>
                   <p className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">Carton Activado</p>
                   <p className="text-sm text-emerald-600/80 dark:text-emerald-400/80">
-                    Venta registrada exitosamente
+                    Marcado como vendido exitosamente
                   </p>
                 </div>
               </div>
@@ -263,9 +229,11 @@ export default function CardActivation() {
                 <AlertTriangle className="text-yellow-500 h-6 w-6 shrink-0" />
                 <div>
                   <p className="font-semibold text-yellow-600 dark:text-yellow-400">Este carton ya fue vendido</p>
-                  <p className="text-sm text-yellow-600/80 dark:text-yellow-400/80">
-                    Comprador: {card.buyer_name || 'Sin nombre'} {card.buyer_phone ? `| Tel: ${card.buyer_phone}` : ''}
-                  </p>
+                  {card.buyer_name && (
+                    <p className="text-sm text-yellow-600/80 dark:text-yellow-400/80">
+                      Comprador: {card.buyer_name} {card.buyer_phone ? `| Tel: ${card.buyer_phone}` : ''}
+                    </p>
+                  )}
                 </div>
               </div>
             ) : null}
@@ -310,69 +278,32 @@ export default function CardActivation() {
 
             <Separator />
 
-            {/* Activation form - only show if not already sold */}
+            {/* Activate button - only if not already sold */}
             {!card.is_sold && !sold && (
-              <form onSubmit={handleActivate} className="space-y-4">
-                <CardTitle className="text-base">Datos del Comprador</CardTitle>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="buyer-name" className="flex items-center gap-2">
-                      <User className="h-3.5 w-3.5" />
-                      Nombre *
-                    </Label>
-                    <Input
-                      id="buyer-name"
-                      value={buyerName}
-                      onChange={(e) => setBuyerName(e.target.value)}
-                      placeholder="Nombre del comprador"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="buyer-phone" className="flex items-center gap-2">
-                      <Phone className="h-3.5 w-3.5" />
-                      Telefono
-                    </Label>
-                    <Input
-                      id="buyer-phone"
-                      value={buyerPhone}
-                      onChange={(e) => setBuyerPhone(e.target.value)}
-                      placeholder="Numero de telefono"
-                      type="tel"
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  variant="success"
-                  size="lg"
-                  className="w-full"
-                  disabled={sellMutation.isPending || !buyerName.trim()}
-                >
-                  {sellMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Activando...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="mr-2 h-5 w-5" />
-                      Activar Carton
-                    </>
-                  )}
-                </Button>
-              </form>
-            )}
-
-            {/* New sale button after successful activation */}
-            {sold && (
               <Button
-                onClick={handleReset}
+                variant="success"
                 size="lg"
                 className="w-full"
+                onClick={() => setShowConfirm(true)}
+                disabled={sellMutation.isPending}
               >
+                {sellMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Activando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="mr-2 h-5 w-5" />
+                    Activar como Vendido
+                  </>
+                )}
+              </Button>
+            )}
+
+            {/* New activation after success */}
+            {sold && (
+              <Button onClick={handleReset} size="lg" className="w-full">
                 <ScanLine className="mr-2 h-5 w-5" />
                 Activar Otro Carton
               </Button>
@@ -380,6 +311,30 @@ export default function CardActivation() {
           </CardContent>
         </Card>
       )}
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Activar carton como vendido</AlertDialogTitle>
+            <AlertDialogDescription>
+              {card && (
+                <>
+                  ¿Estas seguro que quieres activar el carton <strong className="text-foreground">#{card.card_number}</strong> (Serie: <strong className="text-foreground">{card.serial}</strong>) como vendido?
+                  <br /><br />
+                  Esta accion marcara el carton como vendido en el sistema.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmActivate}>
+              Si, Activar como Vendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
