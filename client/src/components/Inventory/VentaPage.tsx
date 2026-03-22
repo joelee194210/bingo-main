@@ -257,7 +257,7 @@ export default function VentaPage() {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <ShoppingCart className="h-6 w-6" /> Punto de Venta
+          <ShoppingCart className="h-6 w-6" /> Punto de Venta Loteria
         </h1>
         <Card className="text-center py-12">
           <CardContent>
@@ -276,7 +276,7 @@ export default function VentaPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <ShoppingCart className="h-6 w-6" /> Punto de Venta
+          <ShoppingCart className="h-6 w-6" /> Punto de Venta Loteria
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           Vender cajas, lotes o cartones de tu almacen

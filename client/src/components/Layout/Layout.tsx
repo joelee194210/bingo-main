@@ -66,7 +66,7 @@ const navGroups = [
     items: [
       { to: '/inventory', icon: Warehouse, label: 'Inventario', permission: 'inventory:read' },
       { to: '/inventory/mi-inventario', icon: PackageOpen, label: 'Mi Inventario', permission: 'inventory:read' },
-      { to: '/inventory/venta', icon: ShoppingCart, label: 'Punto de Venta', permission: 'inventory:sell' },
+      { to: '/inventory/venta', icon: ShoppingCart, label: 'Punto de Venta Loteria', permission: 'inventory:sell' },
       { to: '/inventory/venta-general', icon: ShoppingCart, label: 'Venta General', permission: 'inventory:sell' },
       { to: '/dashboard-general', icon: BarChart3, label: 'Dashboard General', permission: 'inventory:dashboard' },
       { to: '/resumen-ventas', icon: Eye, label: 'Resumen Ventas', permission: 'inventory:dashboard' },
