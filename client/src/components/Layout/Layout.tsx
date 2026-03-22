@@ -145,12 +145,8 @@ export default function Layout() {
       >
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-5">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Bingo Pro" className="w-9 h-9 rounded-lg object-contain" />
-            <div>
-              <span className="text-[15px] font-bold text-white tracking-tight">Bingo Pro</span>
-              <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase">Manager</p>
-            </div>
+          <div className="flex items-center">
+            <img src="/logo.png" alt="Logo" className="h-12 object-contain" />
           </div>
           <Button
             variant="ghost"
