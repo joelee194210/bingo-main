@@ -146,9 +146,7 @@ export default function Layout() {
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-5">
           <div className="flex items-center gap-3">
-            <div className="sidebar-logo w-9 h-9 rounded-lg flex items-center justify-center text-lg font-bold text-white">
-              B
-            </div>
+            <img src="/logo.png" alt="Bingo Pro" className="w-9 h-9 rounded-lg object-contain" />
             <div>
               <span className="text-[15px] font-bold text-white tracking-tight">Bingo Pro</span>
               <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase">Manager</p>
