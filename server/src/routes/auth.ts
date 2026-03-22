@@ -261,10 +261,10 @@ router.post('/users', authenticate, requireRole('admin'), async (req: Request, r
   } catch (error) {
     console.error('Error creando usuario:', error);
     const message = (error as Error).message;
-    if (message.includes('ya existe') || message.includes('ya está registrado')) {
+    if (message.includes('ya existe') || message.includes('ya está registrado') || message.includes('duplicate')) {
       return res.status(400).json({ success: false, error: message });
     }
-    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+    res.status(500).json({ success: false, error: message || 'Error interno del servidor' });
   }
 });
 
