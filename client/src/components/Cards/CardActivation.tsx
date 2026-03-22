@@ -119,6 +119,7 @@ export default function CardActivation() {
     setCard(null);
     setError('');
     setSold(false);
+    setUnsold(false);
     inputRef.current?.focus();
   };
 
@@ -337,7 +338,7 @@ export default function CardActivation() {
             )}
 
             {/* Activate button - only if not already sold */}
-            {!card.is_sold && !sold && (
+            {!card.is_sold && !sold && !unsold && (
               <Button
                 variant="success"
                 size="lg"

@@ -13,8 +13,8 @@ const router = Router();
 async function verificarAccesoAlmacen(pool: ReturnType<typeof getPool>, userId: number, userRole: string, almacenIds: number[]): Promise<boolean> {
   if (userRole === 'admin' || userRole === 'moderator') return true;
   if (almacenIds.length === 0) return true;
-  const validIds = almacenIds.filter(id => id);
-  if (validIds.length === 0) return true;
+  const validIds = almacenIds.filter(id => id && id > 0);
+  if (validIds.length === 0) return false;
   const result = await pool.query(
     `SELECT almacen_id FROM almacen_usuarios WHERE user_id = $1 AND almacen_id = ANY($2) AND is_active = TRUE`,
     [userId, validIds]
@@ -405,7 +405,7 @@ router.post('/asignaciones', requirePermission('inventory:move'), async (req, re
     const userId = reqUser.id;
     const { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe, ...asignacionData } = req.body;
     // Verificar acceso al almacen
-    if (asignacionData.almacen_id && !await verificarAccesoAlmacen(pool, userId, reqUser.role, [asignacionData.almacen_id])) {
+    if (!await verificarAccesoAlmacen(pool, userId, reqUser.role, [asignacionData.almacen_id])) {
       return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
     }
     const firmas = (firma_entrega || firma_recibe) ? { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } : undefined;
@@ -757,7 +757,7 @@ router.get('/dashboard-general/:eventId', requirePermission('inventory:dashboard
 });
 
 // Vista informativa (solo lectura) — misma data, permiso menor
-router.get('/dashboard-ventas/:eventId', requirePermission('inventory:dashboard'), async (req, res) => {
+router.get('/dashboard-ventas/:eventId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
     const data = await inv.getDashboardGeneral(pool, parseInt(req.params.eventId as string, 10));

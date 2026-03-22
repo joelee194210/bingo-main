@@ -1,8 +1,9 @@
 import PDFDocument from 'pdfkit';
 import { existsSync, mkdirSync, createWriteStream } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 const MOVIMIENTOS_DIR = join(process.cwd(), 'exports', 'movimientos');
+const LOGO_PATH = resolve(process.cwd(), 'client/public/logo.png');
 
 if (!existsSync(MOVIMIENTOS_DIR)) {
   mkdirSync(MOVIMIENTOS_DIR, { recursive: true });
@@ -61,7 +62,11 @@ export function generateMovimientoPdf(data: MovimientoPdfData): Promise<string> 
 
     const pageWidth = doc.page.width - 100; // margins
 
-    // Header
+    // Logo + Header
+    if (existsSync(LOGO_PATH)) {
+      doc.image(LOGO_PATH, doc.page.width / 2 - 40, 30, { width: 80 });
+      doc.moveDown(4);
+    }
     doc.fontSize(16).font('Helvetica-Bold')
       .text(ACCION_TITULOS[data.accion] || 'ACTA DE MOVIMIENTO DE INVENTARIO', { align: 'center' });
 
@@ -216,7 +221,7 @@ export function generateMovimientoPdf(data: MovimientoPdfData): Promise<string> 
     // Footer
     doc.fontSize(7).font('Helvetica').fillColor('#999999')
       .text(
-        `Generado automaticamente por Bingo Pro - ${new Date().toISOString()}`,
+        `Generado automaticamente por MegabingoTV - ${new Date().toISOString()}`,
         50,
         doc.page.height - 40,
         { align: 'center', width: pageWidth }
@@ -282,6 +287,10 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
     const margin = 50;
 
     // ---- HEADER ----
+    if (existsSync(LOGO_PATH)) {
+      doc.image(LOGO_PATH, doc.page.width / 2 - 40, 30, { width: 80 });
+      doc.moveDown(4);
+    }
     doc.fontSize(14).font('Helvetica-Bold')
       .text(ACCION_TITULOS[data.accion] || 'ACTA DE MOVIMIENTO DE INVENTARIO', { align: 'center' });
 
@@ -470,7 +479,7 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
     // Footer
     doc.fontSize(7).font('Helvetica').fillColor('#999999')
       .text(
-        `Generado automaticamente por Bingo Pro - ${new Date().toISOString()}`,
+        `Generado automaticamente por MegabingoTV - ${new Date().toISOString()}`,
         margin, doc.page.height - 40,
         { align: 'center', width: pageWidth }
       );

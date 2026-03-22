@@ -265,7 +265,7 @@ export default function Layout() {
 
         {/* Footer */}
         <footer className="shrink-0 border-t px-4 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>Bingo Pro Manager &copy; 2026</span>
+          <span>MegabingoTV &copy; 2026</span>
           <span>v2.0</span>
         </footer>
       </div>

@@ -92,6 +92,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'events:read',
     'cards:read', 'cards:sell',
     'games:read',
+    'reports:read',
     'inventory:read', 'inventory:sell', 'inventory:move', 'inventory:dashboard', 'inventory:users',
     'loteria:dashboard',
     'dashboard:read',

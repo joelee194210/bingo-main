@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
 import { getPool } from '../database/init.js';
+
+const LOGO_PATH = resolve(process.cwd(), 'client/public/logo.png');
 import {
   generateGameReport,
   generateReportPDF,
@@ -334,6 +338,10 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
     const margin = 50;
 
     // Header
+    if (existsSync(LOGO_PATH)) {
+      doc.image(LOGO_PATH, doc.page.width / 2 - 40, 30, { width: 80 });
+      doc.moveDown(4);
+    }
     doc.fontSize(14).font('Helvetica-Bold').text('REPORTE DE VENTAS', { align: 'center' });
     doc.moveDown(0.3);
     doc.fontSize(10).font('Helvetica').text(evento.name, { align: 'center' });
@@ -413,7 +421,7 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
 
     // Footer
     doc.fontSize(7).font('Helvetica').fillColor('#999')
-      .text(`Generado por Bingo Pro - ${new Date().toISOString()}`, margin, doc.page.height - 40, { align: 'center', width: pageWidth });
+      .text(`Generado por MegabingoTV - ${new Date().toISOString()}`, margin, doc.page.height - 40, { align: 'center', width: pageWidth });
 
     doc.end();
   } catch (error) {

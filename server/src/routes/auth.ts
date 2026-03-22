@@ -102,7 +102,7 @@ router.post('/login', async (req: Request, res: Response) => {
     res.cookie('bingo_token', result.token, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isProduction ? 'strict' : 'lax',
+      sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 24 horas
       path: '/',
     });
@@ -145,7 +145,8 @@ router.post('/logout', (req: Request, res: Response) => {
       });
     }
   }
-  res.clearCookie('bingo_token', { path: '/' });
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie('bingo_token', { path: '/', httpOnly: true, secure: isProd, sameSite: 'lax' });
   res.json({ success: true, message: 'Sesión cerrada' });
 });
 
@@ -358,7 +359,11 @@ router.delete('/users/:id', authenticate, requireRole('admin'), async (req: Requ
     res.json({ success: true, message: 'Usuario eliminado' });
   } catch (error) {
     console.error('Error eliminando usuario:', error);
-    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+    const code = (error as any)?.code;
+    if (code === '23503') {
+      return res.status(409).json({ success: false, error: 'No se puede eliminar el usuario porque tiene registros asociados. Desactivalo en su lugar.' });
+    }
+    res.status(500).json({ success: false, error: (error as Error).message || 'Error interno del servidor' });
   }
 });
 
