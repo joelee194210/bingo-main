@@ -19,6 +19,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { useTableControls } from '@/hooks/useTableControls';
@@ -100,13 +104,19 @@ export default function Users() {
     },
   });
 
+  const [confirmAction, setConfirmAction] = useState<{ type: 'toggle' | 'delete'; user: User } | null>(null);
+
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: number; is_active: boolean }) => {
       const res = await api.put(`/auth/users/${id}`, { is_active });
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success(vars.is_active ? 'Usuario activado' : 'Usuario desactivado');
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      toast.error(err.response?.data?.error || 'Error al cambiar estado del usuario');
     },
   });
 
@@ -124,10 +134,14 @@ export default function Users() {
     },
   });
 
-  const handleDelete = (user: User) => {
-    if (confirm(`¿Eliminar al usuario "${user.full_name}" (@${user.username})? Esta accion no se puede deshacer.`)) {
-      deleteMutation.mutate(user.id);
+  const handleConfirmAction = () => {
+    if (!confirmAction) return;
+    if (confirmAction.type === 'toggle') {
+      toggleActiveMutation.mutate({ id: confirmAction.user.id, is_active: !confirmAction.user.is_active });
+    } else {
+      deleteMutation.mutate(confirmAction.user.id);
     }
+    setConfirmAction(null);
   };
 
   const openCreateModal = () => {
@@ -177,9 +191,6 @@ export default function Users() {
     }
   };
 
-  const handleToggleActive = (user: User) => {
-    toggleActiveMutation.mutate({ id: user.id, is_active: !user.is_active });
-  };
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Nunca';
@@ -312,7 +323,7 @@ export default function Users() {
                         </Button>
                         <Button
                           variant="ghost" size="icon"
-                          onClick={() => handleToggleActive(u)}
+                          onClick={() => setConfirmAction({ type: 'toggle', user: u })}
                           title={u.is_active ? 'Desactivar' : 'Activar'}
                           className={u.is_active ? 'hover:text-destructive' : 'hover:text-green-600'}
                         >
@@ -320,7 +331,7 @@ export default function Users() {
                         </Button>
                         <Button
                           variant="ghost" size="icon"
-                          onClick={() => handleDelete(u)}
+                          onClick={() => setConfirmAction({ type: 'delete', user: u })}
                           title="Eliminar"
                           className="hover:text-destructive"
                           disabled={deleteMutation.isPending}
@@ -402,6 +413,37 @@ export default function Users() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmAction?.type === 'delete' ? 'Eliminar usuario' :
+               confirmAction?.user.is_active ? 'Desactivar usuario' : 'Activar usuario'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.type === 'delete' ? (
+                <>¿Estas seguro que quieres eliminar a <strong className="text-foreground">{confirmAction.user.full_name}</strong> (@{confirmAction.user.username})? Esta accion no se puede deshacer.</>
+              ) : confirmAction?.user.is_active ? (
+                <>¿Estas seguro que quieres desactivar a <strong className="text-foreground">{confirmAction.user.full_name}</strong> (@{confirmAction.user.username})? No podra iniciar sesion.</>
+              ) : (
+                <>¿Estas seguro que quieres activar a <strong className="text-foreground">{confirmAction?.user.full_name}</strong> (@{confirmAction?.user.username})? Podra iniciar sesion nuevamente.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmAction}
+              className={confirmAction?.type === 'delete' || confirmAction?.user.is_active ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+            >
+              {confirmAction?.type === 'delete' ? 'Si, Eliminar' :
+               confirmAction?.user.is_active ? 'Si, Desactivar' : 'Si, Activar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
