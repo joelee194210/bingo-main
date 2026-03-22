@@ -145,8 +145,8 @@ export default function Layout() {
       >
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-5">
-          <div className="flex items-center">
-            <img src="/logo.png" alt="Logo" className="h-12 object-contain" />
+          <div className="flex-1 flex justify-center">
+            <img src="/logo.png" alt="Logo" className="h-14 object-contain" />
           </div>
           <Button
             variant="ghost"
