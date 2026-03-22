@@ -392,6 +392,38 @@ router.put('/:id/sell', requirePermission('cards:sell'), async (req: Request, re
   }
 });
 
+// PUT /api/cards/:id/unsell - Desmarcar cartón como vendido
+router.put('/:id/unsell', requirePermission('cards:sell'), async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+
+    const { rows: cardRows } = await pool.query('SELECT * FROM cards WHERE id = $1', [req.params.id]);
+    const card = cardRows[0] as BingoCard | undefined;
+    if (!card) {
+      return res.status(404).json({ success: false, error: 'Cartón no encontrado' });
+    }
+
+    if (!card.is_sold) {
+      return res.status(409).json({ success: false, error: 'El cartón no está marcado como vendido' });
+    }
+
+    await pool.query(`
+      UPDATE cards SET is_sold = false, sold_at = NULL, buyer_name = NULL, buyer_phone = NULL
+      WHERE id = $1
+    `, [req.params.id]);
+
+    const { rows: updatedRows } = await pool.query('SELECT * FROM cards WHERE id = $1', [req.params.id]);
+    const updated = updatedRows[0] as BingoCard;
+
+    logActivity(pool, auditFromReq(req, 'card_unsold', 'cards', { card_id: card.id, card_code: card.card_code }));
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Error desactivando cartón:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
 // GET /api/cards/search/:code - Buscar cartón por código
 router.get('/search/:code', async (req: Request, res: Response) => {
   try {

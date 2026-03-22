@@ -90,6 +90,9 @@ export const verifyEventCards = (eventId: number) =>
 export const sellCard = (id: number, data: { buyer_name?: string; buyer_phone?: string }) =>
   api.put<ApiResponse<BingoCard>>(`/cards/${id}/sell`, data).then(r => r.data);
 
+export const unsellCard = (id: number) =>
+  api.put<ApiResponse<BingoCard>>(`/cards/${id}/unsell`).then(r => r.data);
+
 export const searchCard = (code: string) =>
   api.get<ApiResponse<BingoCard>>(`/cards/search/${code}`).then(r => r.data);
 

@@ -12,7 +12,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { searchCard, sellCard } from '@/services/api';
+import { searchCard, sellCard, unsellCard } from '@/services/api';
 import type { BingoCard, CardNumbers } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -36,7 +36,9 @@ export default function CardActivation() {
   const [card, setCard] = useState<BingoCard | null>(null);
   const [error, setError] = useState('');
   const [sold, setSold] = useState(false);
+  const [unsold, setUnsold] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showUnsellConfirm, setShowUnsellConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -75,18 +77,41 @@ export default function CardActivation() {
     },
   });
 
+  const unsellMutation = useMutation({
+    mutationFn: () => {
+      if (!card) throw new Error('No card');
+      return unsellCard(card.id);
+    },
+    onSuccess: (data) => {
+      if (data.success && data.data) {
+        setCard(data.data);
+        setUnsold(true);
+        toast.success(`Carton #${data.data.card_number} (${data.data.serial}) desactivado`);
+      }
+    },
+    onError: (err: Error & { response?: { data?: { error?: string } } }) => {
+      toast.error(err.response?.data?.error || 'Error al desactivar el carton');
+    },
+  });
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchValue.trim().length < 3) return;
     setCard(null);
     setError('');
     setSold(false);
+    setUnsold(false);
     searchMutation.mutate();
   };
 
   const handleConfirmActivate = () => {
     setShowConfirm(false);
     sellMutation.mutate();
+  };
+
+  const handleConfirmUnsell = () => {
+    setShowUnsellConfirm(false);
+    unsellMutation.mutate();
   };
 
   const handleReset = () => {
@@ -211,7 +236,7 @@ export default function CardActivation() {
 
       {/* Card Found */}
       {card && (
-        <Card className={sold ? 'border-emerald-500/50 shadow-emerald-500/10 shadow-lg' : ''}>
+        <Card className={sold ? 'border-emerald-500/50 shadow-emerald-500/10 shadow-lg' : unsold ? 'border-orange-500/50 shadow-orange-500/10 shadow-lg' : ''}>
           <CardContent className="pt-6 space-y-6">
             {/* Status banner */}
             {sold ? (
@@ -221,6 +246,16 @@ export default function CardActivation() {
                   <p className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">Carton Activado</p>
                   <p className="text-sm text-emerald-600/80 dark:text-emerald-400/80">
                     Marcado como vendido exitosamente
+                  </p>
+                </div>
+              </div>
+            ) : unsold ? (
+              <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
+                <XCircle className="text-orange-500 h-8 w-8 shrink-0" />
+                <div>
+                  <p className="font-bold text-orange-600 dark:text-orange-400 text-lg">Carton Desactivado</p>
+                  <p className="text-sm text-orange-600/80 dark:text-orange-400/80">
+                    Marcado como disponible exitosamente
                   </p>
                 </div>
               </div>
@@ -278,6 +313,29 @@ export default function CardActivation() {
 
             <Separator />
 
+            {/* Deactivate button - if already sold */}
+            {card.is_sold && !unsold && (
+              <Button
+                variant="destructive"
+                size="lg"
+                className="w-full"
+                onClick={() => setShowUnsellConfirm(true)}
+                disabled={unsellMutation.isPending}
+              >
+                {unsellMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Desactivando...
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="mr-2 h-5 w-5" />
+                    Desactivar (Marcar como Disponible)
+                  </>
+                )}
+              </Button>
+            )}
+
             {/* Activate button - only if not already sold */}
             {!card.is_sold && !sold && (
               <Button
@@ -301,11 +359,11 @@ export default function CardActivation() {
               </Button>
             )}
 
-            {/* New activation after success */}
-            {sold && (
+            {/* New search after success */}
+            {(sold || unsold) && (
               <Button onClick={handleReset} size="lg" className="w-full">
                 <ScanLine className="mr-2 h-5 w-5" />
-                Activar Otro Carton
+                Buscar Otro Carton
               </Button>
             )}
           </CardContent>
@@ -331,6 +389,30 @@ export default function CardActivation() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmActivate}>
               Si, Activar como Vendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unsell Confirmation Dialog */}
+      <AlertDialog open={showUnsellConfirm} onOpenChange={setShowUnsellConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desactivar carton</AlertDialogTitle>
+            <AlertDialogDescription>
+              {card && (
+                <>
+                  ¿Estas seguro que quieres desactivar el carton <strong className="text-foreground">#{card.card_number}</strong> (Serie: <strong className="text-foreground">{card.serial}</strong>)?
+                  <br /><br />
+                  Esta accion lo marcara como disponible y eliminara los datos del comprador.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmUnsell} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Si, Desactivar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
