@@ -8,6 +8,9 @@ const LOGO_CANDIDATES = [
   resolve(process.cwd(), 'client/public/logo.png'),
   resolve(process.cwd(), 'client/dist/logo.png'),
   resolve(process.cwd(), 'logo.png'),
+  resolve(process.cwd(), '../client/public/logo.png'),
+  resolve(process.cwd(), '../client/dist/logo.png'),
+  resolve(process.cwd(), '../logo.png'),
 ];
 function getLogoPath(): string {
   return LOGO_CANDIDATES.find(p => existsSync(p)) || '';
