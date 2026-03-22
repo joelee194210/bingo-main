@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Gamepad2, Play, Clock, Trophy, Search, Trash2 } from 'lucide-react';
+import { Gamepad2, Play, Clock, Trophy, Search, Trash2, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '@/services/api';
-import { getGames, getEvents } from '@/services/api';
+import { getGames, getEvents, downloadGameReportPDF } from '@/services/api';
 import { GAME_TYPE_LABELS, STATUS_LABELS, type GameStatus } from '@/types';
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,6 +35,29 @@ export default function GameList() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null);
+
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
+  const handleDownloadReport = async (gameId: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDownloadingId(gameId);
+    try {
+      const blob = await downloadGameReportPDF(gameId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_juego_${gameId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Error al descargar el reporte');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/games/${id}`),
@@ -263,13 +286,27 @@ export default function GameList() {
                       <Progress value={progressPercent} className="h-2" />
                     </div>
 
-                    {/* Delete button — solo admin */}
-                    {isRole('admin') && (
-                      <div className="mt-3 pt-3 border-t">
+                    {/* Actions */}
+                    <div className="mt-3 pt-3 border-t flex gap-2">
+                      {/* Descargar reporte — juegos completados o cancelados */}
+                      {(game.status === 'completed' || game.status === 'cancelled') && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={(e) => handleDownloadReport(game.id, e)}
+                          disabled={downloadingId === game.id}
+                        >
+                          <FileDown className="h-4 w-4 mr-1" />
+                          {downloadingId === game.id ? 'Generando...' : 'Reporte PDF'}
+                        </Button>
+                      )}
+                      {/* Eliminar — solo admin */}
+                      {isRole('admin') && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -277,11 +314,10 @@ export default function GameList() {
                           }}
                           disabled={deleteMutation.isPending}
                         >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Eliminar
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               </Link>
