@@ -59,7 +59,7 @@ export default function VentaGeneralPage() {
   const [inputRef, setInputRef] = useState('');
   const [items, setItems] = useState<ItemVenta[]>([]);
   const [buyerName, setBuyerName] = useState('');
-  const [buyerEmail, setBuyerEmail] = useState('');
+  const [buyerCedula, setBuyerCedula] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
   const [firmaEntrega, setFirmaEntrega] = useState<string | null>(null);
   const [firmaRecibe, setFirmaRecibe] = useState<string | null>(null);
@@ -194,7 +194,7 @@ export default function VentaGeneralPage() {
         almacen_id: currentAlmacen.almacen_id,
         items: validItems.map(i => ({ tipo: i.tipo, referencia: i.referencia })),
         buyer_name: buyerName.trim(),
-        buyer_cedula: buyerEmail.trim() || undefined,
+        buyer_cedula: buyerCedula.trim() || undefined,
         buyer_phone: buyerPhone.trim() || undefined,
         firma_entrega: firmaEntrega || undefined,
         firma_recibe: firmaRecibe || undefined,
@@ -216,7 +216,7 @@ export default function VentaGeneralPage() {
         if (documentoId) await downloadPdf(documentoId);
         setItems([]);
         setBuyerName('');
-        setBuyerEmail('');
+        setBuyerCedula('');
         setBuyerPhone('');
         setFirmaEntrega(null);
         setFirmaRecibe(null);
@@ -338,12 +338,11 @@ export default function VentaGeneralPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Email</Label>
+                  <Label>Cedula</Label>
                   <Input
-                    type="email"
-                    value={buyerEmail}
-                    onChange={(e) => setBuyerEmail(e.target.value)}
-                    placeholder="correo@ejemplo.com"
+                    value={buyerCedula}
+                    onChange={(e) => setBuyerCedula(e.target.value)}
+                    placeholder="Cedula del comprador"
                   />
                 </div>
                 <div className="space-y-2">

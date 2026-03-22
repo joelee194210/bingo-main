@@ -452,7 +452,13 @@ router.post('/asignaciones/:id/cancelar', requirePermission('inventory:move'), a
 router.post('/vender/carton/:cartonId', requirePermission('inventory:sell'), async (req, res) => {
   try {
     const pool = getPool();
-    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const reqUser = (req as any).user;
+    const userId = reqUser.id;
+    // Verificar que el usuario tiene acceso al almacén del cartón
+    const cardResult = await pool.query('SELECT almacen_id FROM cards WHERE id = $1', [req.params.cartonId]);
+    if (cardResult.rows[0]?.almacen_id && !await verificarAccesoAlmacen(pool, userId, reqUser.role, [cardResult.rows[0].almacen_id])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
+    }
     const data = await inv.venderCarton(pool, parseInt(req.params.cartonId as string, 10), userId, req.body);
     res.json({ success: true, data });
   } catch (error) {
@@ -463,7 +469,13 @@ router.post('/vender/carton/:cartonId', requirePermission('inventory:sell'), asy
 router.post('/vender/todos/:asignacionId', requirePermission('inventory:sell'), async (req, res) => {
   try {
     const pool = getPool();
-    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const reqUser = (req as any).user;
+    const userId = reqUser.id;
+    // Verificar que el usuario tiene acceso al almacén de la asignación
+    const asigResult = await pool.query('SELECT almacen_id FROM inv_asignaciones WHERE id = $1', [req.params.asignacionId]);
+    if (asigResult.rows[0]?.almacen_id && !await verificarAccesoAlmacen(pool, userId, reqUser.role, [asigResult.rows[0].almacen_id])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
+    }
     const data = await inv.venderTodos(pool, parseInt(req.params.asignacionId as string, 10), userId, req.body);
     res.json({ success: true, data });
   } catch (error) {

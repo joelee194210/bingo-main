@@ -73,9 +73,9 @@ export function generateMovimientoPdf(data: MovimientoPdfData): Promise<string> 
     const pageWidth = doc.page.width - 100; // margins
 
     // Logo + Header
-    if (getLogoPath()) {
-      doc.image(getLogoPath(), doc.page.width / 2 - 40, 30, { width: 80 });
-      doc.moveDown(4);
+    const logoFile = getLogoPath();
+    if (logoFile) {
+      try { doc.image(logoFile, doc.page.width / 2 - 40, 30, { width: 80 }); doc.moveDown(4); } catch {}
     }
     doc.fontSize(16).font('Helvetica-Bold')
       .text(ACCION_TITULOS[data.accion] || 'ACTA DE MOVIMIENTO DE INVENTARIO', { align: 'center' });
@@ -297,9 +297,9 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
     const margin = 50;
 
     // ---- HEADER ----
-    if (getLogoPath()) {
-      doc.image(getLogoPath(), doc.page.width / 2 - 40, 30, { width: 80 });
-      doc.moveDown(4);
+    const logoFile2 = getLogoPath();
+    if (logoFile2) {
+      try { doc.image(logoFile2, doc.page.width / 2 - 40, 30, { width: 80 }); doc.moveDown(4); } catch {}
     }
     doc.fontSize(14).font('Helvetica-Bold')
       .text(ACCION_TITULOS[data.accion] || 'ACTA DE MOVIMIENTO DE INVENTARIO', { align: 'center' });

@@ -129,6 +129,7 @@ export default function CardActivation() {
       setCard(null);
       setError('');
       setSold(false);
+      setUnsold(false);
       searchMutation.mutate();
     }
   };

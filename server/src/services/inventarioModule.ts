@@ -144,7 +144,7 @@ export async function getLoteriaDashboard(pool: Pool, eventId: number) {
     ) cards_stock ON cards_stock.almacen_id = a.id
     LEFT JOIN (
       SELECT almacen_id, COUNT(*) AS vendidos
-      FROM cards WHERE event_id = $1 AND is_sold = true
+      FROM cards WHERE event_id = $1 AND is_sold = true AND almacen_id IS NOT NULL
       GROUP BY almacen_id
     ) sold ON sold.almacen_id = a.id
     WHERE a.event_id = $1 AND a.es_agencia_loteria = true AND a.is_active = true
@@ -256,7 +256,7 @@ export async function getDashboardGeneral(pool: Pool, eventId: number) {
     ) cards_stock ON cards_stock.almacen_id = a.id
     LEFT JOIN (
       SELECT almacen_id, COUNT(*) AS vendidos
-      FROM cards WHERE event_id = $1 AND is_sold = true
+      FROM cards WHERE event_id = $1 AND is_sold = true AND almacen_id IS NOT NULL
       GROUP BY almacen_id
     ) sold ON sold.almacen_id = a.id
     WHERE a.event_id = $1 AND a.is_active = true
@@ -349,7 +349,7 @@ export async function getAlmacenTree(pool: Pool, eventId: number): Promise<Almac
     ) cards_stock ON cards_stock.almacen_id = a.id
     LEFT JOIN (
       SELECT almacen_id, COUNT(*) AS vendidos
-      FROM cards WHERE event_id = $1 AND is_sold = true
+      FROM cards WHERE event_id = $1 AND is_sold = true AND almacen_id IS NOT NULL
       GROUP BY almacen_id
     ) sold ON sold.almacen_id = a.id
     WHERE a.event_id = $1

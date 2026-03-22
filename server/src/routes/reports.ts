@@ -348,8 +348,9 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
     const margin = 50;
 
     // Header
-    if (getLogoPath()) {
-      doc.image(getLogoPath(), doc.page.width / 2 - 40, 30, { width: 80 });
+    const salesLogoFile = getLogoPath();
+    if (salesLogoFile) {
+      try { doc.image(salesLogoFile, doc.page.width / 2 - 40, 30, { width: 80 }); } catch {}
       doc.moveDown(4);
     }
     doc.fontSize(14).font('Helvetica-Bold').text('REPORTE DE VENTAS', { align: 'center' });

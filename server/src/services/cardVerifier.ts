@@ -411,22 +411,30 @@ export async function findWinners(
     buyerName?: string;
   }> = [];
 
-  // Verificar cada patrón con condiciones JSONB nativas (mucho más rápido que función PL/pgSQL)
+  const SAFE_COLS = ['B', 'I', 'N', 'G', 'O'] as const;
+
+  // Verificar cada patrón con condiciones JSONB nativas
   for (const pattern of patterns) {
-    // Construir condiciones WHERE para cada posición del patrón
     const conditions: string[] = [];
     for (const [row, col] of pattern.positions) {
+      // Validar rango para evitar SQL injection
+      if (col < 0 || col > 4 || row < 0 || row > 4) continue;
       // FREE center: siempre cuenta como match
-      if (row === 2 && col === 2 && useFreeCenter) {
-        continue;
-      }
-      const colName = COLUMNS[col];
-      // Para columna N con FREE center (4 elementos), ajustar índice
-      let idx = row;
+      if (row === 2 && col === 2 && useFreeCenter) continue;
+
+      const colName = SAFE_COLS[col];
+
       if (col === 2 && useFreeCenter) {
-        idx = row < 2 ? row : row - 1;
+        // N column con FREE center (4 elementos): ajustar índice
+        const idx4 = row < 2 ? row : row - 1;
+        // N column sin FREE (5 elementos): índice directo
+        // Manejar ambos tipos de tarjeta en una sola condición
+        conditions.push(
+          `(CASE WHEN jsonb_array_length(numbers->'N') = 4 THEN (numbers->'${colName}'->>${idx4})::int ELSE (numbers->'${colName}'->>${row})::int END = ANY($2::int[]))`
+        );
+      } else {
+        conditions.push(`(numbers->'${colName}'->>${row})::int = ANY($2::int[])`);
       }
-      conditions.push(`(numbers->'${colName}'->>${idx})::int = ANY($2::int[])`);
     }
 
     if (conditions.length === 0) continue;

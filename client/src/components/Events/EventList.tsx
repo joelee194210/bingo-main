@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Plus, Trash2, Eye, CreditCard, Loader2, Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { getEvents, createEvent, deleteEvent } from '@/services/api';
 import { EVENT_STATUS_LABELS, type EventStatus } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,10 @@ export default function EventList() {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       setShowModal(false);
       setNewEvent({ name: '', description: '', use_free_center: true });
+      toast.success('Evento creado');
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      toast.error(err.response?.data?.error || 'Error al crear evento');
     },
   });
 

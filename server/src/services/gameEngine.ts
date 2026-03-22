@@ -225,7 +225,7 @@ export async function callBall(
     validationCode: string;
     winningPattern: string;
     buyerName?: string;
-  }>;
+  }> = [];
 
   const client = await pool.connect();
   try {

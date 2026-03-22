@@ -242,7 +242,7 @@ export default function Login() {
               <div className="pt-1">
                 <Button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || captchaEnabled === null}
                   className="w-full h-11 rounded-xl text-[15px] font-semibold"
                   size="lg"
                 >
