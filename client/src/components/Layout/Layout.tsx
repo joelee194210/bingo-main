@@ -26,11 +26,20 @@ import {
   BookOpen,
   ClipboardList,
   Eye,
+  KeyRound,
+  Loader2,
 } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
+import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_LABELS } from '@/types/auth';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -103,12 +112,52 @@ const navGroups = [
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const resetPasswordForm = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    if (!currentPassword || !newPassword) {
+      setPasswordError('Todos los campos son requeridos');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('La nueva contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Las contraseñas no coinciden');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await api.post('/auth/change-password', { current_password: currentPassword, new_password: newPassword });
+      toast.success('Contraseña cambiada exitosamente');
+      setShowPasswordDialog(false);
+      resetPasswordForm();
+    } catch (err: any) {
+      setPasswordError(err.response?.data?.error || 'Error al cambiar contraseña');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   const visibleGroups = navGroups
@@ -248,6 +297,13 @@ export default function Layout() {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                onClick={() => { resetPasswordForm(); setShowPasswordDialog(true); }}
+                className="cursor-pointer"
+              >
+                <KeyRound className="mr-2 h-4 w-4" />
+                Cambiar Contraseña
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 onClick={handleLogout}
                 className="text-destructive focus:text-destructive cursor-pointer"
               >
@@ -256,6 +312,58 @@ export default function Layout() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Cambiar contraseña dialog */}
+          <Dialog open={showPasswordDialog} onOpenChange={(v) => { if (!v) resetPasswordForm(); setShowPasswordDialog(v); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Cambiar Contraseña</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                {passwordError && (
+                  <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-lg">
+                    {passwordError}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Contraseña actual</Label>
+                  <Input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Ingrese su contraseña actual"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Nueva contraseña</Label>
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Minimo 8 caracteres"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Confirmar nueva contraseña</Label>
+                  <Input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repita la nueva contraseña"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { resetPasswordForm(); setShowPasswordDialog(false); }}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleChangePassword} disabled={changingPassword}>
+                  {changingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Cambiar Contraseña
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </header>
 
         {/* Page content */}
