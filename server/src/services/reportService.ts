@@ -9,7 +9,9 @@ const LOGO_CANDIDATES = [
   resolve(process.cwd(), 'client/dist/logo.png'),
   resolve(process.cwd(), 'logo.png'),
 ];
-const LOGO_PATH = LOGO_CANDIDATES.find(p => existsSync(p)) || '';
+function getLogoPath(): string {
+  return LOGO_CANDIDATES.find(p => existsSync(p)) || '';
+}
 import type { BingoGame } from '../types/index.js';
 
 const REPORTS_DIR = join(process.cwd(), 'reports');
@@ -266,8 +268,8 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
     doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
 
     // Logo
-    if (existsSync(LOGO_PATH)) {
-      doc.image(LOGO_PATH, doc.page.width / 2 - 55, 20, { width: 110 });
+    if (getLogoPath()) {
+      doc.image(getLogoPath(), doc.page.width / 2 - 55, 20, { width: 110 });
       doc.y = 130;
     } else {
       doc.y = 30;
@@ -339,8 +341,8 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
       doc.addPage();
       doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
 
-      if (existsSync(LOGO_PATH)) {
-        doc.image(LOGO_PATH, m, 15, { width: 60 });
+      if (getLogoPath()) {
+        doc.image(getLogoPath(), m, 15, { width: 60 });
       }
       doc.fontSize(16).font('Helvetica-Bold').fillColor(ACCENT).text('CARTONES GANADORES', m, 25, { width: pw, align: 'center' });
       doc.fillColor('#333333');
@@ -410,8 +412,8 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
     doc.addPage();
     doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
 
-    if (existsSync(LOGO_PATH)) {
-      doc.image(LOGO_PATH, m, 15, { width: 60 });
+    if (getLogoPath()) {
+      doc.image(getLogoPath(), m, 15, { width: 60 });
     }
     doc.fontSize(16).font('Helvetica-Bold').fillColor(ACCENT).text('CERTIFICACIÓN DE BALOTAS', m, 25, { width: pw, align: 'center' });
     doc.fillColor('#64748b').fontSize(9).font('Helvetica').text('Orden cronológico de balotas llamadas', m, 45, { width: pw, align: 'center' });

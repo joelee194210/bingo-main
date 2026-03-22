@@ -8,7 +8,9 @@ const LOGO_CANDIDATES = [
   resolve(process.cwd(), 'client/dist/logo.png'),
   resolve(process.cwd(), 'logo.png'),
 ];
-const LOGO_PATH = LOGO_CANDIDATES.find(p => existsSync(p)) || '';
+function getLogoPath(): string {
+  return LOGO_CANDIDATES.find(p => existsSync(p)) || '';
+}
 
 if (!existsSync(MOVIMIENTOS_DIR)) {
   mkdirSync(MOVIMIENTOS_DIR, { recursive: true });
@@ -68,8 +70,8 @@ export function generateMovimientoPdf(data: MovimientoPdfData): Promise<string> 
     const pageWidth = doc.page.width - 100; // margins
 
     // Logo + Header
-    if (existsSync(LOGO_PATH)) {
-      doc.image(LOGO_PATH, doc.page.width / 2 - 40, 30, { width: 80 });
+    if (getLogoPath()) {
+      doc.image(getLogoPath(), doc.page.width / 2 - 40, 30, { width: 80 });
       doc.moveDown(4);
     }
     doc.fontSize(16).font('Helvetica-Bold')
@@ -292,8 +294,8 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
     const margin = 50;
 
     // ---- HEADER ----
-    if (existsSync(LOGO_PATH)) {
-      doc.image(LOGO_PATH, doc.page.width / 2 - 40, 30, { width: 80 });
+    if (getLogoPath()) {
+      doc.image(getLogoPath(), doc.page.width / 2 - 40, 30, { width: 80 });
       doc.moveDown(4);
     }
     doc.fontSize(14).font('Helvetica-Bold')

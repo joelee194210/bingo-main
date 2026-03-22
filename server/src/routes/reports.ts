@@ -9,7 +9,9 @@ const LOGO_CANDIDATES = [
   resolve(process.cwd(), 'client/dist/logo.png'),
   resolve(process.cwd(), 'logo.png'),
 ];
-const LOGO_PATH = LOGO_CANDIDATES.find(p => existsSync(p)) || '';
+function getLogoPath(): string {
+  return LOGO_CANDIDATES.find(p => existsSync(p)) || '';
+}
 import {
   generateGameReport,
   generateReportPDF,
@@ -343,8 +345,8 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
     const margin = 50;
 
     // Header
-    if (existsSync(LOGO_PATH)) {
-      doc.image(LOGO_PATH, doc.page.width / 2 - 40, 30, { width: 80 });
+    if (getLogoPath()) {
+      doc.image(getLogoPath(), doc.page.width / 2 - 40, 30, { width: 80 });
       doc.moveDown(4);
     }
     doc.fontSize(14).font('Helvetica-Bold').text('REPORTE DE VENTAS', { align: 'center' });
