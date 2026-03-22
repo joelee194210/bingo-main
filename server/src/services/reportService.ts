@@ -268,10 +268,17 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
     doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
 
     // Logo
-    if (getLogoPath()) {
-      doc.image(getLogoPath(), doc.page.width / 2 - 55, 20, { width: 110 });
-      doc.y = 130;
+    const logoFile = getLogoPath();
+    if (logoFile) {
+      try {
+        doc.image(logoFile, doc.page.width / 2 - 55, 20, { width: 110 });
+        doc.y = 130;
+      } catch (logoErr) {
+        console.error('Error cargando logo en PDF:', logoErr, 'path:', logoFile);
+        doc.y = 30;
+      }
     } else {
+      console.warn('Logo no encontrado. Buscado en:', LOGO_CANDIDATES);
       doc.y = 30;
     }
 
@@ -332,17 +339,13 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
       doc.text(`Duración total: ${mins} minutos ${secs} segundos`);
     }
 
-    // Footer page 1
-    doc.fontSize(7).fillColor('#94a3b8')
-      .text(`Generado por MegabingoTV — ${new Date().toLocaleString('es')}`, m, doc.page.height - 30, { width: pw, align: 'center' });
-
     // ==================== PAGE 2: GANADORES ====================
     if (report.winners.length > 0) {
       doc.addPage();
       doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
 
-      if (getLogoPath()) {
-        doc.image(getLogoPath(), m, 15, { width: 60 });
+      if (logoFile) {
+        try { doc.image(logoFile, m, 15, { width: 60 }); } catch {}
       }
       doc.fontSize(16).font('Helvetica-Bold').fillColor(ACCENT).text('CARTONES GANADORES', m, 25, { width: pw, align: 'center' });
       doc.fillColor('#333333');
@@ -403,17 +406,14 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
       });
 
       doc.y = ty + 5;
-
-      doc.fontSize(7).fillColor('#94a3b8')
-        .text(`Generado por MegabingoTV — ${new Date().toLocaleString('es')}`, m, doc.page.height - 30, { width: pw, align: 'center' });
     }
 
     // ==================== PAGE 3: CERTIFICACIÓN BALOTAS ====================
     doc.addPage();
     doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
 
-    if (getLogoPath()) {
-      doc.image(getLogoPath(), m, 15, { width: 60 });
+    if (logoFile) {
+      try { doc.image(logoFile, m, 15, { width: 60 }); } catch {}
     }
     doc.fontSize(16).font('Helvetica-Bold').fillColor(ACCENT).text('CERTIFICACIÓN DE BALOTAS', m, 25, { width: pw, align: 'center' });
     doc.fillColor('#64748b').fontSize(9).font('Helvetica').text('Orden cronológico de balotas llamadas', m, 45, { width: pw, align: 'center' });
@@ -470,9 +470,6 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
       .text(`Generado por MegabingoTV`, { width: pw / 2 - 20, align: 'center' })
       .text(`${new Date().toLocaleString('es')}`, { width: pw / 2 - 20, align: 'center' })
       .text(`ID del Juego: ${report.game_id}`, { width: pw / 2 - 20, align: 'center' });
-
-    doc.fontSize(7).fillColor('#94a3b8')
-      .text(`Generado por MegabingoTV — ${new Date().toLocaleString('es')}`, m, doc.page.height - 30, { width: pw, align: 'center' });
 
     doc.end();
 
