@@ -4,7 +4,12 @@ import { existsSync } from 'fs';
 import { resolve } from 'path';
 import { getPool } from '../database/init.js';
 
-const LOGO_PATH = resolve(process.cwd(), 'client/public/logo.png');
+const LOGO_CANDIDATES = [
+  resolve(process.cwd(), 'client/public/logo.png'),
+  resolve(process.cwd(), 'client/dist/logo.png'),
+  resolve(process.cwd(), 'logo.png'),
+];
+const LOGO_PATH = LOGO_CANDIDATES.find(p => existsSync(p)) || '';
 import {
   generateGameReport,
   generateReportPDF,

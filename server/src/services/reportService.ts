@@ -3,7 +3,13 @@ import PDFDocument from 'pdfkit';
 import { createWriteStream, existsSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
 
-const LOGO_PATH = resolve(process.cwd(), 'client/public/logo.png');
+// Buscar logo en múltiples ubicaciones (dev: client/public, prod: client/dist)
+const LOGO_CANDIDATES = [
+  resolve(process.cwd(), 'client/public/logo.png'),
+  resolve(process.cwd(), 'client/dist/logo.png'),
+  resolve(process.cwd(), 'logo.png'),
+];
+const LOGO_PATH = LOGO_CANDIDATES.find(p => existsSync(p)) || '';
 import type { BingoGame } from '../types/index.js';
 
 const REPORTS_DIR = join(process.cwd(), 'reports');
@@ -394,8 +400,7 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
         ty += 20;
       });
 
-      // Borde de tabla
-      doc.rect(m, doc.y - 0.5, pw, ty - doc.y + 0.5).stroke(BORDER);
+      doc.y = ty + 5;
 
       doc.fontSize(7).fillColor('#94a3b8')
         .text(`Generado por MegabingoTV — ${new Date().toLocaleString('es')}`, m, doc.page.height - 30, { width: pw, align: 'center' });

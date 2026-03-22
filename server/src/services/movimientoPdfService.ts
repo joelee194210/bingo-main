@@ -3,7 +3,12 @@ import { existsSync, mkdirSync, createWriteStream } from 'fs';
 import { join, resolve } from 'path';
 
 const MOVIMIENTOS_DIR = join(process.cwd(), 'exports', 'movimientos');
-const LOGO_PATH = resolve(process.cwd(), 'client/public/logo.png');
+const LOGO_CANDIDATES = [
+  resolve(process.cwd(), 'client/public/logo.png'),
+  resolve(process.cwd(), 'client/dist/logo.png'),
+  resolve(process.cwd(), 'logo.png'),
+];
+const LOGO_PATH = LOGO_CANDIDATES.find(p => existsSync(p)) || '';
 
 if (!existsSync(MOVIMIENTOS_DIR)) {
   mkdirSync(MOVIMIENTOS_DIR, { recursive: true });
