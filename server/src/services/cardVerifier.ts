@@ -2,6 +2,11 @@ import type { Pool, PoolClient } from 'pg';
 import type { CardNumbers, Position, GameType } from '../types/index.js';
 import { getNumberAtPosition, calculateCardHash } from './cardGenerator.js';
 
+// Helper: parsea numbers que puede ser string (TEXT) u objeto (JSONB)
+export function parseNumbers(numbers: string | CardNumbers): CardNumbers {
+  return typeof numbers === 'string' ? JSON.parse(numbers) : numbers;
+}
+
 // Patrones de victoria
 const WIN_PATTERNS_DATA: Record<string, { name: string; positions: Position[] }> = {
   horizontal_1: { name: 'Línea Horizontal 1', positions: [[0, 0], [0, 1], [0, 2], [0, 3], [0, 4]] },
@@ -335,6 +340,17 @@ export function checkCardWinner(
 /**
  * Busca todos los cartones ganadores en un evento
  */
+// Número mínimo de balotas necesarias para cada tipo de juego
+const MIN_BALLS_FOR_PATTERN: Record<string, number> = {
+  horizontal_line: 5,
+  vertical_line: 5,
+  diagonal: 5,
+  four_corners: 4,
+  x_pattern: 9,
+  blackout: 24, // 25 - 1 FREE
+  custom: 1,
+};
+
 export async function findWinners(
   pool: Pool | PoolClient,
   eventId: number,
@@ -352,7 +368,38 @@ export async function findWinners(
   winningPattern: string;
   buyerName?: string;
 }>> {
-  const calledSet = new Set(calledBalls);
+  // Early exit: no verificar si no hay suficientes balotas para el patrón
+  const minBalls = MIN_BALLS_FOR_PATTERN[gameType] || 4;
+  if (calledBalls.length < minBalls) {
+    return [];
+  }
+
+  // Obtener configuración del evento
+  const eventResult = await pool.query('SELECT use_free_center FROM events WHERE id = $1', [eventId]);
+  const event = eventResult.rows[0] as { use_free_center: boolean } | undefined;
+  const useFreeCenter = event?.use_free_center !== false;
+
+  const patterns = gameType === 'custom' && customPattern
+    ? [{ name: 'Patrón Personalizado', positions: customPattern }]
+    : Object.entries(WIN_PATTERNS_DATA)
+        .filter(([key]) => {
+          if (gameType === 'horizontal_line') return key.startsWith('horizontal_');
+          if (gameType === 'vertical_line') return key.startsWith('vertical_');
+          if (gameType === 'diagonal') return key.startsWith('diagonal_');
+          if (gameType === 'four_corners') return key === 'four_corners';
+          if (gameType === 'x_pattern') return key === 'x_pattern';
+          if (gameType === 'blackout') return false; // handled separately
+          return false;
+        })
+        .map(([, v]) => v);
+
+  // Para blackout, usar el patrón completo
+  if (gameType === 'blackout') {
+    patterns.push({ name: 'Cartón Lleno', positions: BLACKOUT_PATTERN });
+  }
+
+  const soldFilter = isPracticeMode ? '' : 'AND is_sold = TRUE';
+  const calledArray = `{${calledBalls.join(',')}}`;
   const winners: Array<{
     cardId: number;
     cardCode: string;
@@ -363,54 +410,32 @@ export async function findWinners(
     buyerName?: string;
   }> = [];
 
-  // Obtener configuración del evento
-  const eventResult = await pool.query('SELECT use_free_center FROM events WHERE id = $1', [eventId]);
-  const event = eventResult.rows[0] as { use_free_center: boolean } | undefined;
-  const useFreeCenter = event?.use_free_center !== false; // Por defecto true
+  // Verificar cada patrón con SQL — PostgreSQL escanea sin cargar filas a Node
+  for (const pattern of patterns) {
+    // Convertir posiciones a formato PostgreSQL: {{row,col},{row,col},...}
+    const pgPattern = `{${pattern.positions.map(([r, c]) => `{${r},${c}}`).join(',')}}`;
 
-  // Procesar cartones en batches para evitar OOM con muchos cartones (600K+)
-  const BATCH_SIZE = 10000;
-  const baseQuery = isPracticeMode
-    ? 'SELECT id, card_number, serial, card_code, validation_code, numbers, buyer_name FROM cards WHERE event_id = $1'
-    : 'SELECT id, card_number, serial, card_code, validation_code, numbers, buyer_name FROM cards WHERE event_id = $1 AND is_sold = TRUE';
+    const result = await pool.query(`
+      SELECT id, card_code, card_number, serial, validation_code, buyer_name
+      FROM cards
+      WHERE event_id = $1 ${soldFilter}
+        AND bingo_check_pattern(numbers, $2::INT[], $3::INT[][], $4)
+    `, [eventId, calledArray, pgPattern, useFreeCenter]);
 
-  let offset = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const cardsResult = await pool.query(
-      `${baseQuery} ORDER BY id LIMIT $2 OFFSET $3`,
-      [eventId, BATCH_SIZE, offset]
-    );
-    const cards = cardsResult.rows as Array<{
-      id: number;
-      card_number: number;
-      serial: string;
-      card_code: string;
-      validation_code: string;
-      numbers: string;
-      buyer_name: string | null;
-    }>;
-
-    for (const card of cards) {
-      const numbers: CardNumbers = JSON.parse(card.numbers);
-      const result = checkCardWinner(numbers, calledSet, gameType, customPattern, useFreeCenter);
-
-      if (result.isWinner) {
+    for (const row of result.rows) {
+      // Evitar duplicados si un cartón gana por múltiples patrones
+      if (!winners.some(w => w.cardId === row.id)) {
         winners.push({
-          cardId: card.id,
-          cardCode: card.card_code,
-          cardNumber: card.card_number,
-          serial: card.serial,
-          validationCode: card.validation_code,
-          winningPattern: result.winningPattern!,
-          buyerName: card.buyer_name || undefined,
+          cardId: row.id,
+          cardCode: row.card_code,
+          cardNumber: row.card_number,
+          serial: row.serial,
+          validationCode: row.validation_code,
+          winningPattern: pattern.name,
+          buyerName: row.buyer_name || undefined,
         });
       }
     }
-
-    hasMore = cards.length === BATCH_SIZE;
-    offset += BATCH_SIZE;
   }
 
   return winners;
@@ -460,7 +485,7 @@ export async function validateCard(
       id: card.id,
       cardNumber: card.card_number,
       eventId: card.event_id,
-      numbers: JSON.parse(card.numbers),
+      numbers: parseNumbers(card.numbers),
       isSold: !!card.is_sold,
     },
   };
@@ -482,7 +507,7 @@ export async function verifyCardIntegrity(
     return { valid: false, error: 'Cartón no encontrado' };
   }
 
-  const numbers: CardNumbers = JSON.parse(card.numbers);
+  const numbers: CardNumbers = parseNumbers(card.numbers);
   const recalculatedHash = calculateCardHash(numbers);
 
   if (recalculatedHash !== card.numbers_hash) {

@@ -76,9 +76,9 @@ router.get('/:card_code', async (req: Request, res: Response) => {
   }
 });
 
-function renderNumbers(numbersJson: string, useFreeCenter: boolean): string {
+function renderNumbers(numbersJson: string | Record<string, number[]>, useFreeCenter: boolean): string {
   try {
-    const numbers: number[][] = JSON.parse(numbersJson);
+    const numbers: number[][] = typeof numbersJson === 'string' ? JSON.parse(numbersJson) : Object.values(numbersJson);
     const cols = ['B', 'I', 'N', 'G', 'O'];
     const colColors = ['#e53e3e', '#dd6b20', '#38a169', '#3182ce', '#805ad5'];
     let html = '<table class="bingo-table"><thead><tr>';

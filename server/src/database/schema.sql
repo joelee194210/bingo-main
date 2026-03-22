@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS cards (
     serial TEXT NOT NULL DEFAULT '',
     card_code TEXT NOT NULL UNIQUE,
     validation_code TEXT NOT NULL UNIQUE,
-    numbers TEXT NOT NULL,
+    numbers JSONB NOT NULL,
     numbers_hash TEXT NOT NULL,
     promo_text TEXT,
     is_sold BOOLEAN DEFAULT FALSE,

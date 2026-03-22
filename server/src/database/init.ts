@@ -267,4 +267,74 @@ async function runMigrations(p: Pool): Promise<void> {
     await p.query('CREATE INDEX IF NOT EXISTS idx_users_created_by ON users(created_by)');
     console.log('✅ Migración aplicada: created_by agregado a users');
   }
+
+  // Migration: numbers TEXT → JSONB + función SQL para verificar ganadores en la DB
+  const colType = await p.query(
+    `SELECT data_type FROM information_schema.columns WHERE table_name = 'cards' AND column_name = 'numbers'`
+  );
+  if (colType.rows[0]?.data_type === 'text') {
+    console.log('🔄 Migrando columna numbers de TEXT a JSONB...');
+    await p.query('ALTER TABLE cards ALTER COLUMN numbers TYPE JSONB USING numbers::jsonb');
+    await p.query('CREATE INDEX IF NOT EXISTS idx_cards_numbers_gin ON cards USING GIN (numbers)');
+    console.log('✅ Migración aplicada: numbers convertido a JSONB con índice GIN');
+  }
+
+  // Crear/actualizar función SQL para verificar patrones de bingo
+  await p.query(`
+    CREATE OR REPLACE FUNCTION bingo_check_pattern(
+      card_numbers JSONB,
+      called_balls INT[],
+      pattern_positions INT[][],
+      use_free_center BOOLEAN DEFAULT TRUE
+    ) RETURNS BOOLEAN AS $$
+    DECLARE
+      pos INT[];
+      row_idx INT;
+      col_idx INT;
+      col_name TEXT;
+      col_arr JSONB;
+      num_idx INT;
+      num_val INT;
+      has_five_n BOOLEAN;
+    BEGIN
+      has_five_n := jsonb_array_length(card_numbers->'N') = 5;
+
+      FOREACH pos SLICE 1 IN ARRAY pattern_positions LOOP
+        row_idx := pos[1];
+        col_idx := pos[2];
+
+        -- FREE center check
+        IF row_idx = 2 AND col_idx = 2 AND use_free_center AND NOT has_five_n THEN
+          CONTINUE; -- FREE counts as matched
+        END IF;
+
+        -- Map column index to letter
+        col_name := CASE col_idx
+          WHEN 0 THEN 'B' WHEN 1 THEN 'I' WHEN 2 THEN 'N'
+          WHEN 3 THEN 'G' WHEN 4 THEN 'O'
+        END;
+
+        col_arr := card_numbers->col_name;
+
+        -- Calculate array index for N column with FREE center
+        IF col_idx = 2 AND NOT has_five_n THEN
+          IF row_idx < 2 THEN num_idx := row_idx;
+          ELSE num_idx := row_idx - 1;
+          END IF;
+        ELSE
+          num_idx := row_idx;
+        END IF;
+
+        num_val := (col_arr->>num_idx)::INT;
+
+        IF NOT (num_val = ANY(called_balls)) THEN
+          RETURN FALSE;
+        END IF;
+      END LOOP;
+
+      RETURN TRUE;
+    END;
+    $$ LANGUAGE plpgsql IMMUTABLE;
+  `);
+  console.log('✅ Función bingo_check_pattern creada/actualizada');
 }

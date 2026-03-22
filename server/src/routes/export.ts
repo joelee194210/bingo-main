@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { getPool } from '../database/init.js';
 import { generateCardsPDF, exportCardsAsImages, generateCardImage } from '../services/exportService.js';
 import { requirePermission } from '../middleware/auth.js';
+import { parseNumbers } from '../services/cardVerifier.js';
 import type { BingoCard, BingoEvent, CardNumbers } from '../types/index.js';
 import { logActivity, auditFromReq } from '../services/auditService.js';
 import QRCode from 'qrcode';
@@ -89,7 +90,7 @@ router.post('/pdf', requirePermission('cards:export'), async (req: Request, res:
       cardNumber: card.card_number,
       cardCode: card.card_code,
       validationCode: card.validation_code,
-      numbers: JSON.parse(card.numbers as unknown as string) as CardNumbers,
+      numbers: parseNumbers(card.numbers) as CardNumbers,
       useFreeCenter,
     }));
 
@@ -131,7 +132,7 @@ router.get('/card/:id/image', async (req: Request, res: Response) => {
       cardNumber: card.card_number,
       cardCode: card.card_code,
       validationCode: card.validation_code,
-      numbers: JSON.parse(card.numbers as unknown as string) as CardNumbers,
+      numbers: parseNumbers(card.numbers) as CardNumbers,
       useFreeCenter,
     });
 
@@ -181,7 +182,7 @@ router.post('/images', requirePermission('cards:export'), async (req: Request, r
       cardNumber: card.card_number,
       cardCode: card.card_code,
       validationCode: card.validation_code,
-      numbers: JSON.parse(card.numbers as unknown as string) as CardNumbers,
+      numbers: parseNumbers(card.numbers) as CardNumbers,
       useFreeCenter,
     }));
 
@@ -223,7 +224,7 @@ router.get('/csv/:eventId', requirePermission('cards:export'), async (req: Reque
     const header = 'card_number,serial,card_code,validation_code,promo_text,B1,B2,B3,B4,B5,I1,I2,I3,I4,I5,N1,N2,N3,N4,N5,G1,G2,G3,G4,G5,O1,O2,O3,O4,O5';
 
     const rows = cards.map((card: any) => {
-      const nums: CardNumbers = JSON.parse(card.numbers);
+      const nums: CardNumbers = parseNumbers(card.numbers);
 
       // Expandir N a 5 valores: si FREE center, insertar FREE en posición 3 (índice 2)
       const nValues: (number | string)[] = useFreeCenter

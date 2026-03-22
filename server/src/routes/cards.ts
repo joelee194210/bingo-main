@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getPool } from '../database/init.js';
 import { generateCards, cardNumbersToMatrix } from '../services/cardGenerator.js';
-import { verifyEventCards, validateCard } from '../services/cardVerifier.js';
+import { verifyEventCards, validateCard, parseNumbers } from '../services/cardVerifier.js';
 import { requirePermission } from '../middleware/auth.js';
 import type { BingoCard, BingoEvent, CardNumbers } from '../types/index.js';
 import { logActivity, auditFromReq } from '../services/auditService.js';
@@ -447,7 +447,7 @@ router.get('/search/:code', async (req: Request, res: Response) => {
     const eventConfig = eventRows[0] as { use_free_center: boolean } | undefined;
     const useFreeCenter = eventConfig?.use_free_center !== false;
 
-    const numbers: CardNumbers = JSON.parse(card.numbers);
+    const numbers: CardNumbers = parseNumbers(card.numbers);
     res.json({
       success: true,
       data: { ...card, numbers, matrix: cardNumbersToMatrix(numbers, useFreeCenter) },
@@ -474,7 +474,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     const eventConfig = eventRows[0] as { use_free_center: boolean } | undefined;
     const useFreeCenter = eventConfig?.use_free_center !== false;
 
-    const numbers: CardNumbers = JSON.parse(card.numbers);
+    const numbers: CardNumbers = parseNumbers(card.numbers);
     const matrix = cardNumbersToMatrix(numbers, useFreeCenter);
 
     res.json({
