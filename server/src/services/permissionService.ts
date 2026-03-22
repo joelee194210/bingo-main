@@ -19,13 +19,9 @@ const ALL_PERMISSIONS = [
   'sub_users:manage',
 ];
 
-// Permisos default extendidos (agrega los nuevos al hardcodeado)
+// Permisos default por rol
 function getDefaultPermissions(): Record<string, string[]> {
-  return {
-    ...ROLE_PERMISSIONS,
-    admin: [...ROLE_PERMISSIONS.admin, 'permissions:manage', 'audit:read'],
-    moderator: [...ROLE_PERMISSIONS.moderator, 'audit:read'],
-  };
+  return { ...ROLE_PERMISSIONS };
 }
 
 /**

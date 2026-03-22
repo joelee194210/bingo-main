@@ -172,14 +172,13 @@ function isAdminHost(host: string | undefined): boolean {
 }
 
 if (existsSync(clientDistPath)) {
-  // Assets estáticos (JS, CSS, imágenes) se sirven a todos los hosts
-  app.use('/assets', express.static(resolve(clientDistPath, 'assets')));
-  app.use('/bingo.svg', express.static(resolve(clientDistPath, 'bingo.svg')));
-  app.use('/logo.png', express.static(resolve(clientDistPath, 'logo.png')));
+  // Servir todos los archivos estáticos del build (JS, CSS, imágenes, etc.)
+  app.use(express.static(clientDistPath, { maxAge: '1d' }));
 
   // SPA catch-all SOLO para admin subdomain
   app.get('*', (_req, res, next) => {
-    if (_req.path.startsWith('/api') || _req.path.startsWith('/socket.io') || _req.path.startsWith('/verificar')) {
+    // No interceptar API, socket.io, verificación, ni assets estáticos
+    if (_req.path.startsWith('/api') || _req.path.startsWith('/socket.io') || _req.path.startsWith('/verificar') || _req.path.startsWith('/assets')) {
       return next();
     }
 
