@@ -257,51 +257,9 @@ export default function Login() {
           mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
         }`}
       >
-        {/* Header — brand */}
+        {/* Header — logo */}
         <div className="text-center mb-8">
-          {/* Bingo ball logo */}
-          <div className="relative inline-flex mb-4">
-            <div
-              className="w-[72px] h-[72px] rounded-full relative"
-              style={{
-                background: 'radial-gradient(circle at 35% 30%, #60a5fa, #2563eb 50%, #1e40af)',
-                boxShadow: '0 0 40px rgba(37, 99, 235, 0.4), 0 0 80px rgba(37, 99, 235, 0.15), inset 0 -4px 8px rgba(30, 64, 175, 0.4)',
-              }}
-            >
-              <div className="absolute inset-[10px] rounded-full bg-white/90 flex items-center justify-center">
-                <span
-                  className="font-black text-[28px] leading-none"
-                  style={{
-                    background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                  }}
-                >
-                  B
-                </span>
-              </div>
-              {/* Shine */}
-              <div className="absolute w-5 h-3 bg-white/35 rounded-full top-3 left-4 blur-[2px]" />
-            </div>
-            {/* Pulsing ring */}
-            <div className="absolute inset-0 rounded-full animate-ping opacity-20 bg-blue-500/30" style={{ animationDuration: '3s' }} />
-          </div>
-
-          <h1 className="text-[28px] sm:text-[32px] font-extrabold text-white tracking-tight leading-none">
-            Bingo{' '}
-            <span
-              style={{
-                background: 'linear-gradient(135deg, #60a5fa, #38bdf8)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              Pro
-            </span>
-          </h1>
-          <p className="text-slate-500 text-[13px] mt-1.5 tracking-[0.08em] uppercase font-medium">
-            Sistema de Administracion
-          </p>
+          <img src="/logo.png" alt="Logo" className="h-24 mx-auto mb-4 object-contain" />
         </div>
 
         {/* ── Glass form card ── */}
