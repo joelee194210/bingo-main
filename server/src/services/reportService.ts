@@ -224,140 +224,248 @@ export async function generateReportPDF(report: GameReport): Promise<string> {
   const filename = `reporte_juego_${report.game_id}_${Date.now()}.pdf`;
   const filepath = join(REPORTS_DIR, filename);
 
+  // Colores por columna BINGO
+  const BINGO_COLORS: Record<string, string> = {
+    B: '#e53e3e', I: '#dd6b20', N: '#38a169', G: '#3182ce', O: '#805ad5',
+  };
+  const ACCENT = '#1e40af';
+  const LIGHT_BG = '#f0f4ff';
+  const BORDER = '#cbd5e1';
+
   return new Promise((res, reject) => {
-    const doc = new PDFDocument({ size: 'LETTER', margin: 50 });
+    const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
     const stream = createWriteStream(filepath);
     doc.pipe(stream);
 
-    const pageWidth = doc.page.width - 100;
-    const margin = 50;
+    const pw = doc.page.width - 80; // page width usable
+    const m = 40; // margin
 
-    // Logo + Título
+    // Helper: section title with colored bar
+    const sectionTitle = (title: string, color = ACCENT) => {
+      const y = doc.y;
+      doc.rect(m, y, 4, 16).fill(color);
+      doc.fillColor(color).fontSize(13).font('Helvetica-Bold').text(title, m + 12, y + 1);
+      doc.fillColor('#333333');
+      doc.y = y + 22;
+    };
+
+    // Helper: info row in a table-like layout
+    const infoRow = (label: string, value: string, y: number, x: number, w: number) => {
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#64748b').text(label, x + 6, y + 3, { width: w });
+      doc.fontSize(10).font('Helvetica').fillColor('#1e293b').text(value, x + 6, y + 14, { width: w });
+    };
+
+    // ==================== PAGE 1: INFO ====================
+    // Header bar
+    doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
+
+    // Logo
     if (existsSync(LOGO_PATH)) {
-      doc.image(LOGO_PATH, doc.page.width / 2 - 50, 30, { width: 100 });
-      doc.moveDown(5);
+      doc.image(LOGO_PATH, doc.page.width / 2 - 55, 20, { width: 110 });
+      doc.y = 130;
+    } else {
+      doc.y = 30;
     }
-    doc.fontSize(20).font('Helvetica-Bold').text('REPORTE DE JUEGO', { align: 'center' });
-    doc.fontSize(10).font('Helvetica').text('MegabingoTV', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.moveTo(margin, doc.y).lineTo(margin + pageWidth, doc.y).stroke('#cccccc');
-    doc.moveDown();
 
-    // Información del juego
-    doc.fontSize(12).font('Helvetica-Bold').fillColor('#2563eb').text('INFORMACIÓN DEL JUEGO');
-    doc.fillColor('#333333');
+    // Title
+    doc.fontSize(22).font('Helvetica-Bold').fillColor(ACCENT).text('REPORTE DE JUEGO', { align: 'center' });
+    doc.fontSize(11).font('Helvetica').fillColor('#64748b').text('MegabingoTV — Sistema de Bingo Americano', { align: 'center' });
     doc.moveDown(0.3);
-    doc.font('Helvetica').fontSize(10);
-    doc.text(`Evento: ${report.event_name}`);
-    doc.text(`Nombre del Juego: ${report.game_name || 'Sin nombre'}`);
-    doc.text(`Tipo de Juego: ${report.game_type_label}`);
-    doc.text(`Modo: ${report.is_practice_mode ? 'Práctica' : 'Real (Solo vendidos)'}`);
-    doc.text(`Estado: ${report.status === 'completed' ? 'Finalizado' : report.status}`);
-    doc.moveDown();
+    doc.moveTo(m, doc.y).lineTo(m + pw, doc.y).lineWidth(1).stroke(BORDER);
+    doc.moveDown(0.8);
+
+    // Info cards — 2 columnas
+    sectionTitle('INFORMACIÓN DEL JUEGO');
+    const infoY = doc.y;
+    const halfW = pw / 2 - 5;
+
+    // Fila 1
+    doc.rect(m, infoY, halfW, 32).lineWidth(0.5).stroke(BORDER);
+    infoRow('Evento', report.event_name, infoY, m, halfW);
+    doc.rect(m + halfW + 10, infoY, halfW, 32).stroke(BORDER);
+    infoRow('Juego', report.game_name || 'Sin nombre', infoY, m + halfW + 10, halfW);
+
+    // Fila 2
+    const r2y = infoY + 36;
+    doc.rect(m, r2y, halfW, 32).stroke(BORDER);
+    infoRow('Tipo de Juego', report.game_type_label, r2y, m, halfW);
+    doc.rect(m + halfW + 10, r2y, halfW, 32).stroke(BORDER);
+    infoRow('Modo', report.is_practice_mode ? 'Práctica' : 'Real (Solo vendidos)', r2y, m + halfW + 10, halfW);
+
+    doc.y = r2y + 44;
+
+    // Estadísticas en cajas de color
+    sectionTitle('ESTADÍSTICAS');
+    const statY = doc.y;
+    const statW = pw / 4 - 6;
+    const stats = [
+      { label: 'Balotas', value: String(report.total_balls_called), color: '#3182ce' },
+      { label: 'Ganadores', value: String(report.winners.length), color: '#38a169' },
+      { label: 'Duración', value: report.duration_seconds ? `${Math.floor(report.duration_seconds / 60)}m ${report.duration_seconds % 60}s` : 'N/A', color: '#dd6b20' },
+      { label: 'Estado', value: report.status === 'completed' ? 'Finalizado' : report.status, color: '#805ad5' },
+    ];
+    stats.forEach((s, i) => {
+      const sx = m + i * (statW + 8);
+      doc.roundedRect(sx, statY, statW, 50, 4).fill(s.color);
+      doc.fillColor('#ffffff').fontSize(20).font('Helvetica-Bold').text(s.value, sx, statY + 6, { width: statW, align: 'center' });
+      doc.fontSize(8).font('Helvetica').text(s.label, sx, statY + 32, { width: statW, align: 'center' });
+    });
+    doc.fillColor('#333333');
+    doc.y = statY + 60;
 
     // Tiempos
-    doc.fontSize(12).font('Helvetica-Bold').fillColor('#2563eb').text('TIEMPOS');
-    doc.fillColor('#333333');
-    doc.moveDown(0.3);
-    doc.font('Helvetica').fontSize(10);
+    sectionTitle('TIEMPOS');
+    doc.fontSize(10).font('Helvetica');
     doc.text(`Inicio: ${report.started_at ? new Date(report.started_at).toLocaleString('es') : 'N/A'}`);
     doc.text(`Finalización: ${report.finished_at ? new Date(report.finished_at).toLocaleString('es') : 'N/A'}`);
     if (report.duration_seconds) {
       const mins = Math.floor(report.duration_seconds / 60);
       const secs = report.duration_seconds % 60;
-      doc.text(`Duración: ${mins} minutos ${secs} segundos`);
+      doc.text(`Duración total: ${mins} minutos ${secs} segundos`);
     }
-    doc.moveDown();
 
-    // Estadísticas
-    doc.fontSize(12).font('Helvetica-Bold').fillColor('#2563eb').text('ESTADÍSTICAS');
-    doc.fillColor('#333333');
-    doc.moveDown(0.3);
-    doc.font('Helvetica').fontSize(10);
-    doc.text(`Total Balotas Llamadas: ${report.total_balls_called}`);
-    doc.text(`Total Ganadores: ${report.winners.length}`);
-    doc.moveDown();
+    // Footer page 1
+    doc.fontSize(7).fillColor('#94a3b8')
+      .text(`Generado por MegabingoTV — ${new Date().toLocaleString('es')}`, m, doc.page.height - 30, { width: pw, align: 'center' });
 
-    // Ganadores
+    // ==================== PAGE 2: GANADORES ====================
     if (report.winners.length > 0) {
       doc.addPage();
+      doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
+
       if (existsSync(LOGO_PATH)) {
-        doc.image(LOGO_PATH, doc.page.width / 2 - 30, 30, { width: 60 });
-        doc.moveDown(3.5);
+        doc.image(LOGO_PATH, m, 15, { width: 60 });
       }
-      doc.fontSize(16).font('Helvetica-Bold').fillColor('#2563eb').text('CARTONES GANADORES', { align: 'center' });
+      doc.fontSize(16).font('Helvetica-Bold').fillColor(ACCENT).text('CARTONES GANADORES', m, 25, { width: pw, align: 'center' });
       doc.fillColor('#333333');
+      doc.y = 50;
+      doc.moveTo(m, doc.y).lineTo(m + pw, doc.y).stroke(BORDER);
       doc.moveDown(0.5);
-      doc.moveTo(margin, doc.y).lineTo(margin + pageWidth, doc.y).stroke('#cccccc');
-      doc.moveDown();
 
-      report.winners.forEach((winner, index) => {
-        if (doc.y > 650) doc.addPage();
-        // Caja con fondo
-        const boxY = doc.y;
-        doc.rect(margin, boxY, pageWidth, 16).fill('#e8edf2');
-        doc.fillColor('#333333').fontSize(11).font('Helvetica-Bold')
-          .text(`Ganador #${index + 1}  —  Serie: ${winner.serial || 'N/A'}`, margin + 8, boxY + 3);
-        doc.y = boxY + 22;
-        doc.fontSize(10).font('Helvetica');
-        doc.text(`  No. de Control: ${winner.card_number}    |    Código: ${winner.card_code}    |    Validación: ${winner.validation_code}`);
-        if (winner.buyer_name) {
-          doc.text(`  Comprador: ${winner.buyer_name}${winner.buyer_phone ? `  |  Tel: ${winner.buyer_phone}` : ''}`);
-        }
-        doc.text(`  Patrón: ${winner.winning_pattern}    |    Balotas para ganar: ${winner.balls_to_win}    |    Hora: ${new Date(winner.won_at).toLocaleString('es')}`);
-        doc.moveDown(0.8);
+      // Tabla de ganadores
+      const cols = [
+        { label: '#', w: 25 },
+        { label: 'Serie', w: 75 },
+        { label: 'No. Control', w: 70 },
+        { label: 'Código', w: 55 },
+        { label: 'Patrón', w: 90 },
+        { label: 'Balotas', w: 45 },
+        { label: 'Comprador', w: 90 },
+        { label: 'Hora', w: pw - 25 - 75 - 70 - 55 - 90 - 45 - 90 },
+      ];
+
+      // Header de tabla
+      let ty = doc.y;
+      doc.rect(m, ty, pw, 18).fill(ACCENT);
+      let cx = m;
+      cols.forEach(c => {
+        doc.fillColor('#ffffff').fontSize(7).font('Helvetica-Bold').text(c.label, cx + 3, ty + 5, { width: c.w - 6 });
+        cx += c.w;
       });
+      doc.fillColor('#333333');
+      ty += 18;
+
+      report.winners.forEach((w, i) => {
+        if (ty > 720) {
+          doc.addPage();
+          doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
+          ty = 20;
+        }
+        const bg = i % 2 === 0 ? LIGHT_BG : '#ffffff';
+        doc.rect(m, ty, pw, 20).fill(bg);
+
+        const vals = [
+          String(i + 1),
+          w.serial || 'N/A',
+          String(w.card_number),
+          w.card_code,
+          w.winning_pattern,
+          String(w.balls_to_win),
+          w.buyer_name || '-',
+          new Date(w.won_at).toLocaleTimeString('es'),
+        ];
+
+        cx = m;
+        vals.forEach((v, ci) => {
+          doc.fillColor('#1e293b').fontSize(8).font(ci === 0 ? 'Helvetica-Bold' : 'Helvetica')
+            .text(v, cx + 3, ty + 6, { width: cols[ci].w - 6 });
+          cx += cols[ci].w;
+        });
+        ty += 20;
+      });
+
+      // Borde de tabla
+      doc.rect(m, doc.y - 0.5, pw, ty - doc.y + 0.5).stroke(BORDER);
+
+      doc.fontSize(7).fillColor('#94a3b8')
+        .text(`Generado por MegabingoTV — ${new Date().toLocaleString('es')}`, m, doc.page.height - 30, { width: pw, align: 'center' });
     }
 
-    // Historial de balotas (certificación)
+    // ==================== PAGE 3: CERTIFICACIÓN BALOTAS ====================
     doc.addPage();
-    if (existsSync(LOGO_PATH)) {
-      doc.image(LOGO_PATH, doc.page.width / 2 - 30, 30, { width: 60 });
-      doc.moveDown(3.5);
-    }
-    doc.fontSize(16).font('Helvetica-Bold').fillColor('#2563eb').text('CERTIFICACIÓN DE BALOTAS', { align: 'center' });
-    doc.fillColor('#333333');
-    doc.fontSize(10).font('Helvetica').text('Orden cronológico de balotas llamadas', { align: 'center' });
-    doc.moveDown();
+    doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
 
-    // Tabla de balotas
-    const ballsPerRow = 10;
-    let currentY = doc.y;
-    const cellWidth = 45;
-    const cellHeight = 25;
+    if (existsSync(LOGO_PATH)) {
+      doc.image(LOGO_PATH, m, 15, { width: 60 });
+    }
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(ACCENT).text('CERTIFICACIÓN DE BALOTAS', m, 25, { width: pw, align: 'center' });
+    doc.fillColor('#64748b').fontSize(9).font('Helvetica').text('Orden cronológico de balotas llamadas', m, 45, { width: pw, align: 'center' });
+    doc.fillColor('#333333');
+    doc.y = 65;
+
+    // Tabla de balotas con colores BINGO
+    const bpr = 10; // balls per row
+    const cw = pw / bpr;
+    const ch = 28;
+    let by = doc.y;
+
+    // Header BINGO columns (repeat every page)
+    const drawBallsHeader = () => {
+      // No header needed — each ball shows its column color
+    };
+    drawBallsHeader();
 
     report.ball_history.forEach((ball, index) => {
-      const col = index % ballsPerRow;
-      const _row = Math.floor(index / ballsPerRow);
+      const col = index % bpr;
 
       if (col === 0 && index > 0) {
-        currentY += cellHeight;
-        if (currentY > 700) {
+        by += ch;
+        if (by > 700) {
           doc.addPage();
-          currentY = 50;
+          doc.rect(0, 0, doc.page.width, 8).fill(ACCENT);
+          by = 20;
         }
       }
 
-      const x = 50 + col * cellWidth;
-      const y = currentY;
+      const x = m + col * cw;
+      const ballColor = BINGO_COLORS[ball.ball_column] || '#333333';
 
-      // Dibujar celda
-      doc.rect(x, y, cellWidth, cellHeight).stroke();
-      doc.fontSize(10).text(`${ball.call_order}. ${ball.ball_column}${ball.ball_number}`, x + 2, y + 8, {
-        width: cellWidth - 4,
-        align: 'center',
-      });
+      // Celda con color de fondo suave
+      doc.rect(x, by, cw, ch).lineWidth(0.5).stroke(BORDER);
+      // Número de orden
+      doc.fontSize(6).font('Helvetica').fillColor('#94a3b8').text(String(ball.call_order), x + 2, by + 2, { width: cw - 4 });
+      // Balota con color
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(ballColor)
+        .text(`${ball.ball_column}${ball.ball_number}`, x, by + 10, { width: cw, align: 'center' });
     });
 
-    doc.moveDown(3);
+    doc.fillColor('#333333');
+    doc.y = by + ch + 20;
 
-    // Pie de página con certificación
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#2563eb')
-      .text('CERTIFICACIÓN', { align: 'center' });
-    doc.fillColor('#333333').font('Helvetica')
-      .text(`Este reporte certifica el orden y resultado del juego de bingo.`, { align: 'center' })
-      .text(`Generado automáticamente por MegabingoTV el ${new Date().toLocaleString('es')}`, { align: 'center' })
-      .text(`ID del Juego: ${report.game_id}`, { align: 'center' });
+    // Certificación final
+    if (doc.y > 650) doc.addPage();
+    const certY = doc.y;
+    doc.roundedRect(m + pw / 4, certY, pw / 2, 80, 6).lineWidth(1).stroke(ACCENT);
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(ACCENT)
+      .text('CERTIFICACIÓN', m + pw / 4, certY + 8, { width: pw / 2, align: 'center' });
+    doc.fontSize(8).font('Helvetica').fillColor('#333333')
+      .text('Este reporte certifica el orden y resultado del juego de bingo.', m + pw / 4 + 10, certY + 24, { width: pw / 2 - 20, align: 'center' })
+      .text(`Generado por MegabingoTV`, { width: pw / 2 - 20, align: 'center' })
+      .text(`${new Date().toLocaleString('es')}`, { width: pw / 2 - 20, align: 'center' })
+      .text(`ID del Juego: ${report.game_id}`, { width: pw / 2 - 20, align: 'center' });
+
+    doc.fontSize(7).fillColor('#94a3b8')
+      .text(`Generado por MegabingoTV — ${new Date().toLocaleString('es')}`, m, doc.page.height - 30, { width: pw, align: 'center' });
 
     doc.end();
 
