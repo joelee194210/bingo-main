@@ -17,10 +17,10 @@ import {
   getEventGames,
 } from '../services/gameEngine.js';
 import { findWinners } from '../services/cardVerifier.js';
-import { requirePermission } from '../middleware/auth.js';
+import { requirePermission, requireRole } from '../middleware/auth.js';
 import { emitGameUpdate, emitBallCalled, emitWinnerFound } from '../app.js';
 import type { GameType, StartGameRequest } from '../types/index.js';
-import { logActivity, auditFromReq } from '../services/auditService.js';
+import { logActivity, auditFromReq, getClientIp } from '../services/auditService.js';
 
 const router = Router();
 
@@ -347,6 +347,40 @@ router.get('/:id/winners', requirePermission('games:read'), async (req: Request,
   } catch (error) {
     console.error('Error obteniendo ganadores:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+// DELETE /api/games/:id - Eliminar juego (solo admin)
+router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    const gameId = parseInt(req.params.id as string, 10);
+
+    // Verificar que el juego existe
+    const { rows } = await pool.query('SELECT id, status, event_id FROM games WHERE id = $1', [gameId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Juego no encontrado' });
+    }
+
+    // Eliminar en orden: ganadores → historial de balotas → reportes → juego
+    await pool.query('DELETE FROM game_winners WHERE game_id = $1', [gameId]);
+    await pool.query('DELETE FROM ball_history WHERE game_id = $1', [gameId]);
+    await pool.query('DELETE FROM game_reports WHERE game_id = $1', [gameId]);
+    await pool.query('DELETE FROM games WHERE id = $1', [gameId]);
+
+    logActivity(pool, {
+      userId: req.user!.id,
+      username: req.user!.username,
+      action: 'game_deleted',
+      category: 'games',
+      details: { game_id: gameId, event_id: rows[0].event_id },
+      ipAddress: getClientIp(req),
+    });
+
+    res.json({ success: true, message: 'Juego eliminado' });
+  } catch (error) {
+    console.error('Error eliminando juego:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 

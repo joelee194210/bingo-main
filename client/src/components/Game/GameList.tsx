@@ -1,9 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Gamepad2, Play, Clock, Trophy, Search } from 'lucide-react';
+import { Gamepad2, Play, Clock, Trophy, Search, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import api from '@/services/api';
 import { getGames, getEvents } from '@/services/api';
 import { GAME_TYPE_LABELS, STATUS_LABELS, type GameStatus } from '@/types';
 import { useState, useMemo } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { DataExportMenu } from '@/components/ui/data-export-menu';
 import { getStatusColor } from '@/lib/badge-variants';
@@ -14,6 +17,10 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -22,9 +29,23 @@ import {
 } from '@/components/ui/select';
 
 export default function GameList() {
+  const { isRole } = useAuth();
+  const queryClient = useQueryClient();
   const [eventId, setEventId] = useState<number | undefined>();
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/games/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['games'] });
+      toast.success('Juego eliminado');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Error al eliminar juego');
+    },
+  });
 
   const { data: eventsData } = useQuery({
     queryKey: ['events'],
@@ -241,6 +262,26 @@ export default function GameList() {
                     <div className="mt-4">
                       <Progress value={progressPercent} className="h-2" />
                     </div>
+
+                    {/* Delete button — solo admin */}
+                    {isRole('admin') && (
+                      <div className="mt-3 pt-3 border-t">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDeleteConfirm({ id: game.id, name: game.name || GAME_TYPE_LABELS[game.game_type] });
+                          }}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Eliminar
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </Link>
@@ -248,6 +289,30 @@ export default function GameList() {
           })}
         </div>
       )}
+
+      {/* Confirmación de eliminación */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar juego</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estas seguro que quieres eliminar el juego <strong className="text-foreground">{deleteConfirm?.name}</strong>? Se eliminaran todas las balotas, ganadores y reportes asociados. Esta accion no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteConfirm) deleteMutation.mutate(deleteConfirm.id);
+                setDeleteConfirm(null);
+              }}
+            >
+              Si, Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
