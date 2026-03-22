@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { User, UserRole, AuthState } from '../types/auth';
 import { hasPermission as hasPermissionDefault } from '../types/auth';
 import api from '../services/api';
@@ -22,17 +22,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: false,
     isLoading: true,
   });
-  const dynamicPermissions = useRef<string[] | null>(null);
+  const [dynamicPermissions, setDynamicPermissions] = useState<string[] | null>(null);
 
   const loadDynamicPermissions = useCallback(async () => {
     try {
       const resp = await api.get('/permissions/my');
       if (resp.data.success) {
-        dynamicPermissions.current = resp.data.data.permissions;
+        setDynamicPermissions(resp.data.data.permissions);
       }
     } catch {
       // Fallback a permisos hardcodeados
-      dynamicPermissions.current = null;
+      setDynamicPermissions(null);
     }
   }, []);
 
@@ -116,17 +116,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     // M10: limpiar cookie httpOnly en el server
     api.post('/auth/logout').catch(() => {});
+    setDynamicPermissions(null);
     clearAuth();
   };
 
   const checkPermission = useCallback((permission: string): boolean => {
     if (!state.user) return false;
     // Usar permisos dinámicos si están cargados, sino fallback a defaults
-    if (dynamicPermissions.current) {
-      return dynamicPermissions.current.includes(permission);
+    if (dynamicPermissions) {
+      return dynamicPermissions.includes(permission);
     }
     return hasPermissionDefault(state.user.role, permission);
-  }, [state.user]);
+  }, [state.user, dynamicPermissions]);
 
   const isRole = (...roles: UserRole[]): boolean => {
     if (!state.user) return false;
