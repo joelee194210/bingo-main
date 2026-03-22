@@ -94,7 +94,7 @@ export default function CardValidator() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (cardCode.length >= 5) {
+    if (cardCode.length >= 3) {
       if (validationCode.length >= 5) {
         validateMutation.mutate();
       } else {
@@ -167,14 +167,14 @@ export default function CardValidator() {
           <form onSubmit={handleSearch} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="card-code">Código del Cartón *</Label>
+                <Label htmlFor="card-code">Codigo o Serie del Carton *</Label>
                 <Input
                   id="card-code"
                   className="font-mono uppercase"
                   value={cardCode}
                   onChange={(e) => setCardCode(e.target.value.toUpperCase())}
-                  placeholder="XXXXX"
-                  maxLength={10}
+                  placeholder="XXXXX o 00001-01"
+                  maxLength={20}
                   required
                 />
               </div>
@@ -193,7 +193,7 @@ export default function CardValidator() {
 
             <Button
               type="submit"
-              disabled={cardCode.length < 5 || isLoading}
+              disabled={cardCode.length < 3 || isLoading}
               className="w-full"
               size="lg"
             >
