@@ -7,23 +7,26 @@ import { Input } from '@/components/ui/input';
 
 /* ─── Floating bingo balls ─── */
 const FLOATING_BALLS = [
-  // Esquinas y bordes
-  { n: 7, letter: 'B', x: 5, y: 10, size: 56, dur: 18, del: 0, hue: '217 91% 60%' },
-  { n: 44, letter: 'N', x: 88, y: 8, size: 48, dur: 22, del: 2, hue: '142 71% 45%' },
-  { n: 62, letter: 'O', x: 6, y: 75, size: 42, dur: 20, del: 4, hue: '210 90% 55%' },
-  { n: 19, letter: 'I', x: 90, y: 70, size: 52, dur: 16, del: 1, hue: '0 72% 51%' },
-  { n: 51, letter: 'G', x: 50, y: 92, size: 38, dur: 24, del: 3, hue: '45 93% 47%' },
-  { n: 33, letter: 'N', x: 95, y: 40, size: 34, dur: 19, del: 5, hue: '217 91% 60%' },
-  { n: 3, letter: 'B', x: 15, y: 92, size: 30, dur: 21, del: 6, hue: '0 72% 51%' },
-  { n: 71, letter: 'O', x: 70, y: 5, size: 36, dur: 17, del: 2, hue: '142 71% 45%' },
-  // Alrededor del centro
-  { n: 28, letter: 'I', x: 2, y: 42, size: 44, dur: 20, del: 1, hue: '280 70% 55%' },
-  { n: 59, letter: 'G', x: 93, y: 55, size: 40, dur: 23, del: 3, hue: '45 93% 47%' },
-  { n: 14, letter: 'B', x: 82, y: 88, size: 32, dur: 19, del: 4, hue: '217 91% 60%' },
-  { n: 38, letter: 'N', x: 20, y: 5, size: 28, dur: 25, del: 7, hue: '142 71% 45%' },
-  { n: 67, letter: 'O', x: 40, y: 3, size: 34, dur: 18, del: 2, hue: '0 72% 51%' },
-  { n: 11, letter: 'B', x: 75, y: 90, size: 30, dur: 22, del: 5, hue: '210 90% 55%' },
-  { n: 46, letter: 'G', x: 3, y: 55, size: 26, dur: 21, del: 8, hue: '280 70% 55%' },
+  // Pegadas al formulario — izquierda
+  { n: 7, letter: 'B', x: 22, y: 25, size: 50, dur: 18, del: 0, hue: '217 91% 60%' },
+  { n: 28, letter: 'I', x: 18, y: 50, size: 44, dur: 20, del: 1, hue: '280 70% 55%' },
+  { n: 46, letter: 'G', x: 20, y: 72, size: 36, dur: 21, del: 8, hue: '45 93% 47%' },
+  // Pegadas al formulario — derecha
+  { n: 44, letter: 'N', x: 72, y: 20, size: 48, dur: 22, del: 2, hue: '142 71% 45%' },
+  { n: 59, letter: 'G', x: 74, y: 48, size: 42, dur: 23, del: 3, hue: '45 93% 47%' },
+  { n: 19, letter: 'I', x: 70, y: 72, size: 46, dur: 16, del: 1, hue: '0 72% 51%' },
+  // Arriba del formulario
+  { n: 38, letter: 'N', x: 35, y: 10, size: 34, dur: 25, del: 7, hue: '142 71% 45%' },
+  { n: 67, letter: 'O', x: 55, y: 8, size: 38, dur: 18, del: 2, hue: '210 90% 55%' },
+  // Abajo del formulario
+  { n: 51, letter: 'G', x: 40, y: 88, size: 32, dur: 24, del: 3, hue: '217 91% 60%' },
+  { n: 3, letter: 'B', x: 58, y: 90, size: 30, dur: 21, del: 6, hue: '0 72% 51%' },
+  // Esquinas cercanas
+  { n: 62, letter: 'O', x: 15, y: 15, size: 28, dur: 20, del: 4, hue: '210 90% 55%' },
+  { n: 71, letter: 'O', x: 80, y: 12, size: 32, dur: 17, del: 2, hue: '142 71% 45%' },
+  { n: 33, letter: 'N', x: 80, y: 85, size: 30, dur: 19, del: 5, hue: '280 70% 55%' },
+  { n: 14, letter: 'B', x: 15, y: 88, size: 34, dur: 19, del: 4, hue: '217 91% 60%' },
+  { n: 11, letter: 'B', x: 25, y: 38, size: 26, dur: 22, del: 5, hue: '0 72% 51%' },
 ];
 
 function FloatingBall({ n, letter, x, y, size, dur, del, hue }: typeof FLOATING_BALLS[0]) {
@@ -176,7 +179,7 @@ export default function Login() {
       >
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Logo" className="h-24 mx-auto mb-4 object-contain" />
+          <img src="/logo.png" alt="Logo" className="h-32 mx-auto mb-4 object-contain" />
         </div>
 
         {/* Form card */}
