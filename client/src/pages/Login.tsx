@@ -98,14 +98,17 @@ export default function Login() {
   // Cargar Turnstile script solo si captcha esta habilitado
   useEffect(() => {
     if (!captchaEnabled || !captchaSiteKey) return;
-    if (document.getElementById('cf-turnstile-script')) return;
+    if (document.getElementById('cf-turnstile-script')) {
+      // Script ya cargado (ej: navegacion SPA), solo renderizar
+      renderTurnstile();
+      return;
+    }
     const script = document.createElement('script');
     script.id = 'cf-turnstile-script';
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
     script.async = true;
     script.onload = () => renderTurnstile();
     document.head.appendChild(script);
-    return () => { script.remove(); };
   }, [captchaEnabled, captchaSiteKey]);
 
   const renderTurnstile = useCallback(() => {
@@ -118,7 +121,7 @@ export default function Login() {
     if (widgetIdRef.current) return;
     widgetIdRef.current = w.turnstile.render(turnstileRef.current, {
       sitekey: captchaSiteKey,
-      theme: 'dark',
+      theme: 'light',
       callback: (token: string) => setTurnstileToken(token),
       'expired-callback': () => setTurnstileToken(null),
       'error-callback': () => setTurnstileToken(null),
