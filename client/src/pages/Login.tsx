@@ -5,49 +5,27 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-/* ─── Floating bingo balls that drift across the background ─── */
+/* ─── Floating bingo balls ─── */
 const FLOATING_BALLS = [
-  { n: 7, letter: 'B', x: 8, y: 15, size: 56, dur: 18, del: 0, hue: '217 91% 60%' },
-  { n: 44, letter: 'N', x: 85, y: 22, size: 48, dur: 22, del: 2, hue: '142 71% 45%' },
-  { n: 62, letter: 'O', x: 12, y: 72, size: 42, dur: 20, del: 4, hue: '210 90% 55%' },
-  { n: 19, letter: 'I', x: 78, y: 68, size: 52, dur: 16, del: 1, hue: '0 72% 51%' },
-  { n: 51, letter: 'G', x: 50, y: 85, size: 38, dur: 24, del: 3, hue: '45 93% 47%' },
-  { n: 33, letter: 'N', x: 92, y: 45, size: 34, dur: 19, del: 5, hue: '217 91% 60%' },
-  { n: 3, letter: 'B', x: 25, y: 90, size: 30, dur: 21, del: 6, hue: '0 72% 51%' },
-  { n: 71, letter: 'O', x: 65, y: 10, size: 36, dur: 17, del: 2, hue: '142 71% 45%' },
+  // Esquinas y bordes
+  { n: 7, letter: 'B', x: 5, y: 10, size: 56, dur: 18, del: 0, hue: '217 91% 60%' },
+  { n: 44, letter: 'N', x: 88, y: 8, size: 48, dur: 22, del: 2, hue: '142 71% 45%' },
+  { n: 62, letter: 'O', x: 6, y: 75, size: 42, dur: 20, del: 4, hue: '210 90% 55%' },
+  { n: 19, letter: 'I', x: 90, y: 70, size: 52, dur: 16, del: 1, hue: '0 72% 51%' },
+  { n: 51, letter: 'G', x: 50, y: 92, size: 38, dur: 24, del: 3, hue: '45 93% 47%' },
+  { n: 33, letter: 'N', x: 95, y: 40, size: 34, dur: 19, del: 5, hue: '217 91% 60%' },
+  { n: 3, letter: 'B', x: 15, y: 92, size: 30, dur: 21, del: 6, hue: '0 72% 51%' },
+  { n: 71, letter: 'O', x: 70, y: 5, size: 36, dur: 17, del: 2, hue: '142 71% 45%' },
+  // Alrededor del centro
+  { n: 28, letter: 'I', x: 2, y: 42, size: 44, dur: 20, del: 1, hue: '280 70% 55%' },
+  { n: 59, letter: 'G', x: 93, y: 55, size: 40, dur: 23, del: 3, hue: '45 93% 47%' },
+  { n: 14, letter: 'B', x: 82, y: 88, size: 32, dur: 19, del: 4, hue: '217 91% 60%' },
+  { n: 38, letter: 'N', x: 20, y: 5, size: 28, dur: 25, del: 7, hue: '142 71% 45%' },
+  { n: 67, letter: 'O', x: 40, y: 3, size: 34, dur: 18, del: 2, hue: '0 72% 51%' },
+  { n: 11, letter: 'B', x: 75, y: 90, size: 30, dur: 22, del: 5, hue: '210 90% 55%' },
+  { n: 46, letter: 'G', x: 3, y: 55, size: 26, dur: 21, del: 8, hue: '280 70% 55%' },
 ];
 
-/* ─── Mini bingo card pattern for background texture ─── */
-function BingoCardPattern({ className }: { className?: string }) {
-  const cells = Array.from({ length: 25 }, (_, i) => {
-    const col = i % 5;
-    const row = Math.floor(i / 5);
-    const isCenter = i === 12;
-    const isFilled = [0, 3, 6, 8, 12, 16, 18, 21, 24].includes(i);
-    return { col, row, isCenter, isFilled };
-  });
-
-  return (
-    <div className={className}>
-      <div className="grid grid-cols-5 gap-[2px] w-[120px]">
-        {cells.map((cell, i) => (
-          <div
-            key={i}
-            className={`w-[22px] h-[22px] rounded-[3px] border transition-all duration-1000 ${
-              cell.isCenter
-                ? 'bg-blue-500/20 border-blue-500/30'
-                : cell.isFilled
-                  ? 'bg-white/[0.06] border-white/[0.08]'
-                  : 'bg-transparent border-white/[0.03]'
-            }`}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Animated ball component with 3D depth ─── */
 function FloatingBall({ n, letter, x, y, size, dur, del, hue }: typeof FLOATING_BALLS[0]) {
   return (
     <div
@@ -63,41 +41,17 @@ function FloatingBall({ n, letter, x, y, size, dur, del, hue }: typeof FLOATING_
       <div
         className="w-full h-full rounded-full relative"
         style={{
-          background: `radial-gradient(circle at 35% 30%, hsl(${hue} / 0.9), hsl(${hue} / 0.6) 60%, hsl(${hue} / 0.3))`,
-          boxShadow: `0 0 ${size * 0.6}px hsl(${hue} / 0.15), inset 0 -${size * 0.08}px ${size * 0.15}px hsl(${hue} / 0.2)`,
+          background: `radial-gradient(circle at 35% 30%, hsl(${hue} / 0.7), hsl(${hue} / 0.4) 60%, hsl(${hue} / 0.15))`,
+          boxShadow: `0 0 ${size * 0.4}px hsl(${hue} / 0.1)`,
         }}
       >
-        {/* Inner white circle — classic bingo ball look */}
         <div
-          className="absolute rounded-full bg-white/80 flex flex-col items-center justify-center"
-          style={{
-            inset: size * 0.15,
-          }}
+          className="absolute rounded-full bg-white/90 flex flex-col items-center justify-center"
+          style={{ inset: size * 0.15 }}
         >
-          <span
-            className="font-black leading-none text-slate-600"
-            style={{ fontSize: size * 0.15 }}
-          >
-            {letter}
-          </span>
-          <span
-            className="font-black leading-none text-slate-900"
-            style={{ fontSize: size * 0.28 }}
-          >
-            {n}
-          </span>
+          <span className="font-black leading-none text-slate-500" style={{ fontSize: size * 0.15 }}>{letter}</span>
+          <span className="font-black leading-none text-slate-800" style={{ fontSize: size * 0.28 }}>{n}</span>
         </div>
-        {/* Shine highlight */}
-        <div
-          className="absolute rounded-full bg-white/30"
-          style={{
-            width: size * 0.18,
-            height: size * 0.12,
-            top: size * 0.12,
-            left: size * 0.22,
-            filter: `blur(${size * 0.04}px)`,
-          }}
-        />
       </div>
     </div>
   );
@@ -207,100 +161,42 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden select-none">
-      {/* ── Deep blue background ── */}
-      <div className="absolute inset-0 bg-[#060f1e]" />
-
-      {/* ── Radial gradient atmosphere ── */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: `
-            radial-gradient(ellipse 80% 60% at 50% 40%, hsl(217 91% 60% / 0.12) 0%, transparent 70%),
-            radial-gradient(ellipse 60% 50% at 20% 80%, hsl(210 90% 50% / 0.08) 0%, transparent 60%),
-            radial-gradient(ellipse 50% 40% at 80% 20%, hsl(200 85% 45% / 0.06) 0%, transparent 50%)
-          `,
-        }}
-      />
-
-      {/* ── Dot grid ── */}
-      <div
-        className="absolute inset-0 opacity-[0.025]"
-        style={{
-          backgroundImage: 'radial-gradient(circle at 1px 1px, white 0.5px, transparent 0)',
-          backgroundSize: '24px 24px',
-        }}
-      />
-
-      {/* ── Floating bingo balls ── */}
+    <div className="min-h-screen flex items-center justify-center bg-white select-none relative overflow-hidden">
+      {/* Floating bingo balls */}
       <div className="absolute inset-0 overflow-hidden">
         {FLOATING_BALLS.map((ball) => (
           <FloatingBall key={`${ball.letter}${ball.n}`} {...ball} />
         ))}
       </div>
 
-      {/* ── Decorative bingo card patterns ── */}
-      <BingoCardPattern className="absolute top-[12%] left-[6%] opacity-[0.15] rotate-[-12deg] hidden lg:block" />
-      <BingoCardPattern className="absolute bottom-[15%] right-[8%] opacity-[0.1] rotate-[8deg] hidden lg:block" />
-
-      {/* ── Horizontal light streak ── */}
       <div
-        className="absolute left-0 right-0 h-px top-[38%] opacity-[0.06]"
-        style={{
-          background: 'linear-gradient(90deg, transparent, hsl(217 91% 60% / 0.8) 30%, hsl(210 90% 50% / 0.6) 70%, transparent)',
-        }}
-      />
-
-      {/* ── Main card ── */}
-      <div
-        className={`relative z-10 w-full max-w-[400px] mx-4 transition-all duration-700 ease-out ${
+        className={`w-full max-w-[400px] mx-4 transition-all duration-700 ease-out ${
           mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
         }`}
       >
-        {/* Header — logo */}
+        {/* Logo */}
         <div className="text-center mb-8">
           <img src="/logo.png" alt="Logo" className="h-24 mx-auto mb-4 object-contain" />
         </div>
 
-        {/* ── Glass form card ── */}
-        <div
-          className="relative rounded-2xl overflow-hidden"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
-            boxShadow: '0 32px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.07) inset, 0 1px 0 rgba(255,255,255,0.05) inset',
-            backdropFilter: 'blur(20px)',
-          }}
-        >
-          {/* Top gradient accent line */}
-          <div
-            className="h-[2px]"
-            style={{
-              background: 'linear-gradient(90deg, transparent 10%, #2563eb 30%, #3b82f6 70%, transparent 90%)',
-            }}
-          />
-
+        {/* Form card */}
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden">
           <div className="p-6 sm:p-8">
-            <h2 className="text-[17px] font-semibold text-white mb-1">Iniciar Sesion</h2>
+            <h2 className="text-[17px] font-semibold text-slate-900 mb-1">Iniciar Sesion</h2>
             <p className="text-slate-500 text-sm mb-6">Ingrese sus credenciales para continuar</p>
 
             {/* Error */}
             {error && (
-              <div
-                className="mb-5 p-3 rounded-xl flex items-center gap-3"
-                style={{
-                  background: 'rgba(239, 68, 68, 0.08)',
-                  border: '1px solid rgba(239, 68, 68, 0.15)',
-                }}
-              >
-                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                <span className="text-red-400 text-sm">{error}</span>
+              <div className="mb-5 p-3 rounded-xl flex items-center gap-3 bg-red-50 border border-red-200">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <span className="text-red-600 text-sm">{error}</span>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Username */}
               <div className="space-y-1.5">
-                <label htmlFor="username" className="text-slate-400 text-xs font-medium tracking-wide uppercase block">
+                <label htmlFor="username" className="text-slate-600 text-xs font-medium tracking-wide uppercase block">
                   Usuario
                 </label>
                 <Input
@@ -312,13 +208,13 @@ export default function Login() {
                   required
                   autoComplete="username"
                   autoFocus
-                  className="h-11 bg-white/[0.04] border-white/[0.08] text-white placeholder:text-slate-600 focus:border-blue-500/40 focus:ring-blue-500/15 rounded-xl text-[15px]"
+                  className="h-11 rounded-xl text-[15px]"
                 />
               </div>
 
               {/* Password */}
               <div className="space-y-1.5">
-                <label htmlFor="password" className="text-slate-400 text-xs font-medium tracking-wide uppercase block">
+                <label htmlFor="password" className="text-slate-600 text-xs font-medium tracking-wide uppercase block">
                   Contrasena
                 </label>
                 <Input
@@ -329,11 +225,11 @@ export default function Login() {
                   placeholder="Ingrese su contrasena"
                   required
                   autoComplete="off"
-                  className="h-11 bg-white/[0.04] border-white/[0.08] text-white placeholder:text-slate-600 focus:border-blue-500/40 focus:ring-blue-500/15 rounded-xl text-[15px]"
+                  className="h-11 rounded-xl text-[15px]"
                 />
               </div>
 
-              {/* Turnstile CAPTCHA — solo si está habilitado */}
+              {/* Turnstile CAPTCHA */}
               {captchaEnabled && <div ref={turnstileRef} className="flex justify-center" />}
 
               {/* Submit */}
@@ -341,12 +237,8 @@ export default function Login() {
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full h-11 rounded-xl text-[15px] font-semibold border-0 relative overflow-hidden transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+                  className="w-full h-11 rounded-xl text-[15px] font-semibold"
                   size="lg"
-                  style={{
-                    background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%)',
-                    boxShadow: '0 8px 24px rgba(37, 99, 235, 0.35), 0 2px 8px rgba(59, 130, 246, 0.2)',
-                  }}
                 >
                   {isLoading ? (
                     <>
@@ -362,14 +254,8 @@ export default function Login() {
 
           </div>
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-[11px] text-slate-400 mt-6 tracking-wide">
-          Bingo Pro Manager &middot; v2.0
-        </p>
       </div>
 
-      {/* ── Inline styles for floating animation ── */}
       <style>{`
         @keyframes login-float {
           0% { transform: translateY(0) rotate(0deg); }
