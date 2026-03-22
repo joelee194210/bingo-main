@@ -84,9 +84,10 @@ export default function Users() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       closeModal();
+      toast.success('Usuario creado');
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
-      setError(err.response?.data?.error || 'Error al crear usuario');
+      toast.error(err.response?.data?.error || 'Error al crear usuario');
     },
   });
 
@@ -98,9 +99,10 @@ export default function Users() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       closeModal();
+      toast.success('Usuario actualizado');
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
-      setError(err.response?.data?.error || 'Error al actualizar usuario');
+      toast.error(err.response?.data?.error || 'Error al actualizar usuario');
     },
   });
 
