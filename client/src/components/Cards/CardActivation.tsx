@@ -270,7 +270,7 @@ export default function CardActivation() {
             </div>
 
             {/* Visual card */}
-            {card.numbers && (
+            {card.numbers && typeof card.numbers === 'object' && card.numbers.N && (
               <div className="flex justify-center py-2">
                 {renderBingoCard(card.numbers)}
               </div>
