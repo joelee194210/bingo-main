@@ -51,7 +51,8 @@ export default function EventList() {
     },
   });
 
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null);
+  const [deleteInput, setDeleteInput] = useState('');
   const [deletingEventId, setDeletingEventId] = useState<number | null>(null);
   const deleteMutation = useMutation({
     mutationFn: deleteEvent,
@@ -166,7 +167,7 @@ export default function EventList() {
                 <Button variant="success" size="sm" asChild className="flex-1">
                   <Link to={`/cards/generate/${event.id}`}><CreditCard className="mr-1 h-4 w-4" /> Cartones</Link>
                 </Button>
-                <Button variant="destructive" size="sm" onClick={() => setDeleteConfirmId(event.id)} disabled={deletingEventId === event.id && deleteMutation.isPending}>
+                <Button variant="destructive" size="sm" onClick={() => { setDeleteConfirm({ id: event.id, name: event.name }); setDeleteInput(''); }} disabled={deletingEventId === event.id && deleteMutation.isPending}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </CardFooter>
@@ -175,19 +176,41 @@ export default function EventList() {
         </div>
       )}
 
-      {/* Confirmar eliminacion */}
-      <AlertDialog open={deleteConfirmId !== null} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
+      {/* Confirmar eliminacion — requiere escribir el nombre del evento */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) { setDeleteConfirm(null); setDeleteInput(''); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar este evento?</AlertDialogTitle>
-            <AlertDialogDescription>Esta accion no se puede deshacer. Se eliminaran todos los cartones y juegos asociados.</AlertDialogDescription>
+            <AlertDialogTitle>Eliminar evento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta accion no se puede deshacer. Se eliminaran <strong className="text-foreground">todos los cartones, juegos, inventario y datos asociados</strong>.
+            </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm">Para confirmar, escribe el nombre completo del evento:</p>
+            <p className="text-sm font-bold text-foreground">{deleteConfirm?.name}</p>
+            <Input
+              value={deleteInput}
+              onChange={(e) => setDeleteInput(e.target.value)}
+              placeholder="Escribe el nombre del evento aqui..."
+              autoFocus
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
-              if (deleteConfirmId) { setDeletingEventId(deleteConfirmId); deleteMutation.mutate(deleteConfirmId); }
-              setDeleteConfirmId(null);
-            }}>Eliminar</AlertDialogAction>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteInput !== deleteConfirm?.name}
+              onClick={() => {
+                if (deleteConfirm && deleteInput === deleteConfirm.name) {
+                  setDeletingEventId(deleteConfirm.id);
+                  deleteMutation.mutate(deleteConfirm.id);
+                }
+                setDeleteConfirm(null);
+                setDeleteInput('');
+              }}
+            >
+              Eliminar Evento
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
