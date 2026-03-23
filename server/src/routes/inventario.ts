@@ -9,9 +9,9 @@ import { createUser, validatePassword } from '../services/authService.js';
 
 const router = Router();
 
-// Helper: verifica si el usuario tiene acceso al almacen (admin/moderator bypasean)
+// Helper: verifica si el usuario tiene acceso al almacen (admin/moderator/loteria bypasean)
 async function verificarAccesoAlmacen(pool: ReturnType<typeof getPool>, userId: number, userRole: string, almacenIds: number[]): Promise<boolean> {
-  if (userRole === 'admin' || userRole === 'moderator') return true;
+  if (userRole === 'admin' || userRole === 'moderator' || userRole === 'loteria') return true;
   if (almacenIds.length === 0) return true;
   const validIds = almacenIds.filter(id => id && id > 0);
   if (validIds.length === 0) return false;
@@ -19,7 +19,8 @@ async function verificarAccesoAlmacen(pool: ReturnType<typeof getPool>, userId: 
     `SELECT almacen_id FROM almacen_usuarios WHERE user_id = $1 AND almacen_id = ANY($2) AND is_active = TRUE`,
     [userId, validIds]
   );
-  return result.rows.length >= validIds.length;
+  // El usuario debe estar asignado a al menos uno de los almacenes involucrados
+  return result.rows.length > 0;
 }
 
 // =====================================================
