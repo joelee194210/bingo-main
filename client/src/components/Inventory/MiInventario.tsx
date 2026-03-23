@@ -98,7 +98,7 @@ export default function MiInventario() {
     if (!loteCartones[loteId]) {
       setLoadingLotes(prev => new Set(prev).add(loteId));
       try {
-        const result = await getCartonesLote(loteId);
+        const result = await getCartonesLote(loteId, Number(selectedAlmacen));
         setLoteCartones(prev => ({ ...prev, [loteId]: result.data || [] }));
       } catch {
         setLoteCartones(prev => ({ ...prev, [loteId]: [] }));

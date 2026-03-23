@@ -372,15 +372,21 @@ router.get('/cartones-sueltos/:eventId/:almacenId', requirePermission('inventory
   }
 });
 
-// Cartones de un lote
+// Cartones de un lote (filtrar por almacen_id si se proporciona)
 router.get('/lotes/:loteId/cartones', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const result = await pool.query(
-      `SELECT c.id, c.card_code, c.serial, c.is_sold, c.buyer_name, c.sold_at
-       FROM cards c WHERE c.lote_id = $1 ORDER BY c.card_number`,
-      [parseInt(req.params.loteId as string, 10)]
-    );
+    const loteId = parseInt(req.params.loteId as string, 10);
+    const almacenId = req.query.almacen_id ? parseInt(req.query.almacen_id as string, 10) : null;
+
+    const query = almacenId
+      ? `SELECT c.id, c.card_code, c.serial, c.is_sold, c.buyer_name, c.sold_at
+         FROM cards c WHERE c.lote_id = $1 AND c.almacen_id = $2 ORDER BY c.card_number`
+      : `SELECT c.id, c.card_code, c.serial, c.is_sold, c.buyer_name, c.sold_at
+         FROM cards c WHERE c.lote_id = $1 ORDER BY c.card_number`;
+    const params = almacenId ? [loteId, almacenId] : [loteId];
+
+    const result = await pool.query(query, params);
     res.json({ success: true, data: result.rows });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });

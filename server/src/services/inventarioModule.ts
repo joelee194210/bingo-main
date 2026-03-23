@@ -894,6 +894,16 @@ export async function ejecutarMovimientoBulk(
           await db.query('UPDATE cards SET almacen_id = $1 WHERE id = $2', [data.almacen_destino_id, card.id]);
         }
         cartones = 1;
+        // Actualizar status de caja padre si se sacó un cartón de una caja sellada
+        const cardLoteResult = await db.query('SELECT lote_id FROM cards WHERE id = $1', [card.id]);
+        const cardLoteId = cardLoteResult.rows[0]?.lote_id;
+        if (cardLoteId) {
+          const loteInfo = await db.query('SELECT caja_id FROM lotes WHERE id = $1', [cardLoteId]);
+          const cajaId = loteInfo.rows[0]?.caja_id;
+          if (cajaId) {
+            await db.query("UPDATE cajas SET status = 'abierta', updated_at = NOW() WHERE id = $1 AND status = 'sellada'", [cajaId]);
+          }
+        }
       } else {
         throw new Error('Tipo de entidad invalido');
       }
