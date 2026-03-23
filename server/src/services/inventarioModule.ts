@@ -747,6 +747,14 @@ export async function ejecutarMovimientoBulk(
         const cajaResult = await pool.query('SELECT id, caja_code, almacen_id, status FROM cajas WHERE caja_code = $1 AND event_id = $2', [item.referencia, eventId]);
         if (cajaResult.rows.length === 0) throw new Error(`Caja "${item.referencia}" no encontrada`);
         const caja = cajaResult.rows[0];
+        // Verificar que la caja esté en el almacén origen
+        if (data.almacen_origen_id && caja.almacen_id !== data.almacen_origen_id) {
+          throw new Error(`Caja "${item.referencia}" no esta en el almacen origen`);
+        }
+        // Verificar que no se mueva al mismo almacén
+        if (caja.almacen_id === data.almacen_destino_id) {
+          throw new Error(`Caja "${item.referencia}" ya esta en el almacen destino`);
+        }
         if (!isDevolucion && caja.status === 'agotada') throw new Error(`Caja "${item.referencia}" ya esta agotada`);
         if (caja.almacen_id) {
           const r = await pool.query('SELECT name FROM almacenes WHERE id = $1', [caja.almacen_id]);
@@ -773,6 +781,14 @@ export async function ejecutarMovimientoBulk(
         const loteResult = await pool.query('SELECT l.id, l.lote_code, l.almacen_id, l.status FROM lotes l WHERE l.lote_code = $1 AND l.event_id = $2', [item.referencia, eventId]);
         if (loteResult.rows.length === 0) throw new Error(`Libreta "${item.referencia}" no encontrada`);
         const lote = loteResult.rows[0];
+        // Verificar que la libreta esté en el almacén origen
+        if (data.almacen_origen_id && lote.almacen_id !== data.almacen_origen_id) {
+          throw new Error(`Libreta "${item.referencia}" no esta en el almacen origen`);
+        }
+        // Verificar que no se mueva al mismo almacén
+        if (lote.almacen_id === data.almacen_destino_id) {
+          throw new Error(`Libreta "${item.referencia}" ya esta en el almacen destino`);
+        }
         if (!isDevolucion && lote.status === 'vendido_completo') throw new Error(`Libreta "${item.referencia}" ya vendida`);
         if (lote.almacen_id) {
           const r = await pool.query('SELECT name FROM almacenes WHERE id = $1', [lote.almacen_id]);
@@ -795,6 +811,14 @@ export async function ejecutarMovimientoBulk(
         const cardResult = await pool.query('SELECT c.id, c.card_code, c.is_sold, c.almacen_id FROM cards c WHERE c.card_code = $1 AND c.event_id = $2', [item.referencia, eventId]);
         if (cardResult.rows.length === 0) throw new Error(`Carton "${item.referencia}" no encontrado`);
         const card = cardResult.rows[0];
+        // Verificar que el cartón esté en el almacén origen
+        if (data.almacen_origen_id && card.almacen_id !== data.almacen_origen_id) {
+          throw new Error(`Carton "${item.referencia}" no esta en el almacen origen`);
+        }
+        // Verificar que no se mueva al mismo almacén
+        if (card.almacen_id === data.almacen_destino_id) {
+          throw new Error(`Carton "${item.referencia}" ya esta en el almacen destino`);
+        }
         if (!isDevolucion && card.is_sold) throw new Error(`Carton "${item.referencia}" ya vendido`);
         if (card.almacen_id) {
           const r = await pool.query('SELECT name FROM almacenes WHERE id = $1', [card.almacen_id]);
