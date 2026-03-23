@@ -598,6 +598,17 @@ export async function cargarInventarioPorReferencia(
     await pool.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [almacenId, lote.id]);
     await pool.query('UPDATE cards SET almacen_id = $1 WHERE lote_id = $2 AND is_sold = false', [almacenId, lote.id]);
     cartones = Number(soldCheck.rows[0].total) - Number(soldCheck.rows[0].vendidos);
+    // Actualizar status de la caja padre
+    if (lote.caja_id) {
+      const lotesEnCaja = await pool.query(
+        'SELECT COUNT(*) as total FROM lotes WHERE caja_id = $1 AND almacen_id = (SELECT almacen_id FROM cajas WHERE id = $1)',
+        [lote.caja_id]
+      );
+      const totalLotes = await pool.query('SELECT total_lotes FROM cajas WHERE id = $1', [lote.caja_id]);
+      if (Number(lotesEnCaja.rows[0].total) < Number(totalLotes.rows[0].total_lotes)) {
+        await pool.query("UPDATE cajas SET status = 'abierta', updated_at = NOW() WHERE id = $1 AND status = 'sellada'", [lote.caja_id]);
+      }
+    }
   } else if (tipoEntidad === 'carton') {
     const cardResult = await pool.query(
       'SELECT c.id, c.card_code, c.lote_id, c.is_sold, c.almacen_id FROM cards c WHERE c.card_code = $1 AND c.event_id = $2',
@@ -788,7 +799,7 @@ export async function ejecutarMovimientoBulk(
           cartones = Number(total) - Number(vendidos);
         }
       } else if (item.tipo === 'libreta') {
-        const loteResult = await db.query('SELECT l.id, l.lote_code, l.almacen_id, l.status FROM lotes l WHERE l.lote_code = $1 AND l.event_id = $2', [item.referencia, eventId]);
+        const loteResult = await db.query('SELECT l.id, l.lote_code, l.almacen_id, l.status, l.caja_id FROM lotes l WHERE l.lote_code = $1 AND l.event_id = $2', [item.referencia, eventId]);
         if (loteResult.rows.length === 0) throw new Error(`Libreta "${item.referencia}" no encontrada`);
         const lote = loteResult.rows[0];
         // Verificar que la libreta esté en el almacén origen
@@ -816,6 +827,17 @@ export async function ejecutarMovimientoBulk(
         } else {
           await db.query('UPDATE cards SET almacen_id = $1 WHERE lote_id = $2 AND is_sold = false', [data.almacen_destino_id, lote.id]);
           cartones = Number(soldCheck.rows[0].total) - Number(soldCheck.rows[0].vendidos);
+        }
+        // Actualizar status de la caja padre si la libreta fue movida fuera
+        if (lote.caja_id) {
+          const lotesEnCaja = await db.query(
+            'SELECT COUNT(*) as total FROM lotes WHERE caja_id = $1 AND almacen_id = (SELECT almacen_id FROM cajas WHERE id = $1)',
+            [lote.caja_id]
+          );
+          const totalLotes = await db.query('SELECT total_lotes FROM cajas WHERE id = $1', [lote.caja_id]);
+          if (Number(lotesEnCaja.rows[0].total) < Number(totalLotes.rows[0].total_lotes)) {
+            await db.query("UPDATE cajas SET status = 'abierta', updated_at = NOW() WHERE id = $1 AND status = 'sellada'", [lote.caja_id]);
+          }
         }
       } else if (item.tipo === 'carton') {
         const cardResult = await db.query('SELECT c.id, c.card_code, c.is_sold, c.almacen_id FROM cards c WHERE c.card_code = $1 AND c.event_id = $2', [item.referencia, eventId]);
