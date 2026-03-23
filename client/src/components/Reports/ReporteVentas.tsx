@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getReporteVentas,
   downloadReporteVentasPdf,
@@ -51,6 +51,7 @@ function formatDateTime(dateStr: string) {
 
 export default function ReporteVentas() {
   const { hasPermission } = useAuth();
+  const queryClient = useQueryClient();
   const isAdmin = hasPermission('reports:export');
 
   // Default: ultimos 7 dias (hora local, no UTC)
@@ -101,7 +102,7 @@ export default function ReporteVentas() {
   }, [treeData]);
 
   // Reporte — carga automáticamente cuando hay evento y fechas
-  const { data: reporteRes, isLoading, refetch } = useQuery({
+  const { data: reporteRes, isLoading } = useQuery({
     queryKey: ['reporte-ventas', eventId, desde, hasta, almacenId, vendedorId],
     queryFn: () => getReporteVentas(eventId!, { desde, hasta, almacen_id: almacenId, vendedor_id: vendedorId }),
     enabled: !!eventId && !!desde && !!hasta,
@@ -245,7 +246,7 @@ export default function ReporteVentas() {
             )}
             {/* Botón Buscar */}
             <div className="flex items-end">
-              <Button onClick={() => refetch()} disabled={!eventId || !desde || !hasta || isLoading}>
+              <Button onClick={() => { queryClient.invalidateQueries({ queryKey: ['reporte-ventas'] }); }} disabled={!eventId || !desde || !hasta || isLoading}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                 Buscar
               </Button>
