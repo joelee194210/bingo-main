@@ -1337,10 +1337,13 @@ export async function getCajas(pool: Pool, eventId: number, almacenId?: number):
 }[]> {
   const where = almacenId ? 'c.event_id = $1 AND c.almacen_id = $2' : 'c.event_id = $1';
   const params = almacenId ? [eventId, almacenId] : [eventId];
+  // Cuando se filtra por almacén, contar solo lotes/cards que están en ese almacén
+  const loteAlmFilter = almacenId ? `AND l.almacen_id = ${Number(almacenId)}` : '';
+  const cardAlmFilter = almacenId ? `AND ca.almacen_id = ${Number(almacenId)}` : '';
   const cajasResult = await pool.query(`
     SELECT c.*,
-      COALESCE((SELECT SUM(l.total_cards) FROM lotes l WHERE l.caja_id = c.id), 0) as total_cartones,
-      COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND ca.is_sold = true), 0) as asignados,
+      COALESCE((SELECT SUM(l.total_cards) FROM lotes l WHERE l.caja_id = c.id ${loteAlmFilter}), 0) as total_cartones,
+      COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND ca.is_sold = true ${cardAlmFilter}), 0) as asignados,
       a.name as almacen_name
     FROM cajas c
     LEFT JOIN almacenes a ON a.id = c.almacen_id
@@ -1348,14 +1351,15 @@ export async function getCajas(pool: Pool, eventId: number, almacenId?: number):
     ORDER BY c.caja_code
   `, params);
 
-  // Obtener todos los lotes en una sola query (evita N+1)
+  // Obtener lotes — filtrar por almacén si se especifica
   const cajaIds = cajasResult.rows.map((c: any) => c.id);
   const lotesMap: Record<number, any[]> = {};
   if (cajaIds.length > 0) {
-    const lotesResult = await pool.query(`
-      SELECT id, caja_id, lote_code, series_number, total_cards, cards_sold, status
-      FROM lotes WHERE caja_id = ANY($1::int[]) ORDER BY lote_code
-    `, [cajaIds]);
+    const lotesQuery = almacenId
+      ? `SELECT id, caja_id, lote_code, series_number, total_cards, cards_sold, status FROM lotes WHERE caja_id = ANY($1::int[]) AND almacen_id = $2 ORDER BY lote_code`
+      : `SELECT id, caja_id, lote_code, series_number, total_cards, cards_sold, status FROM lotes WHERE caja_id = ANY($1::int[]) ORDER BY lote_code`;
+    const lotesParams = almacenId ? [cajaIds, almacenId] : [cajaIds];
+    const lotesResult = await pool.query(lotesQuery, lotesParams);
     for (const l of lotesResult.rows) {
       if (!lotesMap[l.caja_id]) lotesMap[l.caja_id] = [];
       lotesMap[l.caja_id].push({ id: l.id, lote_code: l.lote_code, series_number: l.series_number, total_cards: l.total_cards, cards_sold: l.cards_sold, status: l.status });
