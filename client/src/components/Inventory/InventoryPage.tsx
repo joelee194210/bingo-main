@@ -144,6 +144,8 @@ export default function InventoryPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  // Admin, moderator y loteria ven todo; inventory/seller solo su almacén
+  const canSeeAll = user?.role === 'admin' || user?.role === 'moderator' || user?.role === 'loteria';
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedEventId, setSelectedEventId] = useState<number | undefined>(
     eventIdParam ? Number(eventIdParam) : undefined
@@ -214,10 +216,10 @@ export default function InventoryPage() {
   const { data: misAlmacenesData } = useQuery({
     queryKey: ['mis-almacenes'],
     queryFn: getMisAlmacenes,
-    enabled: !isAdmin,
+    enabled: !canSeeAll,
   });
   const miAlmacen = misAlmacenesData?.data?.find(a => a.event_id === eventId);
-  const miAlmacenId = isAdmin ? undefined : miAlmacen?.almacen_id;
+  const miAlmacenId = canSeeAll ? undefined : miAlmacen?.almacen_id;
 
   const { data: treeData, isLoading: treeLoading } = useQuery({
     queryKey: ['almacen-tree', eventId],
@@ -270,7 +272,14 @@ export default function InventoryPage() {
     enabled: !!selectedDocumentoId,
   });
 
-  const tree = useMemo(() => treeData?.data ?? [], [treeData?.data]);
+  const fullTree = useMemo(() => treeData?.data ?? [], [treeData?.data]);
+  // Filtrar árbol: operadores solo ven su almacén
+  const tree = useMemo(() => {
+    if (canSeeAll || !miAlmacenId) return fullTree;
+    const filterTree = (nodes: typeof fullTree): typeof fullTree =>
+      nodes.filter(n => n.id === miAlmacenId).map(n => ({ ...n }));
+    return filterTree(fullTree);
+  }, [fullTree, canSeeAll, miAlmacenId]);
   // B4: derivar lista plana del tree en lugar de query separada
   const almacenes = useMemo(() => {
     const flat: typeof tree = [];
