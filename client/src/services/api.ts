@@ -318,6 +318,12 @@ export const getCajas = (eventId: number, almacenId?: number) =>
 export const getCartonesLote = (loteId: number) =>
   api.get<ApiResponse<{ id: number; card_code: string; serial: string; is_sold: boolean; buyer_name: string | null; sold_at: string | null }[]>>(`/inventario/lotes/${loteId}/cartones`).then(r => r.data);
 
+export const getLibretasSueltas = (eventId: number, almacenId: number) =>
+  api.get<ApiResponse<{ id: number; lote_code: string; series_number: string; total_cards: number; cards_sold: number; status: string; caja_code: string | null }[]>>(`/inventario/libretas-sueltas/${eventId}/${almacenId}`).then(r => r.data);
+
+export const getCartonesSueltos = (eventId: number, almacenId: number) =>
+  api.get<ApiResponse<{ id: number; card_code: string; serial: string; card_number: number; is_sold: boolean; buyer_name: string | null; lote_code: string | null }[]>>(`/inventario/cartones-sueltos/${eventId}/${almacenId}`).then(r => r.data);
+
 export const getCajasDisponibles = (eventId: number) =>
   api.get<ApiResponse<{ id: number; caja_code: string; total_lotes: number; total_cartones: number; almacen_id: number | null; almacen_name: string | null }[]>>(`/inventario/cajas-disponibles/${eventId}`).then(r => r.data);
 

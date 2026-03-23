@@ -350,6 +350,28 @@ router.get('/lotes/:eventId', requirePermission('inventory:read'), async (req, r
   }
 });
 
+// Libretas sueltas de un almacén (sin caja en el mismo almacén)
+router.get('/libretas-sueltas/:eventId/:almacenId', requirePermission('inventory:read'), async (req, res) => {
+  try {
+    const pool = getPool();
+    const data = await inv.getLibretasSueltas(pool, parseInt(req.params.eventId as string, 10), parseInt(req.params.almacenId as string, 10));
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Cartones sueltos de un almacén (sin lote en el mismo almacén)
+router.get('/cartones-sueltos/:eventId/:almacenId', requirePermission('inventory:read'), async (req, res) => {
+  try {
+    const pool = getPool();
+    const data = await inv.getCartonesSueltos(pool, parseInt(req.params.eventId as string, 10), parseInt(req.params.almacenId as string, 10));
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
 // Cartones de un lote
 router.get('/lotes/:loteId/cartones', requirePermission('inventory:read'), async (req, res) => {
   try {

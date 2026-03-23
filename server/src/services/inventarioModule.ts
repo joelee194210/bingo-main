@@ -1372,6 +1372,40 @@ export async function getCajas(pool: Pool, eventId: number, almacenId?: number):
   }));
 }
 
+// Libretas sueltas en un almacén (su caja no está en el mismo almacén o no tiene caja)
+export async function getLibretasSueltas(pool: Pool, eventId: number, almacenId: number): Promise<{
+  id: number; lote_code: string; series_number: string; total_cards: number; cards_sold: number; status: string;
+  caja_code: string | null;
+}[]> {
+  const result = await pool.query(`
+    SELECT l.id, l.lote_code, l.series_number, l.total_cards, l.cards_sold, l.status,
+      c.caja_code
+    FROM lotes l
+    LEFT JOIN cajas c ON c.id = l.caja_id
+    WHERE l.event_id = $1 AND l.almacen_id = $2
+      AND (l.caja_id IS NULL OR c.almacen_id IS DISTINCT FROM $2)
+    ORDER BY l.lote_code
+  `, [eventId, almacenId]);
+  return result.rows;
+}
+
+// Cartones sueltos en un almacén (su lote no está en el mismo almacén o no tiene lote)
+export async function getCartonesSueltos(pool: Pool, eventId: number, almacenId: number): Promise<{
+  id: number; card_code: string; serial: string; card_number: number; is_sold: boolean;
+  buyer_name: string | null; lote_code: string | null;
+}[]> {
+  const result = await pool.query(`
+    SELECT ca.id, ca.card_code, ca.serial, ca.card_number, ca.is_sold, ca.buyer_name,
+      l.lote_code
+    FROM cards ca
+    LEFT JOIN lotes l ON l.id = ca.lote_id
+    WHERE ca.event_id = $1 AND ca.almacen_id = $2
+      AND (ca.lote_id IS NULL OR l.almacen_id IS DISTINCT FROM $2)
+    ORDER BY ca.serial
+  `, [eventId, almacenId]);
+  return result.rows;
+}
+
 export async function getLotes(pool: Pool, eventId: number): Promise<{
   id: number;
   lote_code: string;

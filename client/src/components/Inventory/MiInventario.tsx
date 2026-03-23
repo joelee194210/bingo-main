@@ -17,6 +17,8 @@ import {
   getResumenInventario,
   getCajas,
   getCartonesLote,
+  getLibretasSueltas,
+  getCartonesSueltos,
 } from '@/services/api';
 
 export default function MiInventario() {
@@ -47,8 +49,22 @@ export default function MiInventario() {
     enabled: !!currentAlmacen,
   });
 
+  const { data: libretasSueltasData } = useQuery({
+    queryKey: ['libretas-sueltas', currentAlmacen?.event_id, currentAlmacen?.almacen_id],
+    queryFn: () => getLibretasSueltas(currentAlmacen!.event_id, currentAlmacen!.almacen_id),
+    enabled: !!currentAlmacen,
+  });
+
+  const { data: cartonesSueltosData } = useQuery({
+    queryKey: ['cartones-sueltos', currentAlmacen?.event_id, currentAlmacen?.almacen_id],
+    queryFn: () => getCartonesSueltos(currentAlmacen!.event_id, currentAlmacen!.almacen_id),
+    enabled: !!currentAlmacen,
+  });
+
   const resumen = resumenData?.data;
   const cajas = cajasData?.data ?? [];
+  const libretasSueltas = libretasSueltasData?.data ?? [];
+  const cartonesSueltos = cartonesSueltosData?.data ?? [];
 
   // Auto-select if only one almacen
   useEffect(() => {
@@ -344,6 +360,65 @@ export default function MiInventario() {
               )}
             </CardContent>
           </Card>
+
+          {/* Libretas sueltas (sin caja en este almacén) */}
+          {libretasSueltas.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-amber-500" />
+                  Libretas Individuales ({libretasSueltas.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="divide-y">
+                  {libretasSueltas.map(l => (
+                    <div key={l.id} className="py-2 flex items-center justify-between">
+                      <div>
+                        <span className="font-mono font-medium text-sm">{l.lote_code}</span>
+                        {l.caja_code && <span className="text-xs text-muted-foreground ml-2">(de caja {l.caja_code})</span>}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span>{l.total_cards - l.cards_sold} disp.</span>
+                        <span className="text-muted-foreground">/ {l.total_cards}</span>
+                        <Badge variant={l.cards_sold > 0 ? 'success' : 'secondary'} className="text-[10px]">
+                          {l.cards_sold} vend.
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Cartones sueltos (sin lote en este almacén) */}
+          {cartonesSueltos.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-blue-500" />
+                  Cartones Individuales ({cartonesSueltos.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="divide-y">
+                  {cartonesSueltos.map(c => (
+                    <div key={c.id} className="py-2 flex items-center justify-between">
+                      <div>
+                        <span className="font-mono font-medium text-sm">{c.serial}</span>
+                        <span className="text-xs text-muted-foreground ml-2">{c.card_code}</span>
+                        {c.lote_code && <span className="text-xs text-muted-foreground ml-1">(de libreta {c.lote_code})</span>}
+                      </div>
+                      <Badge variant={c.is_sold ? 'success' : 'secondary'} className="text-[10px]">
+                        {c.is_sold ? 'Vendido' : 'Disponible'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>
