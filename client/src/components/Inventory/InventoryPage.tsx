@@ -59,10 +59,12 @@ function AlmacenNode({
   almacen,
   level,
   onEdit,
+  canEdit = true,
 }: {
   almacen: Almacen;
   level: number;
   onEdit: (a: Almacen) => void;
+  canEdit?: boolean;
 }) {
   const [expanded, setExpanded] = useState(level === 0);
   const hasChildren = almacen.children && almacen.children.length > 0;
@@ -89,17 +91,19 @@ function AlmacenNode({
           {almacen.es_agencia_loteria && (
             <Badge variant="info" className="text-[10px] shrink-0">Agencia</Badge>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-xs ml-auto shrink-0"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(almacen);
-            }}
-          >
-            Editar
-          </Button>
+          {canEdit && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs ml-auto shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(almacen);
+              }}
+            >
+              Editar
+            </Button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-1" style={{ marginLeft: `${20 + 16 + 8}px` }}>
           {(almacen.inv_cajas ?? 0) > 0 && (
@@ -127,7 +131,7 @@ function AlmacenNode({
       {expanded && hasChildren && (
         <div>
           {almacen.children!.map((child) => (
-            <AlmacenNode key={child.id} almacen={child} level={level + 1} onEdit={onEdit} />
+            <AlmacenNode key={child.id} almacen={child} level={level + 1} onEdit={onEdit} canEdit={canEdit} />
           ))}
         </div>
       )}
@@ -218,6 +222,14 @@ export default function InventoryPage() {
     queryFn: getMisAlmacenes,
     enabled: !canSeeAll,
   });
+
+  // Auto-seleccionar evento del operador si no tiene uno
+  useEffect(() => {
+    if (!canSeeAll && !selectedEventId && misAlmacenesData?.data?.length) {
+      setSelectedEventId(misAlmacenesData.data[0].event_id);
+    }
+  }, [canSeeAll, selectedEventId, misAlmacenesData]);
+
   const miAlmacen = misAlmacenesData?.data?.find(a => a.event_id === eventId);
   const miAlmacenId = canSeeAll ? undefined : miAlmacen?.almacen_id;
 
@@ -793,10 +805,12 @@ export default function InventoryPage() {
                 <Upload className="mr-1 h-4 w-4" />
                 Movimiento
               </Button>
-              <Button size="sm" onClick={openCreateAlmacen}>
-                <Plus className="mr-1 h-4 w-4" />
-                Almacen
-              </Button>
+              {canSeeAll && (
+                <Button size="sm" onClick={openCreateAlmacen}>
+                  <Plus className="mr-1 h-4 w-4" />
+                  Almacen
+                </Button>
+              )}
             </div>
           </div>
 
@@ -815,7 +829,7 @@ export default function InventoryPage() {
               ) : (
                 <div className="divide-y">
                   {tree.map((a) => (
-                    <AlmacenNode key={a.id} almacen={a} level={0} onEdit={openEditAlmacen} />
+                    <AlmacenNode key={a.id} almacen={a} level={0} onEdit={openEditAlmacen} canEdit={canSeeAll} />
                   ))}
                 </div>
               )}
