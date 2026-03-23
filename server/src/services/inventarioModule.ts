@@ -528,7 +528,7 @@ export async function getCajasDisponibles(pool: Pool, eventId: number): Promise<
 }[]> {
   const result = await pool.query(`
     SELECT c.id, c.caja_code, c.total_lotes, c.almacen_id,
-      COALESCE((SELECT SUM(l.total_cards) FROM lotes l WHERE l.caja_id = c.id), 0) AS total_cartones,
+      COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND (c.almacen_id IS NULL OR ca.almacen_id = c.almacen_id)), 0) AS total_cartones,
       a.name AS almacen_name
     FROM cajas c
     LEFT JOIN almacenes a ON a.id = c.almacen_id
@@ -612,9 +612,10 @@ export async function cargarInventarioPorReferencia(
     if (Number(soldCheck.rows[0].total) > 0 && Number(soldCheck.rows[0].vendidos) === Number(soldCheck.rows[0].total)) {
       throw new Error(`Libreta "${referencia}" tiene todos los cartones vendidos`);
     }
-    // Mover libreta + todos sus cartones (no vendidos)
+    // Mover libreta + solo cartones no vendidos que están en el almacén origen del lote
+    const loteOrigenAlm = lote.almacen_id;
     await client.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [almacenId, lote.id]);
-    await client.query('UPDATE cards SET almacen_id = $1 WHERE lote_id = $2 AND is_sold = false', [almacenId, lote.id]);
+    await client.query('UPDATE cards SET almacen_id = $1 WHERE lote_id = $2 AND is_sold = false AND ($3::int IS NULL OR almacen_id = $3)', [almacenId, lote.id, loteOrigenAlm]);
     cartones = Number(soldCheck.rows[0].total) - Number(soldCheck.rows[0].vendidos);
     // Actualizar status de la caja padre
     if (lote.caja_id) {
@@ -1526,15 +1527,17 @@ export async function getLibretasSueltas(pool: Pool, eventId: number, almacenId:
   caja_code: string | null;
 }[]> {
   const result = await pool.query(`
-    SELECT l.id, l.lote_code, l.series_number, l.total_cards, l.cards_sold, l.status,
-      c.caja_code
+    SELECT l.id, l.lote_code, l.series_number, l.status,
+      c.caja_code,
+      (SELECT COUNT(*) FROM cards ca WHERE ca.lote_id = l.id AND ca.almacen_id = $2) AS total_cards,
+      (SELECT COUNT(*) FROM cards ca WHERE ca.lote_id = l.id AND ca.almacen_id = $2 AND ca.is_sold = true) AS cards_sold
     FROM lotes l
     LEFT JOIN cajas c ON c.id = l.caja_id
     WHERE l.event_id = $1 AND l.almacen_id = $2
       AND (l.caja_id IS NULL OR c.almacen_id IS DISTINCT FROM $2)
     ORDER BY l.lote_code
   `, [eventId, almacenId]);
-  return result.rows;
+  return result.rows.map(r => ({ ...r, total_cards: Number(r.total_cards), cards_sold: Number(r.cards_sold) }));
 }
 
 // Cartones sueltos en un almacén (su lote no está en el mismo almacén o no tiene lote)
@@ -2141,7 +2144,7 @@ export async function escanearCodigo(pool: Pool, eventId: number, codigo: string
 } | null> {
   // Try as caja code (C001, C002...)
   const cajaResult = await pool.query(`
-    SELECT c.*, COALESCE((SELECT SUM(l.total_cards) FROM lotes l WHERE l.caja_id = c.id), 0) as total_cartones
+    SELECT c.*, COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND (c.almacen_id IS NULL OR ca.almacen_id = c.almacen_id)), 0) as total_cartones
     FROM cajas c WHERE c.event_id = $1 AND c.caja_code = $2
   `, [eventId, codigo.toUpperCase()]);
   if (cajaResult.rows.length > 0) {
