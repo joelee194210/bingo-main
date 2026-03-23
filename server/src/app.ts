@@ -1,3 +1,6 @@
+// Zona horaria de Panamá para todo el proceso Node.js
+process.env.TZ = 'America/Panama';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

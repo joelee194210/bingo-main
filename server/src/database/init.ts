@@ -18,6 +18,10 @@ export function getPool(): Pool {
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
     });
+    // Configurar zona horaria de Panamá en cada conexión nueva
+    pool.on('connect', (client) => {
+      client.query("SET TIME ZONE 'America/Panama'");
+    });
   }
   return pool;
 }
