@@ -78,6 +78,8 @@ export default function AsignacionDialog({ eventId, open, onOpenChange }: Asigna
       queryClient.invalidateQueries({ queryKey: ['almacen-tree'] });
       queryClient.invalidateQueries({ queryKey: ['cajas'] });
       queryClient.invalidateQueries({ queryKey: ['documentos'] });
+      queryClient.invalidateQueries({ queryKey: ['libretas-sueltas'] });
+      queryClient.invalidateQueries({ queryKey: ['cartones-sueltos'] });
       toast.success('Asignacion creada exitosamente');
       resetForm();
       onOpenChange(false);

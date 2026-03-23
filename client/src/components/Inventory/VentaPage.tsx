@@ -212,6 +212,8 @@ export default function VentaPage() {
       queryClient.invalidateQueries({ queryKey: ['documentos'] });
       queryClient.invalidateQueries({ queryKey: ['movimientos'] });
       queryClient.invalidateQueries({ queryKey: ['almacen-tree'] });
+      queryClient.invalidateQueries({ queryKey: ['libretas-sueltas'] });
+      queryClient.invalidateQueries({ queryKey: ['cartones-sueltos'] });
 
       if (errores.length === 0) {
         toast.success(`${exitosos} items vendidos — ${totalCartones} cartones`);

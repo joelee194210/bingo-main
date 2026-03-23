@@ -564,6 +564,8 @@ export default function InventoryPage() {
     queryClient.invalidateQueries({ queryKey: ['almacen-tree'] });
     queryClient.invalidateQueries({ queryKey: ['resumen-inventario'] });
     queryClient.invalidateQueries({ queryKey: ['cajas-disponibles'] });
+    queryClient.invalidateQueries({ queryKey: ['libretas-sueltas'] });
+    queryClient.invalidateQueries({ queryKey: ['cartones-sueltos'] });
     queryClient.invalidateQueries({ queryKey: ['cajas'] });
     queryClient.invalidateQueries({ queryKey: ['movimientos'] });
     queryClient.invalidateQueries({ queryKey: ['documentos'] });

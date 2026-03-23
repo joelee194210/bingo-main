@@ -140,6 +140,8 @@ export default function MovimientoDialog({ eventId, open, onOpenChange }: Movimi
     queryClient.invalidateQueries({ queryKey: ['movimientos'] });
     queryClient.invalidateQueries({ queryKey: ['documentos'] });
     queryClient.invalidateQueries({ queryKey: ['mis-almacenes'] });
+    queryClient.invalidateQueries({ queryKey: ['libretas-sueltas'] });
+    queryClient.invalidateQueries({ queryKey: ['cartones-sueltos'] });
   };
 
   const resetForm = () => {
