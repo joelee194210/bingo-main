@@ -311,7 +311,7 @@ export default function AsignacionDetail() {
               <TableBody>
                 {cartones.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-mono">{c.serial.replace(/^0+/, '').replace(/-0+/, '-')}</TableCell>
+                    <TableCell className="font-mono">{c.serial}</TableCell>
                     <TableCell>
                       {c.vendido ? (
                         <Badge className="bg-green-100 text-green-800">

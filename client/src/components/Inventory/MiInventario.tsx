@@ -341,7 +341,7 @@ export default function MiInventario() {
                                           >
                                             <CreditCard className="h-3 w-3 shrink-0" />
                                             <span className="font-mono font-medium">
-                                              {c.serial.replace(/^0+/, '').replace(/-0+/, '-')}
+                                              {c.serial}
                                             </span>
                                             {c.is_sold && c.buyer_name && (
                                               <span className="truncate text-[10px] opacity-70">({c.buyer_name})</span>

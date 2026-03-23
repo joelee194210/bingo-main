@@ -624,9 +624,8 @@ router.get('/validar-referencia/:eventId/:referencia', requirePermission('invent
     if (cardRes.rows.length > 0) {
       const card = cardRes.rows[0];
       const enMiAlmacen = !almacenId || card.almacen_id === almacenId;
-      const displayRef = card.serial.replace(/^0+/, '').replace(/-0+/, '-');
       return res.json({ success: true, data: {
-        tipo: 'carton', referencia: displayRef, existe: true, enMiAlmacen,
+        tipo: 'carton', referencia: card.serial, existe: true, enMiAlmacen,
         almacen: card.almacen_name, totalCartones: 1,
         vendidos: card.is_sold ? 1 : 0, disponibles: card.is_sold ? 0 : 1,
       }});
