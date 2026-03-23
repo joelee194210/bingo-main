@@ -134,6 +134,7 @@ export default function MovimientoDialog({ eventId, open, onOpenChange }: Movimi
     queryClient.invalidateQueries({ queryKey: ['asignaciones'] });
     queryClient.invalidateQueries({ queryKey: ['movimientos'] });
     queryClient.invalidateQueries({ queryKey: ['documentos'] });
+    queryClient.invalidateQueries({ queryKey: ['mis-almacenes'] });
   };
 
   const resetForm = () => {

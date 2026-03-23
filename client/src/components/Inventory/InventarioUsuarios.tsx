@@ -165,8 +165,7 @@ export default function InventarioUsuarios() {
   const editMutation = useMutation({
     mutationFn: () => {
       if (!editingUser) throw new Error('No user selected');
-      const data: { rol?: string; new_almacen_id?: number } = {};
-      if (editRol !== editingUser.rol) data.rol = editRol;
+      const data: { rol: string; new_almacen_id?: number } = { rol: editRol };
       if (Number(editAlmacenId) !== editingUser.almacen_id) data.new_almacen_id = Number(editAlmacenId);
       return updateUsuarioAlmacen(editingUser.almacen_id, editingUser.user_id, data);
     },

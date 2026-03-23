@@ -713,8 +713,15 @@ export async function ejecutarMovimientoBulk(
     return { documentoId: 0, exitosos: 0, errores: ['No se enviaron items para procesar'] };
   }
 
+  // Envolver todo en transacción para atomicidad
+  const client = await pool.connect();
+  // Usar 'db' como alias — apunta a client (transaccional) para queries dentro de la tx
+  const db = client;
+  try {
+  await db.query('BEGIN');
+
   // Crear documento
-  const docResult = await pool.query(`
+  const docResult = await db.query(`
     INSERT INTO inv_documentos (event_id, accion, de_almacen_id, a_almacen_id, de_nombre, a_nombre,
       firma_entrega, firma_recibe, nombre_entrega, nombre_recibe, realizado_por)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -744,7 +751,7 @@ export async function ejecutarMovimientoBulk(
       const isDevolucion = data.accion === 'devolucion';
 
       if (item.tipo === 'caja') {
-        const cajaResult = await pool.query('SELECT id, caja_code, almacen_id, status FROM cajas WHERE caja_code = $1 AND event_id = $2', [item.referencia, eventId]);
+        const cajaResult = await db.query('SELECT id, caja_code, almacen_id, status FROM cajas WHERE caja_code = $1 AND event_id = $2', [item.referencia, eventId]);
         if (cajaResult.rows.length === 0) throw new Error(`Caja "${item.referencia}" no encontrada`);
         const caja = cajaResult.rows[0];
         // Verificar que la caja esté en el almacén origen
@@ -757,28 +764,28 @@ export async function ejecutarMovimientoBulk(
         }
         if (!isDevolucion && caja.status === 'agotada') throw new Error(`Caja "${item.referencia}" ya esta agotada`);
         if (caja.almacen_id) {
-          const r = await pool.query('SELECT name FROM almacenes WHERE id = $1', [caja.almacen_id]);
+          const r = await db.query('SELECT name FROM almacenes WHERE id = $1', [caja.almacen_id]);
           itemOrigenName = r.rows[0]?.name || null;
         }
-        const soldCheck = await pool.query(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE c.is_sold = true) as vendidos FROM cards c JOIN lotes l ON l.id = c.lote_id WHERE l.caja_id = $1`, [caja.id]);
+        const soldCheck = await db.query(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE c.is_sold = true) as vendidos FROM cards c JOIN lotes l ON l.id = c.lote_id WHERE l.caja_id = $1`, [caja.id]);
         const { total, vendidos } = soldCheck.rows[0];
         if (!isDevolucion && Number(total) > 0 && Number(vendidos) === Number(total)) throw new Error(`Caja "${item.referencia}" tiene todos los cartones vendidos`);
 
-        await pool.query('UPDATE cajas SET almacen_id = $1, status = $2, updated_at = NOW() WHERE id = $3',
+        await db.query('UPDATE cajas SET almacen_id = $1, status = $2, updated_at = NOW() WHERE id = $3',
           [data.almacen_destino_id, isDevolucion ? 'abierta' : caja.status, caja.id]);
-        await pool.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = $2', [data.almacen_destino_id, caja.id]);
+        await db.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = $2', [data.almacen_destino_id, caja.id]);
 
         if (isDevolucion) {
           // Devolucion: desmarcar vendidos y mover TODOS los cartones
-          await pool.query(`UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2`, [data.almacen_destino_id, caja.id]);
-          await pool.query(`UPDATE lotes SET status = 'disponible', cards_sold = 0 WHERE caja_id = $1`, [caja.id]);
+          await db.query(`UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2`, [data.almacen_destino_id, caja.id]);
+          await db.query(`UPDATE lotes SET status = 'disponible', cards_sold = 0 WHERE caja_id = $1`, [caja.id]);
           cartones = Number(total);
         } else {
-          await pool.query(`UPDATE cards SET almacen_id = $1 FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2 AND cards.is_sold = false`, [data.almacen_destino_id, caja.id]);
+          await db.query(`UPDATE cards SET almacen_id = $1 FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2 AND cards.is_sold = false`, [data.almacen_destino_id, caja.id]);
           cartones = Number(total) - Number(vendidos);
         }
       } else if (item.tipo === 'libreta') {
-        const loteResult = await pool.query('SELECT l.id, l.lote_code, l.almacen_id, l.status FROM lotes l WHERE l.lote_code = $1 AND l.event_id = $2', [item.referencia, eventId]);
+        const loteResult = await db.query('SELECT l.id, l.lote_code, l.almacen_id, l.status FROM lotes l WHERE l.lote_code = $1 AND l.event_id = $2', [item.referencia, eventId]);
         if (loteResult.rows.length === 0) throw new Error(`Libreta "${item.referencia}" no encontrada`);
         const lote = loteResult.rows[0];
         // Verificar que la libreta esté en el almacén origen
@@ -791,24 +798,24 @@ export async function ejecutarMovimientoBulk(
         }
         if (!isDevolucion && lote.status === 'vendido_completo') throw new Error(`Libreta "${item.referencia}" ya vendida`);
         if (lote.almacen_id) {
-          const r = await pool.query('SELECT name FROM almacenes WHERE id = $1', [lote.almacen_id]);
+          const r = await db.query('SELECT name FROM almacenes WHERE id = $1', [lote.almacen_id]);
           itemOrigenName = r.rows[0]?.name || null;
         }
-        const soldCheck = await pool.query(`SELECT COUNT(*) FILTER (WHERE is_sold = true) as vendidos, COUNT(*) as total FROM cards WHERE lote_id = $1`, [lote.id]);
+        const soldCheck = await db.query(`SELECT COUNT(*) FILTER (WHERE is_sold = true) as vendidos, COUNT(*) as total FROM cards WHERE lote_id = $1`, [lote.id]);
         if (!isDevolucion && Number(soldCheck.rows[0].total) > 0 && Number(soldCheck.rows[0].vendidos) === Number(soldCheck.rows[0].total)) throw new Error(`Libreta "${item.referencia}" toda vendida`);
 
-        await pool.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [data.almacen_destino_id, lote.id]);
+        await db.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [data.almacen_destino_id, lote.id]);
 
         if (isDevolucion) {
-          await pool.query('UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL WHERE lote_id = $2', [data.almacen_destino_id, lote.id]);
-          await pool.query(`UPDATE lotes SET status = 'disponible', cards_sold = 0 WHERE id = $1`, [lote.id]);
+          await db.query('UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL WHERE lote_id = $2', [data.almacen_destino_id, lote.id]);
+          await db.query(`UPDATE lotes SET status = 'disponible', cards_sold = 0 WHERE id = $1`, [lote.id]);
           cartones = Number(soldCheck.rows[0].total);
         } else {
-          await pool.query('UPDATE cards SET almacen_id = $1 WHERE lote_id = $2 AND is_sold = false', [data.almacen_destino_id, lote.id]);
+          await db.query('UPDATE cards SET almacen_id = $1 WHERE lote_id = $2 AND is_sold = false', [data.almacen_destino_id, lote.id]);
           cartones = Number(soldCheck.rows[0].total) - Number(soldCheck.rows[0].vendidos);
         }
       } else if (item.tipo === 'carton') {
-        const cardResult = await pool.query('SELECT c.id, c.card_code, c.is_sold, c.almacen_id FROM cards c WHERE c.card_code = $1 AND c.event_id = $2', [item.referencia, eventId]);
+        const cardResult = await db.query('SELECT c.id, c.card_code, c.is_sold, c.almacen_id FROM cards c WHERE c.card_code = $1 AND c.event_id = $2', [item.referencia, eventId]);
         if (cardResult.rows.length === 0) throw new Error(`Carton "${item.referencia}" no encontrado`);
         const card = cardResult.rows[0];
         // Verificar que el cartón esté en el almacén origen
@@ -821,13 +828,13 @@ export async function ejecutarMovimientoBulk(
         }
         if (!isDevolucion && card.is_sold) throw new Error(`Carton "${item.referencia}" ya vendido`);
         if (card.almacen_id) {
-          const r = await pool.query('SELECT name FROM almacenes WHERE id = $1', [card.almacen_id]);
+          const r = await db.query('SELECT name FROM almacenes WHERE id = $1', [card.almacen_id]);
           itemOrigenName = r.rows[0]?.name || null;
         }
         if (isDevolucion) {
-          await pool.query('UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL WHERE id = $2', [data.almacen_destino_id, card.id]);
+          await db.query('UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL WHERE id = $2', [data.almacen_destino_id, card.id]);
         } else {
-          await pool.query('UPDATE cards SET almacen_id = $1 WHERE id = $2', [data.almacen_destino_id, card.id]);
+          await db.query('UPDATE cards SET almacen_id = $1 WHERE id = $2', [data.almacen_destino_id, card.id]);
         }
         cartones = 1;
       } else {
@@ -835,7 +842,7 @@ export async function ejecutarMovimientoBulk(
       }
 
       // Crear movimiento individual vinculado al documento
-      await pool.query(`
+      await db.query(`
         INSERT INTO inv_movimientos (event_id, documento_id, almacen_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, detalles, realizado_por)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `, [
@@ -853,15 +860,17 @@ export async function ejecutarMovimientoBulk(
     }
   }
 
-  // Si no hubo items exitosos, eliminar el documento vacio
+  // Si no hubo items exitosos, rollback
   if (exitosos === 0) {
-    await pool.query('DELETE FROM inv_movimientos WHERE documento_id = $1', [documentoId]);
-    await pool.query('DELETE FROM inv_documentos WHERE id = $1', [documentoId]);
+    await client.query('ROLLBACK');
     return { documentoId: 0, exitosos: 0, errores };
   }
 
   // Actualizar totales del documento
-  await pool.query('UPDATE inv_documentos SET total_items = $1, total_cartones = $2 WHERE id = $3', [exitosos, totalCartones, documentoId]);
+  await client.query('UPDATE inv_documentos SET total_items = $1, total_cartones = $2 WHERE id = $3', [exitosos, totalCartones, documentoId]);
+
+  // COMMIT la transacción antes de generar PDF (PDF es no-transaccional)
+  await client.query('COMMIT');
 
   // Generar PDF del documento con detalle jerarquico completo
   if (exitosos > 0) {
@@ -958,6 +967,13 @@ export async function ejecutarMovimientoBulk(
   }
 
   return { documentoId, exitosos, errores };
+
+  } catch (txError) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw txError;
+  } finally {
+    client.release();
+  }
 }
 
 // =====================================================
@@ -1271,10 +1287,18 @@ export async function cargarInventario(pool: Pool, eventId: number, almacenId: n
     throw new Error(`Las cajas ${alreadyAssigned.map(c => c.caja_code).join(', ')} ya estan asignadas a otro almacen`);
   }
 
-  // Assign cajas to almacen
+  // Assign cajas, lotes y cards to almacen
   await pool.query(
     `UPDATE cajas SET almacen_id = $1, updated_at = NOW() WHERE id = ANY($2::int[]) AND event_id = $3`,
     [almacenId, cajaIds, eventId]
+  );
+  await pool.query(
+    `UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = ANY($2::int[])`,
+    [almacenId, cajaIds]
+  );
+  await pool.query(
+    `UPDATE cards SET almacen_id = $1 FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = ANY($2::int[]) AND cards.is_sold = false`,
+    [almacenId, cajaIds]
   );
 
   // Log movement

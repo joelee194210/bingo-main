@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Edit2, UserCheck, UserX, Search, Loader2, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import api from '@/services/api';
 import type { User, UserRole } from '@/types/auth';
 import { ROLE_LABELS } from '@/types/auth';
@@ -100,8 +101,12 @@ export default function MisUsuarios() {
       const res = await api.put(`/mis-usuarios/${id}`, { is_active });
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['mis-usuarios'] });
+      toast.success(vars.is_active ? 'Usuario activado' : 'Usuario desactivado');
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      toast.error(err.response?.data?.error || 'Error al cambiar estado del usuario');
     },
   });
 
@@ -113,6 +118,10 @@ export default function MisUsuarios() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mis-usuarios'] });
       setShowDeleteConfirm(null);
+      toast.success('Usuario eliminado');
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      toast.error(err.response?.data?.error || 'Error al eliminar usuario');
     },
   });
 

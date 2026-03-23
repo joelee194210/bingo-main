@@ -35,7 +35,7 @@ export default function DashboardVentas() {
   const eventId = selectedEventId || events[0]?.id;
 
   const { data: dashData, isLoading } = useQuery({
-    queryKey: ['dashboard-general', eventId],
+    queryKey: ['dashboard-ventas', eventId],
     queryFn: () => getDashboardVentas(eventId!),
     enabled: !!eventId,
     refetchInterval: 30000,

@@ -97,8 +97,9 @@ router.put('/:id', authenticate, requireLoteria, async (req: Request, res: Respo
       return res.status(400).json({ success: false, error: `Rol inválido. Roles permitidos: ${SUB_USER_ROLES.join(', ')}` });
     }
 
-    if (password && password.length < 6) {
-      return res.status(400).json({ success: false, error: 'La contraseña debe tener al menos 6 caracteres' });
+    if (password) {
+      const pwError = validatePassword(password);
+      if (pwError) return res.status(400).json({ success: false, error: pwError });
     }
 
     const user = await updateUser(pool, subUserId, { email, full_name, role, is_active, password });
@@ -149,6 +150,10 @@ router.delete('/:id', authenticate, requireLoteria, async (req: Request, res: Re
     res.json({ success: true, message: 'Usuario eliminado' });
   } catch (error) {
     console.error('Error eliminando sub-usuario:', error);
+    const code = (error as any)?.code;
+    if (code === '23503') {
+      return res.status(409).json({ success: false, error: 'No se puede eliminar el usuario porque tiene registros asociados. Desactivalo en su lugar.' });
+    }
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 });

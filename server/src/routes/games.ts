@@ -362,10 +362,7 @@ router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) 
       return res.status(404).json({ success: false, error: 'Juego no encontrado' });
     }
 
-    // Eliminar en orden: ganadores → historial de balotas → reportes → juego
-    await pool.query('DELETE FROM game_winners WHERE game_id = $1', [gameId]);
-    await pool.query('DELETE FROM ball_history WHERE game_id = $1', [gameId]);
-    await pool.query('DELETE FROM game_reports WHERE game_id = $1', [gameId]);
+    // Eliminar juego — CASCADE elimina ganadores, balotas y reportes automáticamente
     await pool.query('DELETE FROM games WHERE id = $1', [gameId]);
 
     logActivity(pool, {
