@@ -1,10 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   getReporteVentas,
   downloadReporteVentasPdf,
   getEvents,
-  getMisAlmacenes,
   getDocumentoPdf,
   type ReporteVentasResumen,
 } from '@/services/api';
@@ -72,34 +71,27 @@ export default function ReporteVentas() {
   const events = eventsRes?.data || [];
 
   // Auto-seleccionar primer evento
-  if (!eventId && events.length > 0) {
-    setEventId(events[0].id);
-  }
-
-  // Mis almacenes (para sellers)
-  const { data: misAlmRes } = useQuery({
-    queryKey: ['mis-almacenes'],
-    queryFn: () => getMisAlmacenes(),
-  });
-  const misAlmacenes = misAlmRes?.data || [];
-
-  // Almacenes del evento seleccionado
-  const almacenesEvento = useMemo(() => {
-    if (!eventId) return [];
-    const set = new Map<number, string>();
-    for (const a of misAlmacenes) {
-      if (a.event_id === eventId) set.set(a.almacen_id, a.almacen_name);
-    }
-    return Array.from(set, ([id, name]) => ({ id, name }));
-  }, [eventId, misAlmacenes]);
+  useEffect(() => {
+    if (!eventId && events.length > 0) setEventId(events[0].id);
+  }, [events, eventId]);
 
   // Reporte
-  const { data: reporteRes, isLoading } = useQuery({
+  const { data: reporteRes, isLoading, refetch } = useQuery({
     queryKey: ['reporte-ventas', eventId, desde, hasta, almacenId, vendedorId],
     queryFn: () => getReporteVentas(eventId!, { desde, hasta, almacen_id: almacenId, vendedor_id: vendedorId }),
-    enabled: !!eventId && !!desde && !!hasta,
+    enabled: false, // Solo ejecutar manualmente
   });
   const reporte = reporteRes?.data;
+
+  // Almacenes del reporte (para filtro después de primera búsqueda)
+  const almacenesEvento = useMemo(() => {
+    if (!reporte) return [];
+    const set = new Map<number, string>();
+    for (const r of reporte.resumen) {
+      if (r.almacen_id) set.set(r.almacen_id, r.almacen_nombre);
+    }
+    return Array.from(set, ([id, name]) => ({ id, name }));
+  }, [reporte]);
 
   // Vendedores unicos del reporte (para filtro)
   const vendedores = useMemo(() => {
@@ -236,6 +228,13 @@ export default function ReporteVentas() {
                 </Select>
               </div>
             )}
+            {/* Botón Buscar */}
+            <div className="flex items-end">
+              <Button onClick={() => refetch()} disabled={!eventId || !desde || !hasta || isLoading}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                Buscar
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
