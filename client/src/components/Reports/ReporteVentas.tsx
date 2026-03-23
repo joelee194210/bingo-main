@@ -53,9 +53,15 @@ export default function ReporteVentas() {
   const { hasPermission } = useAuth();
   const isAdmin = hasPermission('reports:export');
 
-  // Default: ultimos 7 dias
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  // Default: ultimos 7 dias (hora local, no UTC)
+  const formatLocalDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  const today = formatLocalDate(new Date());
+  const weekAgo = formatLocalDate(new Date(Date.now() - 7 * 86400000));
 
   const [eventId, setEventId] = useState<number | null>(null);
   const [desde, setDesde] = useState(weekAgo);
