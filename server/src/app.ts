@@ -92,7 +92,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "https://challenges.cloudflare.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "wss:", "ws:"],
+      connectSrc: ["'self'"],
       fontSrc: ["'self'"],
       frameSrc: ["https://challenges.cloudflare.com"],
       objectSrc: ["'none'"],
@@ -171,7 +171,7 @@ const ADMIN_HOSTS = (process.env.ADMIN_HOSTS || 'admin.verificatubingo.com,local
 function isAdminHost(host: string | undefined): boolean {
   if (!host) return false;
   const hostname = host.split(':')[0];
-  return ADMIN_HOSTS.some(h => hostname === h || hostname.endsWith('.railway.app'));
+  return ADMIN_HOSTS.some(h => hostname === h);
 }
 
 if (existsSync(clientDistPath)) {

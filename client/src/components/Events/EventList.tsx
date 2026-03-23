@@ -64,8 +64,12 @@ export default function EventList() {
     onSuccess: () => {
       setDeletingEventId(null);
       queryClient.invalidateQueries({ queryKey: ['events'] });
+      toast.success('Evento eliminado');
     },
-    onError: () => setDeletingEventId(null),
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      setDeletingEventId(null);
+      toast.error(err.response?.data?.error || 'Error al eliminar evento');
+    },
   });
 
   const handleCreate = (e: React.FormEvent) => {

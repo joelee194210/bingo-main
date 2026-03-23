@@ -155,8 +155,7 @@ export default function VentaPage() {
   const addItem = () => {
     const ref = inputRef.trim().toUpperCase();
     if (!ref) return;
-    validateAndAdd(ref, tipoEntidad);
-    setInputRef('');
+    validateAndAdd(ref, tipoEntidad).then(() => setInputRef(''));
   };
 
   const removeItem = (index: number) => {

@@ -76,6 +76,7 @@ export default function MisUsuarios() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mis-usuarios'] });
       closeModal();
+      toast.success('Usuario creado');
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
       setError(err.response?.data?.error || 'Error al crear usuario');
@@ -90,6 +91,7 @@ export default function MisUsuarios() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mis-usuarios'] });
       closeModal();
+      toast.success('Usuario actualizado');
     },
     onError: (err: { response?: { data?: { error?: string } } }) => {
       setError(err.response?.data?.error || 'Error al actualizar usuario');

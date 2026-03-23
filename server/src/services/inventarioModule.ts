@@ -541,9 +541,18 @@ export async function cargarInventarioPorReferencia(
 
   let cartones = 0;
   let origenAlmacenName: string | null = null;
+  let accion: string;
+  let destinoName: string;
+
+  // Usar transacción para garantizar atomicidad de todas las mutaciones
+  const client = await pool.connect();
+  let movId: number;
+  let movCreatedAt: string;
+  try {
+  await client.query('BEGIN');
 
   if (tipoEntidad === 'caja') {
-    const cajaResult = await pool.query(
+    const cajaResult = await client.query(
       'SELECT id, caja_code, almacen_id, status FROM cajas WHERE caja_code = $1 AND event_id = $2',
       [referencia, eventId]
     );
@@ -552,10 +561,10 @@ export async function cargarInventarioPorReferencia(
     if (caja.status === 'agotada') throw new Error(`Caja "${referencia}" ya esta agotada/vendida`);
     // Obtener nombre del almacen origen
     if (caja.almacen_id) {
-      const origenResult = await pool.query('SELECT name FROM almacenes WHERE id = $1', [caja.almacen_id]);
+      const origenResult = await client.query('SELECT name FROM almacenes WHERE id = $1', [caja.almacen_id]);
       origenAlmacenName = origenResult.rows[0]?.name || null;
     }
-    const soldCheck = await pool.query(
+    const soldCheck = await client.query(
       `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE c.is_sold = true) as vendidos
        FROM cards c JOIN lotes l ON l.id = c.lote_id WHERE l.caja_id = $1`,
       [caja.id]
@@ -566,15 +575,15 @@ export async function cargarInventarioPorReferencia(
     }
     // Mover caja + solo lotes/cartones que están en el mismo almacén que la caja
     const cajaOrigenAlmacen = caja.almacen_id;
-    await pool.query('UPDATE cajas SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [almacenId, caja.id]);
-    await pool.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = $2 AND almacen_id = $3', [almacenId, caja.id, cajaOrigenAlmacen]);
-    await pool.query(`
+    await client.query('UPDATE cajas SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [almacenId, caja.id]);
+    await client.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = $2 AND almacen_id = $3', [almacenId, caja.id, cajaOrigenAlmacen]);
+    await client.query(`
       UPDATE cards SET almacen_id = $1
       FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2 AND cards.is_sold = false AND cards.almacen_id = $3
     `, [almacenId, caja.id, cajaOrigenAlmacen]);
     cartones = Number(total) - Number(vendidos);
   } else if (tipoEntidad === 'libreta') {
-    const loteResult = await pool.query(
+    const loteResult = await client.query(
       'SELECT l.id, l.lote_code, l.caja_id, l.total_cards, l.status, l.almacen_id FROM lotes l WHERE l.lote_code = $1 AND l.event_id = $2',
       [referencia, eventId]
     );
@@ -583,10 +592,10 @@ export async function cargarInventarioPorReferencia(
     if (lote.status === 'vendido_completo') throw new Error(`Libreta "${referencia}" ya esta completamente vendida`);
     // Obtener nombre del almacen origen
     if (lote.almacen_id) {
-      const origenResult = await pool.query('SELECT name FROM almacenes WHERE id = $1', [lote.almacen_id]);
+      const origenResult = await client.query('SELECT name FROM almacenes WHERE id = $1', [lote.almacen_id]);
       origenAlmacenName = origenResult.rows[0]?.name || null;
     }
-    const soldCheck = await pool.query(
+    const soldCheck = await client.query(
       `SELECT COUNT(*) FILTER (WHERE is_sold = true) as vendidos, COUNT(*) as total
        FROM cards WHERE lote_id = $1`,
       [lote.id]
@@ -595,22 +604,22 @@ export async function cargarInventarioPorReferencia(
       throw new Error(`Libreta "${referencia}" tiene todos los cartones vendidos`);
     }
     // Mover libreta + todos sus cartones (no vendidos)
-    await pool.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [almacenId, lote.id]);
-    await pool.query('UPDATE cards SET almacen_id = $1 WHERE lote_id = $2 AND is_sold = false', [almacenId, lote.id]);
+    await client.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [almacenId, lote.id]);
+    await client.query('UPDATE cards SET almacen_id = $1 WHERE lote_id = $2 AND is_sold = false', [almacenId, lote.id]);
     cartones = Number(soldCheck.rows[0].total) - Number(soldCheck.rows[0].vendidos);
     // Actualizar status de la caja padre
     if (lote.caja_id) {
-      const lotesEnCaja = await pool.query(
+      const lotesEnCaja = await client.query(
         'SELECT COUNT(*) as total FROM lotes WHERE caja_id = $1 AND almacen_id = (SELECT almacen_id FROM cajas WHERE id = $1)',
         [lote.caja_id]
       );
-      const totalLotes = await pool.query('SELECT total_lotes FROM cajas WHERE id = $1', [lote.caja_id]);
+      const totalLotes = await client.query('SELECT total_lotes FROM cajas WHERE id = $1', [lote.caja_id]);
       if (Number(lotesEnCaja.rows[0].total) < Number(totalLotes.rows[0].total_lotes)) {
-        await pool.query("UPDATE cajas SET status = 'abierta', updated_at = NOW() WHERE id = $1 AND status = 'sellada'", [lote.caja_id]);
+        await client.query("UPDATE cajas SET status = 'abierta', updated_at = NOW() WHERE id = $1 AND status = 'sellada'", [lote.caja_id]);
       }
     }
   } else if (tipoEntidad === 'carton') {
-    const cardResult = await pool.query(
+    const cardResult = await client.query(
       'SELECT c.id, c.card_code, c.lote_id, c.is_sold, c.almacen_id FROM cards c WHERE c.card_code = $1 AND c.event_id = $2',
       [referencia, eventId]
     );
@@ -619,20 +628,20 @@ export async function cargarInventarioPorReferencia(
     if (card.is_sold) throw new Error(`Carton "${referencia}" ya fue vendido`);
     // Obtener nombre del almacen origen
     if (card.almacen_id) {
-      const origenResult = await pool.query('SELECT name FROM almacenes WHERE id = $1', [card.almacen_id]);
+      const origenResult = await client.query('SELECT name FROM almacenes WHERE id = $1', [card.almacen_id]);
       origenAlmacenName = origenResult.rows[0]?.name || null;
     }
     // Mover solo este carton
-    await pool.query('UPDATE cards SET almacen_id = $1 WHERE id = $2', [almacenId, card.id]);
+    await client.query('UPDATE cards SET almacen_id = $1 WHERE id = $2', [almacenId, card.id]);
     cartones = 1;
   } else {
     throw new Error('Tipo de entidad invalido');
   }
 
-  const accion = origenAlmacenName ? 'traslado' : 'carga_inventario';
-  const destinoName = almResult.rows[0].name;
+  accion = origenAlmacenName ? 'traslado' : 'carga_inventario';
+  destinoName = almResult.rows[0].name;
 
-  const movResult = await pool.query(`
+  const movResult = await client.query(`
     INSERT INTO inv_movimientos (event_id, almacen_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, detalles, realizado_por,
       firma_entrega, firma_recibe, nombre_entrega, nombre_recibe)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
@@ -644,8 +653,18 @@ export async function cargarInventarioPorReferencia(
     firmas?.nombre_entrega || null, firmas?.nombre_recibe || null,
   ]);
 
-  // Siempre generar PDF para movimientos
-  const mov = movResult.rows[0];
+  movId = movResult.rows[0].id;
+  movCreatedAt = movResult.rows[0].created_at;
+
+  await client.query('COMMIT');
+  } catch (txError) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw txError;
+  } finally {
+    client.release();
+  }
+
+  // Generar PDF fuera de la transacción (no es crítico)
   const eventResult = await pool.query('SELECT name FROM events WHERE id = $1', [eventId]);
   const userResult = await pool.query('SELECT full_name FROM users WHERE id = $1', [userId]);
 
@@ -672,9 +691,9 @@ export async function cargarInventarioPorReferencia(
 
   try {
     const pdfPath = await generateMovimientoPdf({
-      movimientoId: mov.id,
+      movimientoId: movId,
       accion,
-      fecha: mov.created_at,
+      fecha: movCreatedAt,
       eventoNombre: eventResult.rows[0]?.name || '',
       almacenNombre: destinoName,
       referencia,
@@ -689,12 +708,12 @@ export async function cargarInventarioPorReferencia(
       nombreRecibe: firmas?.nombre_recibe || destinoName,
     });
     const pdfFilename = pdfPath.split('/').pop();
-    await pool.query('UPDATE inv_movimientos SET pdf_path = $1 WHERE id = $2', [pdfFilename, mov.id]);
+    await pool.query('UPDATE inv_movimientos SET pdf_path = $1 WHERE id = $2', [pdfFilename, movId]);
   } catch (err) {
     console.error('Error generando PDF de movimiento:', err);
   }
 
-  return { tipo: tipoEntidad, referencia, cartones, movimientoId: mov.id };
+  return { tipo: tipoEntidad, referencia, cartones, movimientoId: movId };
 }
 
 // Ejecutar movimiento bulk: crea documento + mueve items + genera PDF
@@ -829,10 +848,12 @@ export async function ejecutarMovimientoBulk(
           cartones = Number(soldCheck.rows[0].total) - Number(soldCheck.rows[0].vendidos);
         }
         // Actualizar status de la caja padre si la libreta fue movida fuera
+        // Usar lote.almacen_id (guardado antes del UPDATE) en vez de re-leer la caja (que pudo haber sido movida en un item anterior)
         if (lote.caja_id) {
+          const cajaOrigenAlmacenId = lote.almacen_id;
           const lotesEnCaja = await db.query(
-            'SELECT COUNT(*) as total FROM lotes WHERE caja_id = $1 AND almacen_id = (SELECT almacen_id FROM cajas WHERE id = $1)',
-            [lote.caja_id]
+            'SELECT COUNT(*) as total FROM lotes WHERE caja_id = $1 AND almacen_id = $2',
+            [lote.caja_id, cajaOrigenAlmacenId]
           );
           const totalLotes = await db.query('SELECT total_lotes FROM cajas WHERE id = $1', [lote.caja_id]);
           if (Number(lotesEnCaja.rows[0].total) < Number(totalLotes.rows[0].total_lotes)) {
@@ -1080,6 +1101,21 @@ export async function ejecutarVenta(
           [caja.id]
         );
 
+        // Marcar lotes completamente vendidos
+        await client.query(
+          `UPDATE lotes SET status = 'vendido_completo' WHERE caja_id = $1 AND cards_sold >= total_cards AND status != 'vendido_completo'`,
+          [caja.id]
+        );
+
+        // Si todos los lotes de la caja están vendido_completo, marcar caja como agotada
+        const cajaLotesCheck = await client.query(
+          `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'vendido_completo') as vendidos FROM lotes WHERE caja_id = $1`,
+          [caja.id]
+        );
+        if (Number(cajaLotesCheck.rows[0].total) > 0 && Number(cajaLotesCheck.rows[0].vendidos) === Number(cajaLotesCheck.rows[0].total)) {
+          await client.query(`UPDATE cajas SET status = 'agotada', updated_at = NOW() WHERE id = $1`, [caja.id]);
+        }
+
         // Obtener libretas con rangos de seriales (desde-hasta)
         const lotesInfo = await client.query(
           `SELECT l.lote_code, l.total_cards, l.cards_sold,
@@ -1130,6 +1166,23 @@ export async function ejecutarVenta(
           [lote.id]
         );
 
+        // Marcar lote como vendido_completo si todos los cartones fueron vendidos
+        await client.query(
+          `UPDATE lotes SET status = 'vendido_completo' WHERE id = $1 AND cards_sold >= total_cards AND status != 'vendido_completo'`,
+          [lote.id]
+        );
+
+        // Si la libreta pertenece a una caja y todos los lotes están vendidos, marcar caja como agotada
+        if (lote.caja_id) {
+          const cajaLotesCheck = await client.query(
+            `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'vendido_completo') as vendidos FROM lotes WHERE caja_id = $1`,
+            [lote.caja_id]
+          );
+          if (Number(cajaLotesCheck.rows[0].total) > 0 && Number(cajaLotesCheck.rows[0].vendidos) === Number(cajaLotesCheck.rows[0].total)) {
+            await client.query(`UPDATE cajas SET status = 'agotada', updated_at = NOW() WHERE id = $1`, [lote.caja_id]);
+          }
+        }
+
         // Obtener rango de seriales de la libreta
         const loteRange = await client.query(
           `SELECT l.total_cards, l.cards_sold, MIN(c.serial) as serial_desde, MAX(c.serial) as serial_hasta
@@ -1177,6 +1230,25 @@ export async function ejecutarVenta(
             `UPDATE lotes SET cards_sold = (SELECT COUNT(*) FROM cards WHERE lote_id = $1 AND is_sold = true) WHERE id = $1`,
             [card.lote_id]
           );
+
+          // Marcar lote como vendido_completo si todos los cartones fueron vendidos
+          await client.query(
+            `UPDATE lotes SET status = 'vendido_completo' WHERE id = $1 AND cards_sold >= total_cards AND status != 'vendido_completo'`,
+            [card.lote_id]
+          );
+
+          // Verificar si la caja padre tiene todos los lotes vendidos
+          const loteParent = await client.query('SELECT caja_id FROM lotes WHERE id = $1', [card.lote_id]);
+          const cajaId = loteParent.rows[0]?.caja_id;
+          if (cajaId) {
+            const cajaLotesCheck = await client.query(
+              `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'vendido_completo') as vendidos FROM lotes WHERE caja_id = $1`,
+              [cajaId]
+            );
+            if (Number(cajaLotesCheck.rows[0].total) > 0 && Number(cajaLotesCheck.rows[0].vendidos) === Number(cajaLotesCheck.rows[0].total)) {
+              await client.query(`UPDATE cajas SET status = 'agotada', updated_at = NOW() WHERE id = $1`, [cajaId]);
+            }
+          }
         }
       }
 
@@ -1193,6 +1265,12 @@ export async function ejecutarVenta(
     } catch (err: any) {
       errores.push(err.message);
     }
+  }
+
+  // Si no hubo items exitosos, rollback y retornar sin documento fantasma
+  if (exitosos === 0) {
+    await client.query('ROLLBACK');
+    return { documentoId: 0, exitosos: 0, totalCartones: 0, errores };
   }
 
   // Actualizar documento

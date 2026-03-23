@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getPool } from '../database/init.js';
 import { createUser, updateUser, validatePassword } from '../services/authService.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requirePermission } from '../middleware/auth.js';
 import type { UserRole } from '../types/auth.js';
 import { logActivity, getClientIp } from '../services/auditService.js';
 
@@ -11,16 +11,8 @@ const router = Router();
 // Roles que un loterista puede asignar a sus sub-usuarios
 const SUB_USER_ROLES: UserRole[] = ['seller', 'inventory', 'viewer'];
 
-// Middleware: solo loteria puede acceder
-function requireLoteria(req: Request, res: Response, next: () => void) {
-  if (req.user?.role !== 'loteria') {
-    return res.status(403).json({ success: false, error: 'Solo usuarios de lotería pueden gestionar sub-usuarios' });
-  }
-  next();
-}
-
 // GET /api/mis-usuarios — listar sub-usuarios propios
-router.get('/', authenticate, requireLoteria, async (req: Request, res: Response) => {
+router.get('/', authenticate, requirePermission('sub_users:manage'), async (req: Request, res: Response) => {
   try {
     const pool = getPool();
     const result = await pool.query(
@@ -36,7 +28,7 @@ router.get('/', authenticate, requireLoteria, async (req: Request, res: Response
 });
 
 // POST /api/mis-usuarios — crear sub-usuario
-router.post('/', authenticate, requireLoteria, async (req: Request, res: Response) => {
+router.post('/', authenticate, requirePermission('sub_users:manage'), async (req: Request, res: Response) => {
   try {
     const { username, password, email, full_name, role } = req.body;
 
@@ -80,7 +72,7 @@ router.post('/', authenticate, requireLoteria, async (req: Request, res: Respons
 });
 
 // PUT /api/mis-usuarios/:id — actualizar sub-usuario propio
-router.put('/:id', authenticate, requireLoteria, async (req: Request, res: Response) => {
+router.put('/:id', authenticate, requirePermission('sub_users:manage'), async (req: Request, res: Response) => {
   try {
     const subUserId = parseInt(req.params.id as string, 10);
     const pool = getPool();
@@ -125,7 +117,7 @@ router.put('/:id', authenticate, requireLoteria, async (req: Request, res: Respo
 });
 
 // DELETE /api/mis-usuarios/:id — eliminar sub-usuario propio
-router.delete('/:id', authenticate, requireLoteria, async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, requirePermission('sub_users:manage'), async (req: Request, res: Response) => {
   try {
     const subUserId = parseInt(req.params.id as string, 10);
     const pool = getPool();

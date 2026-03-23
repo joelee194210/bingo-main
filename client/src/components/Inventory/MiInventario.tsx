@@ -73,6 +73,12 @@ export default function MiInventario() {
     }
   }, [misAlmacenes, selectedAlmacen]);
 
+  useEffect(() => {
+    setExpandedCajas(new Set());
+    setExpandedLotes(new Set());
+    setLoteCartones({});
+  }, [selectedAlmacen]);
+
   const toggleCaja = (cajaId: number) => {
     setExpandedCajas(prev => {
       const next = new Set(prev);

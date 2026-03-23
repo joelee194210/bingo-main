@@ -794,7 +794,7 @@ router.get('/dashboard-general/:eventId', requirePermission('inventory:dashboard
 });
 
 // Vista informativa (solo lectura) — misma data, permiso menor
-router.get('/dashboard-ventas/:eventId', requirePermission('inventory:read'), async (req, res) => {
+router.get('/dashboard-ventas/:eventId', requirePermission('inventory:dashboard'), async (req, res) => {
   try {
     const pool = getPool();
     const data = await inv.getDashboardGeneral(pool, parseInt(req.params.eventId as string, 10));
