@@ -808,11 +808,15 @@ export async function ejecutarMovimientoBulk(
           const r = await db.query('SELECT name FROM almacenes WHERE id = $1', [caja.almacen_id]);
           itemOrigenName = r.rows[0]?.name || null;
         }
-        const soldCheck = await db.query(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE c.is_sold = true) as vendidos FROM cards c JOIN lotes l ON l.id = c.lote_id WHERE l.caja_id = $1`, [caja.id]);
+        const cajaOrigenAlmacen = caja.almacen_id;
+        // Contar solo cards que están en el almacén origen de la caja
+        const soldCheckQuery = cajaOrigenAlmacen
+          ? `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE c.is_sold = true) as vendidos FROM cards c JOIN lotes l ON l.id = c.lote_id WHERE l.caja_id = $1 AND c.almacen_id = $2`
+          : `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE c.is_sold = true) as vendidos FROM cards c JOIN lotes l ON l.id = c.lote_id WHERE l.caja_id = $1`;
+        const soldCheckParams = cajaOrigenAlmacen ? [caja.id, cajaOrigenAlmacen] : [caja.id];
+        const soldCheck = await db.query(soldCheckQuery, soldCheckParams);
         const { total, vendidos } = soldCheck.rows[0];
         if (!isDevolucion && Number(total) > 0 && Number(vendidos) === Number(total)) throw new Error(`Caja "${item.referencia}" tiene todos los cartones vendidos`);
-
-        const cajaOrigenAlmacen = caja.almacen_id;
         await db.query('UPDATE cajas SET almacen_id = $1, status = $2, updated_at = NOW() WHERE id = $3',
           [data.almacen_destino_id, isDevolucion ? 'abierta' : caja.status, caja.id]);
         // Solo mover lotes que están en el mismo almacén que la caja (no los movidos individualmente)
@@ -844,17 +848,25 @@ export async function ejecutarMovimientoBulk(
           const r = await db.query('SELECT name FROM almacenes WHERE id = $1', [lote.almacen_id]);
           itemOrigenName = r.rows[0]?.name || null;
         }
-        const soldCheck = await db.query(`SELECT COUNT(*) FILTER (WHERE is_sold = true) as vendidos, COUNT(*) as total FROM cards WHERE lote_id = $1`, [lote.id]);
+        // Contar solo cards que están en el almacén origen del lote
+        const loteOrigenAlmacen = lote.almacen_id;
+        const soldCheckQuery = loteOrigenAlmacen
+          ? `SELECT COUNT(*) FILTER (WHERE is_sold = true) as vendidos, COUNT(*) as total FROM cards WHERE lote_id = $1 AND almacen_id = $2`
+          : `SELECT COUNT(*) FILTER (WHERE is_sold = true) as vendidos, COUNT(*) as total FROM cards WHERE lote_id = $1`;
+        const soldCheckParams = loteOrigenAlmacen ? [lote.id, loteOrigenAlmacen] : [lote.id];
+        const soldCheck = await db.query(soldCheckQuery, soldCheckParams);
         if (!isDevolucion && Number(soldCheck.rows[0].total) > 0 && Number(soldCheck.rows[0].vendidos) === Number(soldCheck.rows[0].total)) throw new Error(`Libreta "${item.referencia}" toda vendida`);
 
         await db.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [data.almacen_destino_id, lote.id]);
 
         if (isDevolucion) {
-          await db.query('UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL WHERE lote_id = $2', [data.almacen_destino_id, lote.id]);
+          // Solo devolver cards que están en el almacén origen
+          await db.query('UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL WHERE lote_id = $2 AND almacen_id = $3', [data.almacen_destino_id, lote.id, loteOrigenAlmacen]);
           await db.query(`UPDATE lotes SET status = 'disponible', cards_sold = 0 WHERE id = $1`, [lote.id]);
           cartones = Number(soldCheck.rows[0].total);
         } else {
-          await db.query('UPDATE cards SET almacen_id = $1 WHERE lote_id = $2 AND is_sold = false', [data.almacen_destino_id, lote.id]);
+          // Solo mover cards no vendidas que están en el almacén origen
+          await db.query('UPDATE cards SET almacen_id = $1 WHERE lote_id = $2 AND is_sold = false AND almacen_id = $3', [data.almacen_destino_id, lote.id, loteOrigenAlmacen]);
           cartones = Number(soldCheck.rows[0].total) - Number(soldCheck.rows[0].vendidos);
         }
         // Actualizar status de la caja padre si la libreta fue movida fuera
