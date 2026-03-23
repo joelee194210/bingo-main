@@ -1458,13 +1458,18 @@ export async function getCajas(pool: Pool, eventId: number, almacenId?: number):
 }[]> {
   const where = almacenId ? 'c.event_id = $1 AND c.almacen_id = $2' : 'c.event_id = $1';
   const params = almacenId ? [eventId, almacenId] : [eventId];
-  // Cuando se filtra por almacén, contar solo lotes/cards que están en ese almacén
-  const loteAlmFilter = almacenId ? `AND l.almacen_id = ${Number(almacenId)}` : '';
-  const cardAlmFilter = almacenId ? `AND ca.almacen_id = ${Number(almacenId)}` : '';
+  // Cuando se filtra por almacén, contar cards REALES en ese almacén (no total_cards del lote)
+  const almId = almacenId ? Number(almacenId) : null;
+  const totalCartonesExpr = almId
+    ? `COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND ca.almacen_id = ${almId}), 0)`
+    : `COALESCE((SELECT SUM(l.total_cards) FROM lotes l WHERE l.caja_id = c.id), 0)`;
+  const asignadosExpr = almId
+    ? `COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND ca.is_sold = true AND ca.almacen_id = ${almId}), 0)`
+    : `COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND ca.is_sold = true), 0)`;
   const cajasResult = await pool.query(`
     SELECT c.*,
-      COALESCE((SELECT SUM(l.total_cards) FROM lotes l WHERE l.caja_id = c.id ${loteAlmFilter}), 0) as total_cartones,
-      COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND ca.is_sold = true ${cardAlmFilter}), 0) as asignados,
+      ${totalCartonesExpr} as total_cartones,
+      ${asignadosExpr} as asignados,
       a.name as almacen_name
     FROM cajas c
     LEFT JOIN almacenes a ON a.id = c.almacen_id
@@ -1477,13 +1482,16 @@ export async function getCajas(pool: Pool, eventId: number, almacenId?: number):
   const lotesMap: Record<number, any[]> = {};
   if (cajaIds.length > 0) {
     const lotesQuery = almacenId
-      ? `SELECT id, caja_id, lote_code, series_number, total_cards, cards_sold, status FROM lotes WHERE caja_id = ANY($1::int[]) AND almacen_id = $2 ORDER BY lote_code`
+      ? `SELECT l.id, l.caja_id, l.lote_code, l.series_number, l.status,
+           (SELECT COUNT(*) FROM cards c WHERE c.lote_id = l.id AND c.almacen_id = $2) AS total_cards,
+           (SELECT COUNT(*) FROM cards c WHERE c.lote_id = l.id AND c.almacen_id = $2 AND c.is_sold = true) AS cards_sold
+         FROM lotes l WHERE l.caja_id = ANY($1::int[]) AND l.almacen_id = $2 ORDER BY l.lote_code`
       : `SELECT id, caja_id, lote_code, series_number, total_cards, cards_sold, status FROM lotes WHERE caja_id = ANY($1::int[]) ORDER BY lote_code`;
     const lotesParams = almacenId ? [cajaIds, almacenId] : [cajaIds];
     const lotesResult = await pool.query(lotesQuery, lotesParams);
     for (const l of lotesResult.rows) {
       if (!lotesMap[l.caja_id]) lotesMap[l.caja_id] = [];
-      lotesMap[l.caja_id].push({ id: l.id, lote_code: l.lote_code, series_number: l.series_number, total_cards: l.total_cards, cards_sold: l.cards_sold, status: l.status });
+      lotesMap[l.caja_id].push({ id: l.id, lote_code: l.lote_code, series_number: l.series_number, total_cards: Number(l.total_cards), cards_sold: Number(l.cards_sold), status: l.status });
     }
   }
 
