@@ -175,8 +175,9 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
     let almacenFilter = almacen_id ? parseInt(almacen_id as string, 10) : null;
     let vendedorFilter = vendedor_id ? parseInt(vendedor_id as string, 10) : null;
 
-    // Si es seller/loteria/inventory sin admin, restringir a sus almacenes
-    if (!['admin', 'moderator'].includes(user.role)) {
+    // Admin, moderator y loteria ven todo; otros solo sus almacenes y ventas
+    const canSeeAllReports = ['admin', 'moderator', 'loteria'].includes(user.role);
+    if (!canSeeAllReports) {
       const { rows: misAlm } = await pool.query(
         'SELECT almacen_id FROM almacen_usuarios WHERE user_id = $1 AND is_active = true',
         [user.id]
@@ -185,12 +186,11 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
       if (misAlmIds.length === 0) {
         return res.json({ success: true, data: { resumen: [], detalle: [], totales: { cartones: 0, documentos: 0 } } });
       }
-      // Si pide un almacen, validar que sea suyo
       if (almacenFilter && !misAlmIds.includes(almacenFilter)) {
         return res.status(403).json({ success: false, error: 'No tienes acceso a este almacen' });
       }
-      // Si no es admin, solo ve sus propias ventas
-      if (!vendedorFilter) vendedorFilter = user.id;
+      // Forzar solo sus propias ventas (ignorar vendedor_id del query string)
+      vendedorFilter = user.id;
     }
 
     // 1. Resumen por día y almacen
@@ -283,15 +283,19 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
     let almacenFilter = almacen_id ? parseInt(almacen_id as string, 10) : null;
     let vendedorFilter = vendedor_id ? parseInt(vendedor_id as string, 10) : null;
 
-    if (!['admin', 'moderator'].includes(user.role)) {
+    const canSeeAllPdf = ['admin', 'moderator', 'loteria'].includes(user.role);
+    if (!canSeeAllPdf) {
       const { rows: misAlm } = await pool.query(
         'SELECT almacen_id FROM almacen_usuarios WHERE user_id = $1 AND is_active = true', [user.id]
       );
       const misAlmIds = misAlm.map((a: any) => a.almacen_id);
+      if (misAlmIds.length === 0) {
+        return res.status(403).json({ success: false, error: 'Sin almacenes asignados' });
+      }
       if (almacenFilter && !misAlmIds.includes(almacenFilter)) {
         return res.status(403).json({ success: false, error: 'No tienes acceso a este almacen' });
       }
-      if (!vendedorFilter) vendedorFilter = user.id;
+      vendedorFilter = user.id;
     }
 
     // Obtener evento
