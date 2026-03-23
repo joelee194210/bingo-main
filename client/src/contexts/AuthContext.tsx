@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { User, UserRole, AuthState } from '../types/auth';
 import { hasPermission as hasPermissionDefault } from '../types/auth';
 import api from '../services/api';
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const USER_KEY = 'bingo_auth_user';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<AuthState>({
     user: null,
     token: null,
@@ -92,6 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.data.success) {
         const { user } = response.data.data;
 
+        // Limpiar cache del usuario anterior
+        queryClient.clear();
+
         // M10: cookie httpOnly se setea automáticamente por el server
         localStorage.setItem(USER_KEY, JSON.stringify(user));
 
@@ -117,6 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // M10: limpiar cookie httpOnly en el server
     api.post('/auth/logout').catch(() => {});
     setDynamicPermissions(null);
+    // Limpiar todo el cache de React Query para evitar datos de otro usuario
+    queryClient.clear();
     clearAuth();
   };
 
