@@ -4,6 +4,7 @@ import {
   getReporteVentas,
   downloadReporteVentasPdf,
   getEvents,
+  getAlmacenTree,
   getDocumentoPdf,
   type ReporteVentasResumen,
 } from '@/services/api';
@@ -75,23 +76,31 @@ export default function ReporteVentas() {
     if (!eventId && events.length > 0) setEventId(events[0].id);
   }, [events, eventId]);
 
-  // Reporte
+  // Almacenes del evento (para filtro)
+  const { data: treeData } = useQuery({
+    queryKey: ['almacen-tree', eventId],
+    queryFn: () => getAlmacenTree(eventId!),
+    enabled: !!eventId,
+  });
+  const almacenesEvento = useMemo(() => {
+    const flat: { id: number; name: string }[] = [];
+    const walk = (nodes: any[]) => {
+      for (const n of nodes) {
+        flat.push({ id: n.id, name: n.name });
+        if (n.children?.length) walk(n.children);
+      }
+    };
+    walk(treeData?.data || []);
+    return flat;
+  }, [treeData]);
+
+  // Reporte — carga automáticamente cuando hay evento y fechas
   const { data: reporteRes, isLoading, refetch } = useQuery({
     queryKey: ['reporte-ventas', eventId, desde, hasta, almacenId, vendedorId],
     queryFn: () => getReporteVentas(eventId!, { desde, hasta, almacen_id: almacenId, vendedor_id: vendedorId }),
-    enabled: false, // Solo ejecutar manualmente
+    enabled: !!eventId && !!desde && !!hasta,
   });
   const reporte = reporteRes?.data;
-
-  // Almacenes del reporte (para filtro después de primera búsqueda)
-  const almacenesEvento = useMemo(() => {
-    if (!reporte) return [];
-    const set = new Map<number, string>();
-    for (const r of reporte.resumen) {
-      if (r.almacen_id) set.set(r.almacen_id, r.almacen_nombre);
-    }
-    return Array.from(set, ([id, name]) => ({ id, name }));
-  }, [reporte]);
 
   // Vendedores unicos del reporte (para filtro)
   const vendedores = useMemo(() => {
