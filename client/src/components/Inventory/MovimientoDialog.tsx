@@ -42,6 +42,7 @@ import {
   type TipoEntidad,
   type AsignacionProposito,
 } from '@/types';
+import { validarReferencia } from '@/services/api';
 import SignaturePad from './SignaturePad';
 import QRCameraScanner from './QRCameraScanner';
 
@@ -63,6 +64,10 @@ const TIPO_ENTIDAD_LABELS: Record<TipoEntidad, string> = {
 interface ItemMovimiento {
   tipo: TipoEntidad;
   referencia: string;
+  validado?: boolean;
+  almacen?: string;
+  totalCartones?: number;
+  disponibles?: number;
 }
 
 interface MovimientoDialogProps {
@@ -176,15 +181,54 @@ export default function MovimientoDialog({ eventId, open, onOpenChange }: Movimi
   };
 
   // Agregar item a la lista
-  const addItem = () => {
+  const [validating, setValidating] = useState(false);
+
+  const addItem = async () => {
     const ref = inputRef.trim().toUpperCase();
     if (!ref) return;
-    if (items.some(i => i.referencia === ref && i.tipo === tipoEntidad)) {
-      toast.error(`${TIPO_ENTIDAD_LABELS[tipoEntidad]} "${ref}" ya esta en la lista`);
+    if (items.some(i => i.referencia === ref)) {
+      toast.error(`"${ref}" ya esta en la lista`);
       return;
     }
-    setItems(prev => [...prev, { tipo: tipoEntidad, referencia: ref }]);
-    setInputRef('');
+
+    // Validar contra el backend antes de agregar
+    const origenId = almacenOrigenId ? Number(almacenOrigenId) : undefined;
+    setValidating(true);
+    try {
+      const result = await validarReferencia(eventId, ref, origenId);
+      const data = result.data;
+
+      if (!data || !data.existe) {
+        toast.error(`"${ref}" no encontrado en el sistema`);
+        return;
+      }
+
+      if (origenId && data.enMiAlmacen === false) {
+        toast.error(`"${ref}" no esta en el almacen origen (esta en ${data.almacen || 'otro almacen'})`);
+        return;
+      }
+
+      if (data.disponibles !== undefined && data.disponibles === 0 && tipoMovimiento !== 'devolucion') {
+        toast.error(`"${ref}" no tiene cartones disponibles`);
+        return;
+      }
+
+      const tipo = (data.tipo as TipoEntidad) || tipoEntidad;
+      setItems(prev => [...prev, {
+        tipo,
+        referencia: data.referencia || ref,
+        validado: true,
+        almacen: data.almacen,
+        totalCartones: data.totalCartones,
+        disponibles: data.disponibles,
+      }]);
+      setInputRef('');
+      toast.success(`${TIPO_ENTIDAD_LABELS[tipo]} "${data.referencia || ref}" agregada — ${data.disponibles ?? 0} cartones disponibles`);
+    } catch {
+      toast.error(`Error al validar "${ref}"`);
+    } finally {
+      setValidating(false);
+    }
   };
 
   const removeItem = (index: number) => {
@@ -540,8 +584,8 @@ export default function MovimientoDialog({ eventId, open, onOpenChange }: Movimi
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }}
                 />
               </div>
-              <Button size="sm" className="h-9" onClick={addItem} disabled={!inputRef.trim()}>
-                <Plus className="h-4 w-4" />
+              <Button size="sm" className="h-9" onClick={addItem} disabled={!inputRef.trim() || validating}>
+                {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               </Button>
             </div>
           </div>
@@ -575,6 +619,7 @@ export default function MovimientoDialog({ eventId, open, onOpenChange }: Movimi
                     <TableHead className="w-8">#</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Referencia</TableHead>
+                    <TableHead>Cartones</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -585,7 +630,11 @@ export default function MovimientoDialog({ eventId, open, onOpenChange }: Movimi
                       <TableCell>
                         <Badge variant="outline" className="text-xs capitalize">{item.tipo}</Badge>
                       </TableCell>
-                      <TableCell className="font-mono font-medium">{item.referencia}</TableCell>
+                      <TableCell>
+                        <span className="font-mono font-medium">{item.referencia}</span>
+                        {item.almacen && <span className="text-xs text-muted-foreground ml-2">({item.almacen})</span>}
+                      </TableCell>
+                      <TableCell className="text-xs">{item.disponibles ?? '-'}</TableCell>
                       <TableCell>
                         <Button
                           variant="ghost"
