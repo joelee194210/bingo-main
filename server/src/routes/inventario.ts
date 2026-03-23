@@ -586,37 +586,60 @@ router.get('/validar-referencia/:eventId/:referencia', requirePermission('invent
     const ref = (req.params.referencia as string).toUpperCase();
     const almacenId = req.query.almacen_id ? parseInt(req.query.almacen_id as string, 10) : undefined;
 
-    // Buscar como caja
+    // Buscar como caja — contar cards reales en el almacén del usuario si aplica
     const cajaRes = await pool.query(
-      `SELECT c.id, c.caja_code, c.almacen_id, c.total_lotes, a.name as almacen_name,
-        COALESCE((SELECT SUM(l.total_cards) FROM lotes l WHERE l.caja_id = c.id), 0) as total_cartones,
-        COALESCE((SELECT SUM(l.cards_sold) FROM lotes l WHERE l.caja_id = c.id), 0) as vendidos
+      `SELECT c.id, c.caja_code, c.almacen_id, c.total_lotes, a.name as almacen_name
        FROM cajas c LEFT JOIN almacenes a ON a.id = c.almacen_id
        WHERE c.caja_code = $1 AND c.event_id = $2`, [ref, eventId]
     );
     if (cajaRes.rows.length > 0) {
       const c = cajaRes.rows[0];
       const enMiAlmacen = !almacenId || c.almacen_id === almacenId;
+      // Contar cards reales en el almacén de la caja
+      const countAlmacen = c.almacen_id || almacenId;
+      const cardsCount = countAlmacen
+        ? await pool.query(
+            `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE ca.is_sold = true) as vendidos
+             FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = $1 AND ca.almacen_id = $2`,
+            [c.id, countAlmacen])
+        : await pool.query(
+            `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE ca.is_sold = true) as vendidos
+             FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = $1`,
+            [c.id]);
+      const totalCartones = Number(cardsCount.rows[0].total);
+      const vendidos = Number(cardsCount.rows[0].vendidos);
       return res.json({ success: true, data: {
         tipo: 'caja', referencia: c.caja_code, existe: true, enMiAlmacen,
-        almacen: c.almacen_name, totalCartones: Number(c.total_cartones),
-        vendidos: Number(c.vendidos), disponibles: Number(c.total_cartones) - Number(c.vendidos),
+        almacen: c.almacen_name, totalCartones,
+        vendidos, disponibles: totalCartones - vendidos,
       }});
     }
 
-    // Buscar como libreta
+    // Buscar como libreta — contar cards reales en el almacén del lote
     const loteRes = await pool.query(
-      `SELECT l.id, l.lote_code, l.almacen_id, l.total_cards, l.cards_sold, a.name as almacen_name
+      `SELECT l.id, l.lote_code, l.almacen_id, a.name as almacen_name
        FROM lotes l LEFT JOIN almacenes a ON a.id = l.almacen_id
        WHERE l.lote_code = $1 AND l.event_id = $2`, [ref, eventId]
     );
     if (loteRes.rows.length > 0) {
       const l = loteRes.rows[0];
       const enMiAlmacen = !almacenId || l.almacen_id === almacenId;
+      const countAlmacen = l.almacen_id || almacenId;
+      const cardsCount = countAlmacen
+        ? await pool.query(
+            `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_sold = true) as vendidos
+             FROM cards WHERE lote_id = $1 AND almacen_id = $2`,
+            [l.id, countAlmacen])
+        : await pool.query(
+            `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_sold = true) as vendidos
+             FROM cards WHERE lote_id = $1`,
+            [l.id]);
+      const totalCartones = Number(cardsCount.rows[0].total);
+      const vendidos = Number(cardsCount.rows[0].vendidos);
       return res.json({ success: true, data: {
         tipo: 'libreta', referencia: l.lote_code, existe: true, enMiAlmacen,
-        almacen: l.almacen_name, totalCartones: l.total_cards,
-        vendidos: l.cards_sold, disponibles: l.total_cards - l.cards_sold,
+        almacen: l.almacen_name, totalCartones,
+        vendidos, disponibles: totalCartones - vendidos,
       }});
     }
 

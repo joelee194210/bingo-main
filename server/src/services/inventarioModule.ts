@@ -1121,9 +1121,9 @@ export async function ejecutarVenta(
 
         const updateResult = await client.query(
           `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, buyer_cedula = $3, buyer_libreta = $4, sold_by = $5
-           FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $6 AND cards.is_sold = false
+           FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $6 AND cards.is_sold = false AND cards.almacen_id = $7
            RETURNING cards.id`,
-          [data.buyer_name || null, data.buyer_phone || null, data.buyer_cedula || null, data.buyer_libreta || null, userId, caja.id]
+          [data.buyer_name || null, data.buyer_phone || null, data.buyer_cedula || null, data.buyer_libreta || null, userId, caja.id, data.almacen_id]
         );
         const vendidos = updateResult.rowCount || 0;
         totalCartones += vendidos;
@@ -1187,8 +1187,8 @@ export async function ejecutarVenta(
 
         const updateResult = await client.query(
           `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2, buyer_cedula = $3, buyer_libreta = $4, sold_by = $5
-           WHERE lote_id = $6 AND is_sold = false RETURNING id`,
-          [data.buyer_name || null, data.buyer_phone || null, data.buyer_cedula || null, data.buyer_libreta || null, userId, lote.id]
+           WHERE lote_id = $6 AND is_sold = false AND almacen_id = $7 RETURNING id`,
+          [data.buyer_name || null, data.buyer_phone || null, data.buyer_cedula || null, data.buyer_libreta || null, userId, lote.id, data.almacen_id]
         );
         const vendidos = updateResult.rowCount || 0;
         totalCartones += vendidos;
