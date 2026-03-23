@@ -28,6 +28,7 @@ import {
 import type { TipoEntidad } from '@/types';
 import SignaturePad from './SignaturePad';
 import { getStatusColor } from '@/lib/badge-variants';
+import { normalizeSerial } from '@/lib/utils';
 import QRCameraScanner from './QRCameraScanner';
 
 const TIPO_ENTIDAD_LABELS: Record<TipoEntidad, string> = {
@@ -101,31 +102,32 @@ export default function VentaGeneralPage() {
     if (!currentAlmacen) return;
     const code = ref.trim().toUpperCase();
     if (!code) return;
+    const normalizedCode = normalizeSerial(code);
 
-    if (items.some(i => i.referencia === code)) {
-      toast.info(`"${code}" ya esta en la lista`);
+    if (items.some(i => i.referencia === normalizedCode)) {
+      toast.info(`"${normalizedCode}" ya esta en la lista`);
       return;
     }
 
     setValidating(true);
     try {
-      const result = await validarReferencia(currentAlmacen.event_id, code, currentAlmacen.almacen_id);
+      const result = await validarReferencia(currentAlmacen.event_id, normalizedCode, currentAlmacen.almacen_id);
       const data = result.data;
 
       if (!data || !data.existe) {
-        toast.error(`"${code}" no existe en el sistema`);
+        toast.error(`"${normalizedCode}" no existe en el sistema`);
         return;
       }
 
       const tipo = (data.tipo as TipoEntidad) || tipoHint || 'carton';
 
       if (!data.enMiAlmacen) {
-        toast.error(`${TIPO_ENTIDAD_LABELS[tipo]} "${code}" no esta en tu almacen (esta en ${data.almacen || 'otro'})`);
+        toast.error(`${TIPO_ENTIDAD_LABELS[tipo]} "${normalizedCode}" no esta en tu almacen (esta en ${data.almacen || 'otro'})`);
         return;
       }
 
       if ((data.disponibles ?? 0) === 0) {
-        toast.error(`${TIPO_ENTIDAD_LABELS[tipo]} "${code}" ya fue vendida completamente`);
+        toast.error(`${TIPO_ENTIDAD_LABELS[tipo]} "${normalizedCode}" ya fue vendida completamente`);
         return;
       }
 
@@ -133,10 +135,10 @@ export default function VentaGeneralPage() {
         ? (data.vendidos ? 'Ya vendido' : 'Disponible')
         : `${data.disponibles} disponibles de ${data.totalCartones}`;
 
-      setItems(prev => [...prev, { tipo, referencia: code, validado: true, info }]);
-      toast.success(`${TIPO_ENTIDAD_LABELS[tipo]} "${code}" — ${info}`);
+      setItems(prev => [...prev, { tipo, referencia: normalizedCode, validado: true, info }]);
+      toast.success(`${TIPO_ENTIDAD_LABELS[tipo]} "${normalizedCode}" — ${info}`);
     } catch {
-      toast.error(`Error validando "${code}"`);
+      toast.error(`Error validando "${normalizedCode}"`);
     } finally {
       setValidating(false);
     }

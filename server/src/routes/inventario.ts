@@ -615,12 +615,7 @@ router.get('/validar-referencia/:eventId/:referencia', requirePermission('invent
     }
 
     // Buscar como carton por card_code o serial
-    // Si el formato es tipo "203-21", convertir a serial con padding: "00203-21"
-    let serialSearch = ref;
-    const serialMatch = ref.match(/^(\d+)-(\d+)$/);
-    if (serialMatch) {
-      serialSearch = serialMatch[1].padStart(5, '0') + '-' + serialMatch[2].padStart(2, '0');
-    }
+    const serialSearch = inv.normalizeSerial(ref);
     const cardRes = await pool.query(
       `SELECT c.id, c.card_code, c.serial, c.is_sold, c.almacen_id, a.name as almacen_name
        FROM cards c LEFT JOIN almacenes a ON a.id = c.almacen_id

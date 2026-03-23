@@ -43,6 +43,7 @@ import {
   type AsignacionProposito,
 } from '@/types';
 import { validarReferencia } from '@/services/api';
+import { normalizeSerial } from '@/lib/utils';
 import SignaturePad from './SignaturePad';
 import QRCameraScanner from './QRCameraScanner';
 
@@ -188,8 +189,9 @@ export default function MovimientoDialog({ eventId, open, onOpenChange }: Movimi
   const addItem = async () => {
     const ref = inputRef.trim().toUpperCase();
     if (!ref) return;
-    if (items.some(i => i.referencia === ref)) {
-      toast.error(`"${ref}" ya esta en la lista`);
+    const normalizedRef = normalizeSerial(ref);
+    if (items.some(i => i.referencia === normalizedRef)) {
+      toast.error(`"${normalizedRef}" ya esta en la lista`);
       return;
     }
 
@@ -197,37 +199,37 @@ export default function MovimientoDialog({ eventId, open, onOpenChange }: Movimi
     const origenId = almacenOrigenId ? Number(almacenOrigenId) : undefined;
     setValidating(true);
     try {
-      const result = await validarReferencia(eventId, ref, origenId);
+      const result = await validarReferencia(eventId, normalizedRef, origenId);
       const data = result.data;
 
       if (!data || !data.existe) {
-        toast.error(`"${ref}" no encontrado en el sistema`);
+        toast.error(`"${normalizedRef}" no encontrado en el sistema`);
         return;
       }
 
       if (origenId && data.enMiAlmacen === false) {
-        toast.error(`"${ref}" no esta en el almacen origen (esta en ${data.almacen || 'otro almacen'})`);
+        toast.error(`"${normalizedRef}" no esta en el almacen origen (esta en ${data.almacen || 'otro almacen'})`);
         return;
       }
 
       if (data.disponibles !== undefined && data.disponibles === 0 && tipoMovimiento !== 'devolucion') {
-        toast.error(`"${ref}" no tiene cartones disponibles`);
+        toast.error(`"${normalizedRef}" no tiene cartones disponibles`);
         return;
       }
 
       const tipo = (data.tipo as TipoEntidad) || tipoEntidad;
       setItems(prev => [...prev, {
         tipo,
-        referencia: data.referencia || ref,
+        referencia: data.referencia || normalizedRef,
         validado: true,
         almacen: data.almacen,
         totalCartones: data.totalCartones,
         disponibles: data.disponibles,
       }]);
       setInputRef('');
-      toast.success(`${TIPO_ENTIDAD_LABELS[tipo]} "${data.referencia || ref}" agregada — ${data.disponibles ?? 0} cartones disponibles`);
+      toast.success(`${TIPO_ENTIDAD_LABELS[tipo]} "${data.referencia || normalizedRef}" agregada — ${data.disponibles ?? 0} cartones disponibles`);
     } catch {
-      toast.error(`Error al validar "${ref}"`);
+      toast.error(`Error al validar "${normalizedRef}"`);
     } finally {
       setValidating(false);
     }

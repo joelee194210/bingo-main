@@ -6,6 +6,7 @@ import { verifyEventCards, validateCard, parseNumbers } from '../services/cardVe
 import { requirePermission } from '../middleware/auth.js';
 import type { BingoCard, BingoEvent, CardNumbers } from '../types/index.js';
 import { logActivity, auditFromReq } from '../services/auditService.js';
+import { normalizeSerial } from '../services/inventarioModule.js';
 const router = Router();
 
 // Almacenar progreso de generación en memoria
@@ -428,14 +429,15 @@ router.put('/:id/unsell', requirePermission('cards:sell'), async (req: Request, 
 router.get('/search/:code', async (req: Request, res: Response) => {
   try {
     const code = (req.params.code as string).toUpperCase();
+    const normalizedCode = normalizeSerial(code);
     const pool = getPool();
 
     const { rows: cardRows } = await pool.query(`
       SELECT * FROM cards WHERE card_code = $1
       UNION SELECT * FROM cards WHERE validation_code = $1
-      UNION SELECT * FROM cards WHERE serial = $1
+      UNION SELECT * FROM cards WHERE serial = $1 OR serial = $2
       LIMIT 1
-    `, [code]);
+    `, [code, normalizedCode]);
     const card = cardRows[0] as BingoCard | undefined;
 
     if (!card) {

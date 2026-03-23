@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { searchCard, sellCard, unsellCard } from '@/services/api';
+import { normalizeSerial } from '@/lib/utils';
 import type { BingoCard, CardNumbers } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,7 +47,7 @@ export default function CardActivation() {
   }, []);
 
   const searchMutation = useMutation({
-    mutationFn: () => searchCard(searchValue.trim()),
+    mutationFn: () => searchCard(normalizeSerial(searchValue.trim())),
     onSuccess: (data) => {
       if (data.success && data.data) {
         setCard(data.data);

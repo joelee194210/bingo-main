@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { Search, CheckCircle, XCircle, Loader2, Gift, PartyPopper } from 'lucide-react';
 import { validateCard, searchCard } from '@/services/api';
+import { normalizeSerial } from '@/lib/utils';
 import type { BingoCard, CardNumbers } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -66,7 +67,7 @@ export default function CardValidator() {
   const [error, setError] = useState('');
 
   const searchMutation = useMutation({
-    mutationFn: () => searchCard(cardCode),
+    mutationFn: () => searchCard(normalizeSerial(cardCode)),
     onSuccess: (data) => {
       if (data.success && data.data) {
         setCard(data.data);
@@ -80,7 +81,7 @@ export default function CardValidator() {
   });
 
   const validateMutation = useMutation({
-    mutationFn: () => validateCard(cardCode, validationCode),
+    mutationFn: () => validateCard(normalizeSerial(cardCode), validationCode),
     onSuccess: (data) => {
       if (data.success && data.data) {
         setCard({ ...data.data, numbers: data.data.numbers as unknown as CardNumbers } as BingoCard);

@@ -9,6 +9,15 @@ import type {
 } from '../types/index.js';
 import { generateMovimientoPdf, generateDocumentoPdf, type DocumentoItemDetalle, type LoteDetalle } from './movimientoPdfService.js';
 
+/** Normaliza serial: "81-1" → "00081-01" */
+export function normalizeSerial(ref: string): string {
+  const match = ref.match(/^(\d+)-(\d+)$/);
+  if (match) {
+    return match[1].padStart(5, '0') + '-' + match[2].padStart(2, '0');
+  }
+  return ref;
+}
+
 export interface FirmaData {
   firma_entrega?: string;
   firma_recibe?: string;
@@ -619,9 +628,10 @@ export async function cargarInventarioPorReferencia(
       }
     }
   } else if (tipoEntidad === 'carton') {
+    const normalizedRef = normalizeSerial(referencia);
     const cardResult = await client.query(
-      'SELECT c.id, c.card_code, c.lote_id, c.is_sold, c.almacen_id FROM cards c WHERE c.card_code = $1 AND c.event_id = $2',
-      [referencia, eventId]
+      'SELECT c.id, c.card_code, c.lote_id, c.is_sold, c.almacen_id FROM cards c WHERE (c.card_code = $1 OR c.serial = $3) AND c.event_id = $2',
+      [referencia, eventId, normalizedRef]
     );
     if (cardResult.rows.length === 0) throw new Error(`Carton "${referencia}" no encontrado`);
     const card = cardResult.rows[0];
@@ -861,7 +871,8 @@ export async function ejecutarMovimientoBulk(
           }
         }
       } else if (item.tipo === 'carton') {
-        const cardResult = await db.query('SELECT c.id, c.card_code, c.is_sold, c.almacen_id FROM cards c WHERE c.card_code = $1 AND c.event_id = $2', [item.referencia, eventId]);
+        const normalizedRef = normalizeSerial(item.referencia);
+        const cardResult = await db.query('SELECT c.id, c.card_code, c.is_sold, c.almacen_id FROM cards c WHERE (c.card_code = $1 OR c.serial = $3) AND c.event_id = $2', [item.referencia, eventId, normalizedRef]);
         if (cardResult.rows.length === 0) throw new Error(`Carton "${item.referencia}" no encontrado`);
         const card = cardResult.rows[0];
         // Verificar que el cartón esté en el almacén origen
@@ -900,7 +911,7 @@ export async function ejecutarMovimientoBulk(
 
       exitosos++;
       totalCartones += cartones;
-      itemsExitosos.push({ tipo: item.tipo, referencia: item.referencia, cartones });
+      itemsExitosos.push({ tipo: item.tipo, referencia: item.tipo === 'carton' ? normalizeSerial(item.referencia) : item.referencia, cartones });
     } catch (err) {
       errores.push(`${item.referencia}: ${(err as Error).message}`);
     }
