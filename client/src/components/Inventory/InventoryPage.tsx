@@ -285,12 +285,20 @@ export default function InventoryPage() {
   });
 
   const fullTree = useMemo(() => treeData?.data ?? [], [treeData?.data]);
-  // Filtrar árbol: operadores solo ven su almacén
+  // Filtrar árbol: operadores solo ven su almacén (búsqueda recursiva)
   const tree = useMemo(() => {
     if (canSeeAll || !miAlmacenId) return fullTree;
-    const filterTree = (nodes: typeof fullTree): typeof fullTree =>
-      nodes.filter(n => n.id === miAlmacenId).map(n => ({ ...n }));
-    return filterTree(fullTree);
+    const findNode = (nodes: typeof fullTree): typeof fullTree => {
+      for (const n of nodes) {
+        if (n.id === miAlmacenId) return [{ ...n, children: n.children || [] }];
+        if (n.children?.length) {
+          const found = findNode(n.children as typeof fullTree);
+          if (found.length > 0) return found;
+        }
+      }
+      return [];
+    };
+    return findNode(fullTree);
   }, [fullTree, canSeeAll, miAlmacenId]);
   // B4: derivar lista plana del tree en lugar de query separada
   const almacenes = useMemo(() => {
