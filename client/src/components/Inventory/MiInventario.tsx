@@ -361,7 +361,7 @@ export default function MiInventario() {
             </CardContent>
           </Card>
 
-          {/* Libretas sueltas (sin caja en este almacén) */}
+          {/* Libretas sueltas (sin caja en este almacén) — expandibles */}
           {libretasSueltas.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
@@ -372,21 +372,56 @@ export default function MiInventario() {
               </CardHeader>
               <CardContent>
                 <div className="divide-y">
-                  {libretasSueltas.map(l => (
-                    <div key={l.id} className="py-2 flex items-center justify-between">
-                      <div>
-                        <span className="font-mono font-medium text-sm">{l.lote_code}</span>
-                        {l.caja_code && <span className="text-xs text-muted-foreground ml-2">(de caja {l.caja_code})</span>}
+                  {libretasSueltas.map(l => {
+                    const isExpanded = expandedLotes.has(l.id);
+                    const cartones = loteCartones[l.id];
+                    const isLoadingLote = loadingLotes.has(l.id);
+                    return (
+                      <div key={l.id}>
+                        <div
+                          className="py-2 flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded px-2"
+                          onClick={() => toggleLote(l.id)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                            <span className="font-mono font-medium text-sm">{l.lote_code}</span>
+                            {l.caja_code && <span className="text-xs text-muted-foreground">(de caja {l.caja_code})</span>}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span>{l.total_cards - l.cards_sold} disp.</span>
+                            <span className="text-muted-foreground">/ {l.total_cards}</span>
+                            <Badge variant={l.cards_sold > 0 ? 'success' : 'secondary'} className="text-[10px]">
+                              {l.cards_sold} vend.
+                            </Badge>
+                          </div>
+                        </div>
+                        {isExpanded && (
+                          <div className="pl-8 pb-2">
+                            {isLoadingLote ? (
+                              <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                                <Loader2 className="h-3 w-3 animate-spin" /> Cargando cartones...
+                              </div>
+                            ) : cartones ? (
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1">
+                                {cartones.map(c => (
+                                  <div key={c.id} className={`text-xs px-2 py-1 rounded flex items-center justify-between ${c.is_sold ? 'bg-green-50 dark:bg-green-950/30' : 'bg-muted/50'}`}>
+                                    <span className="font-mono">{c.serial}</span>
+                                    {c.is_sold ? (
+                                      <span className="text-[10px] text-green-600 truncate ml-1" title={c.buyer_name || ''}>
+                                        {c.buyer_name || 'Vendido'}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-muted-foreground">Disp.</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span>{l.total_cards - l.cards_sold} disp.</span>
-                        <span className="text-muted-foreground">/ {l.total_cards}</span>
-                        <Badge variant={l.cards_sold > 0 ? 'success' : 'secondary'} className="text-[10px]">
-                          {l.cards_sold} vend.
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -404,15 +439,20 @@ export default function MiInventario() {
               <CardContent>
                 <div className="divide-y">
                   {cartonesSueltos.map(c => (
-                    <div key={c.id} className="py-2 flex items-center justify-between">
+                    <div key={c.id} className={`py-2 flex items-center justify-between px-2 rounded ${c.is_sold ? 'bg-green-50 dark:bg-green-950/30' : ''}`}>
                       <div>
                         <span className="font-mono font-medium text-sm">{c.serial}</span>
                         <span className="text-xs text-muted-foreground ml-2">{c.card_code}</span>
                         {c.lote_code && <span className="text-xs text-muted-foreground ml-1">(de libreta {c.lote_code})</span>}
                       </div>
-                      <Badge variant={c.is_sold ? 'success' : 'secondary'} className="text-[10px]">
-                        {c.is_sold ? 'Vendido' : 'Disponible'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {c.is_sold && c.buyer_name && (
+                          <span className="text-xs text-green-600 truncate max-w-[120px]">{c.buyer_name}</span>
+                        )}
+                        <Badge variant={c.is_sold ? 'success' : 'secondary'} className="text-[10px]">
+                          {c.is_sold ? 'Vendido' : 'Disponible'}
+                        </Badge>
+                      </div>
                     </div>
                   ))}
                 </div>
