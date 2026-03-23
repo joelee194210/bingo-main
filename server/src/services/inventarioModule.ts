@@ -564,13 +564,14 @@ export async function cargarInventarioPorReferencia(
     if (Number(total) > 0 && Number(vendidos) === Number(total)) {
       throw new Error(`Caja "${referencia}" tiene todos los cartones vendidos`);
     }
-    // Mover caja + todos sus lotes + todos sus cartones (no vendidos)
+    // Mover caja + solo lotes/cartones que están en el mismo almacén que la caja
+    const cajaOrigenAlmacen = caja.almacen_id;
     await pool.query('UPDATE cajas SET almacen_id = $1, updated_at = NOW() WHERE id = $2', [almacenId, caja.id]);
-    await pool.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = $2', [almacenId, caja.id]);
+    await pool.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = $2 AND almacen_id = $3', [almacenId, caja.id, cajaOrigenAlmacen]);
     await pool.query(`
       UPDATE cards SET almacen_id = $1
-      FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2 AND cards.is_sold = false
-    `, [almacenId, caja.id]);
+      FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2 AND cards.is_sold = false AND cards.almacen_id = $3
+    `, [almacenId, caja.id, cajaOrigenAlmacen]);
     cartones = Number(total) - Number(vendidos);
   } else if (tipoEntidad === 'libreta') {
     const loteResult = await pool.query(
@@ -771,17 +772,19 @@ export async function ejecutarMovimientoBulk(
         const { total, vendidos } = soldCheck.rows[0];
         if (!isDevolucion && Number(total) > 0 && Number(vendidos) === Number(total)) throw new Error(`Caja "${item.referencia}" tiene todos los cartones vendidos`);
 
+        const cajaOrigenAlmacen = caja.almacen_id;
         await db.query('UPDATE cajas SET almacen_id = $1, status = $2, updated_at = NOW() WHERE id = $3',
           [data.almacen_destino_id, isDevolucion ? 'abierta' : caja.status, caja.id]);
-        await db.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = $2', [data.almacen_destino_id, caja.id]);
+        // Solo mover lotes que están en el mismo almacén que la caja (no los movidos individualmente)
+        await db.query('UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = $2 AND almacen_id = $3', [data.almacen_destino_id, caja.id, cajaOrigenAlmacen]);
 
         if (isDevolucion) {
-          // Devolucion: desmarcar vendidos y mover TODOS los cartones
-          await db.query(`UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2`, [data.almacen_destino_id, caja.id]);
-          await db.query(`UPDATE lotes SET status = 'disponible', cards_sold = 0 WHERE caja_id = $1`, [caja.id]);
+          await db.query(`UPDATE cards SET almacen_id = $1, is_sold = false, buyer_name = NULL, buyer_phone = NULL, buyer_cedula = NULL, buyer_libreta = NULL, sold_by = NULL FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2 AND cards.almacen_id = $3`, [data.almacen_destino_id, caja.id, cajaOrigenAlmacen]);
+          await db.query(`UPDATE lotes SET status = 'disponible', cards_sold = 0 WHERE caja_id = $1 AND almacen_id = $2`, [caja.id, data.almacen_destino_id]);
           cartones = Number(total);
         } else {
-          await db.query(`UPDATE cards SET almacen_id = $1 FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2 AND cards.is_sold = false`, [data.almacen_destino_id, caja.id]);
+          // Solo mover cards que están en el almacén origen de la caja
+          await db.query(`UPDATE cards SET almacen_id = $1 FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = $2 AND cards.is_sold = false AND cards.almacen_id = $3`, [data.almacen_destino_id, caja.id, cajaOrigenAlmacen]);
           cartones = Number(total) - Number(vendidos);
         }
       } else if (item.tipo === 'libreta') {
@@ -1293,11 +1296,11 @@ export async function cargarInventario(pool: Pool, eventId: number, almacenId: n
     [almacenId, cajaIds, eventId]
   );
   await pool.query(
-    `UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = ANY($2::int[])`,
+    `UPDATE lotes SET almacen_id = $1, updated_at = NOW() WHERE caja_id = ANY($2::int[]) AND (almacen_id IS NULL OR almacen_id = $1)`,
     [almacenId, cajaIds]
   );
   await pool.query(
-    `UPDATE cards SET almacen_id = $1 FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = ANY($2::int[]) AND cards.is_sold = false`,
+    `UPDATE cards SET almacen_id = $1 FROM lotes l WHERE l.id = cards.lote_id AND l.caja_id = ANY($2::int[]) AND cards.is_sold = false AND (cards.almacen_id IS NULL OR cards.almacen_id = $1)`,
     [almacenId, cajaIds]
   );
 
