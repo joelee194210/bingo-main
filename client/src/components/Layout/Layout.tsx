@@ -1,4 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { APP_VERSION } from '@/version';
 import {
   LayoutDashboard,
   CalendarDays,
@@ -374,7 +375,7 @@ export default function Layout() {
         {/* Footer */}
         <footer className="shrink-0 border-t px-4 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>MegabingoTV &copy; 2026</span>
-          <span>v2.0</span>
+          <span>{APP_VERSION}</span>
         </footer>
       </div>
     </div>

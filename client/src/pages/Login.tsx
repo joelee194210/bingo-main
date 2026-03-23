@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { APP_VERSION } from '@/version';
 
 /* ─── Floating bingo balls ─── */
 const FLOATING_BALLS = [
@@ -260,6 +261,9 @@ export default function Login() {
 
           </div>
         </div>
+
+        {/* Version */}
+        <p className="text-center text-[11px] text-slate-400 mt-4">{APP_VERSION}</p>
       </div>
 
       <style>{`
