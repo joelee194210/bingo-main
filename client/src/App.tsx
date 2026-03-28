@@ -35,6 +35,7 @@ const Permissions = lazy(() => import('./pages/Permissions'));
 const ActivityLog = lazy(() => import('./pages/ActivityLog'));
 const MisUsuarios = lazy(() => import('./pages/MisUsuarios'));
 const ReporteVentas = lazy(() => import('./components/Reports/ReporteVentas'));
+const ReporteVentasAgencias = lazy(() => import('./components/Reports/ReporteVentasAgencias'));
 
 function LazyFallback() {
   return (
@@ -229,6 +230,14 @@ function App() {
           element={
             <ProtectedRoute permission="reports:read">
               <ReporteVentas />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="reportes/ventas-agencias"
+          element={
+            <ProtectedRoute permission="reports:read">
+              <ReporteVentasAgencias />
             </ProtectedRoute>
           }
         />

@@ -526,10 +526,10 @@ export interface ReporteVentasData {
   totales: { cartones: number; documentos: number };
 }
 
-export const getReporteVentas = (eventId: number, params: { desde: string; hasta: string; almacen_id?: number; vendedor_id?: number }) =>
+export const getReporteVentas = (eventId: number, params: { desde: string; hasta: string; almacen_id?: number; vendedor_id?: number; solo_agencias?: boolean }) =>
   api.get<ApiResponse<ReporteVentasData>>(`/reports/sales/${eventId}`, { params }).then(r => r.data);
 
-export const downloadReporteVentasPdf = (eventId: number, params: { desde: string; hasta: string; almacen_id?: number; vendedor_id?: number }) =>
+export const downloadReporteVentasPdf = (eventId: number, params: { desde: string; hasta: string; almacen_id?: number; vendedor_id?: number; solo_agencias?: boolean }) =>
   api.get(`/reports/sales/${eventId}/pdf`, { params, responseType: 'blob', timeout: 60000 }).then(r => r.data);
 
 // =====================================================

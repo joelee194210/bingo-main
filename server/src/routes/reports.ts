@@ -165,6 +165,7 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
     const hasta = req.query.hasta as string | undefined;
     const almacen_id = req.query.almacen_id as string | undefined;
     const vendedor_id = req.query.vendedor_id as string | undefined;
+    const soloAgencias = req.query.solo_agencias === 'true';
 
     if (!desde || !hasta) {
       return res.status(400).json({ success: false, error: 'Se requiere desde y hasta (YYYY-MM-DD)' });
@@ -193,6 +194,9 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
       vendedorFilter = user.id;
     }
 
+    // Filtro para agencias de lotería
+    const agenciaFilter = soloAgencias ? 'AND a.es_agencia_loteria = true' : '';
+
     // 1. Resumen por día y almacen
     const resumenQuery = `
       SELECT
@@ -206,6 +210,7 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
       WHERE c.event_id = $1
         AND c.is_sold = true
         AND DATE(c.sold_at) BETWEEN $2 AND $3
+        ${agenciaFilter}
         ${almacenFilter ? 'AND c.almacen_id = $4' : ''}
         ${vendedorFilter ? `AND c.sold_by = $${almacenFilter ? 5 : 4}` : ''}
       GROUP BY DATE(c.sold_at), a.id, a.name, u.id, u.full_name
@@ -238,6 +243,7 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
       WHERE d.event_id = $1
         AND d.accion = 'venta'
         AND DATE(d.created_at) BETWEEN $2 AND $3
+        ${soloAgencias ? 'AND a.es_agencia_loteria = true' : ''}
         ${almacenFilter ? 'AND d.de_almacen_id = $4' : ''}
         ${vendedorFilter ? `AND d.realizado_por = $${almacenFilter ? 5 : 4}` : ''}
       GROUP BY d.id, a.id, a.name, u.id, u.full_name
@@ -274,6 +280,7 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
     const hasta = req.query.hasta as string | undefined;
     const almacen_id = req.query.almacen_id as string | undefined;
     const vendedor_id = req.query.vendedor_id as string | undefined;
+    const soloAgencias = req.query.solo_agencias === 'true';
 
     if (!desde || !hasta) {
       return res.status(400).json({ success: false, error: 'Se requiere desde y hasta' });
@@ -298,6 +305,8 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
       vendedorFilter = user.id;
     }
 
+    const agenciaFilter = soloAgencias ? 'AND a.es_agencia_loteria = true' : '';
+
     // Obtener evento
     const { rows: [evento] } = await pool.query('SELECT name FROM events WHERE id = $1', [eventId]);
     if (!evento) return res.status(404).json({ success: false, error: 'Evento no encontrado' });
@@ -317,6 +326,7 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
       JOIN almacenes a ON c.almacen_id = a.id
       LEFT JOIN users u ON c.sold_by = u.id
       WHERE c.event_id = $1 AND c.is_sold = true AND DATE(c.sold_at) BETWEEN $2 AND $3
+        ${agenciaFilter}
         ${almacenFilter ? 'AND c.almacen_id = $4' : ''}
         ${vendedorFilter ? `AND c.sold_by = $${almacenFilter ? 5 : 4}` : ''}
       GROUP BY DATE(c.sold_at), a.name, u.full_name
@@ -332,6 +342,7 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
       LEFT JOIN almacenes a ON d.de_almacen_id = a.id
       LEFT JOIN users u ON d.realizado_por = u.id
       WHERE d.event_id = $1 AND d.accion = 'venta' AND DATE(d.created_at) BETWEEN $2 AND $3
+        ${soloAgencias ? 'AND a.es_agencia_loteria = true' : ''}
         ${almacenFilter ? 'AND d.de_almacen_id = $4' : ''}
         ${vendedorFilter ? `AND d.realizado_por = $${almacenFilter ? 5 : 4}` : ''}
       ORDER BY d.created_at DESC
@@ -357,7 +368,7 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
       try { doc.image(salesLogoFile, doc.page.width / 2 - 40, 30, { width: 80 }); } catch {}
       doc.moveDown(4);
     }
-    doc.fontSize(14).font('Helvetica-Bold').text('REPORTE DE VENTAS', { align: 'center' });
+    doc.fontSize(14).font('Helvetica-Bold').text(soloAgencias ? 'REPORTE DE VENTAS - AGENCIAS LOTERIA' : 'REPORTE DE VENTAS', { align: 'center' });
     doc.moveDown(0.3);
     doc.fontSize(10).font('Helvetica').text(evento.name, { align: 'center' });
     doc.moveDown(0.2);

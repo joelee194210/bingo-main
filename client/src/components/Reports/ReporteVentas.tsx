@@ -49,7 +49,7 @@ function formatDateTime(dateStr: string) {
   return new Date(dateStr).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function ReporteVentas() {
+export default function ReporteVentas({ soloAgencias = false }: { soloAgencias?: boolean } = {}) {
   const { hasPermission } = useAuth();
   const queryClient = useQueryClient();
   const isAdmin = hasPermission('reports:export');
@@ -93,18 +93,20 @@ export default function ReporteVentas() {
     const flat: { id: number; name: string }[] = [];
     const walk = (nodes: any[]) => {
       for (const n of nodes) {
-        flat.push({ id: n.id, name: n.name });
+        if (!soloAgencias || n.es_agencia_loteria) {
+          flat.push({ id: n.id, name: n.name });
+        }
         if (n.children?.length) walk(n.children);
       }
     };
     walk(treeData?.data || []);
     return flat;
-  }, [treeData]);
+  }, [treeData, soloAgencias]);
 
   // Reporte — carga automáticamente cuando hay evento y fechas
   const { data: reporteRes, isLoading } = useQuery({
-    queryKey: ['reporte-ventas', eventId, desde, hasta, almacenId, vendedorId],
-    queryFn: () => getReporteVentas(eventId!, { desde, hasta, almacen_id: almacenId, vendedor_id: vendedorId }),
+    queryKey: ['reporte-ventas', eventId, desde, hasta, almacenId, vendedorId, soloAgencias],
+    queryFn: () => getReporteVentas(eventId!, { desde, hasta, almacen_id: almacenId, vendedor_id: vendedorId, solo_agencias: soloAgencias || undefined }),
     enabled: !!eventId && !!desde && !!hasta,
   });
   const reporte = reporteRes?.data;
@@ -123,11 +125,11 @@ export default function ReporteVentas() {
     if (!eventId) return;
     setDownloading(true);
     try {
-      const blob = await downloadReporteVentasPdf(eventId, { desde, hasta, almacen_id: almacenId, vendedor_id: vendedorId });
+      const blob = await downloadReporteVentasPdf(eventId, { desde, hasta, almacen_id: almacenId, vendedor_id: vendedorId, solo_agencias: soloAgencias || undefined });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `reporte_ventas_${desde}_${hasta}.pdf`;
+      a.download = `reporte_ventas_${soloAgencias ? 'agencias_' : ''}${desde}_${hasta}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -170,8 +172,8 @@ export default function ReporteVentas() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reporte de Ventas</h1>
-          <p className="text-muted-foreground text-sm">Consulta tus ventas por rango de fecha y almacen</p>
+          <h1 className="text-2xl font-bold tracking-tight">{soloAgencias ? 'Reporte de Ventas - Agencias' : 'Reporte de Ventas'}</h1>
+          <p className="text-muted-foreground text-sm">{soloAgencias ? 'Ventas de agencias de loteria por rango de fecha' : 'Consulta tus ventas por rango de fecha y almacen'}</p>
         </div>
         <Button onClick={handleDescargarPdf} disabled={!eventId || !reporte || downloading}>
           {downloading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
