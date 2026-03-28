@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -374,7 +375,7 @@ export default function Users() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">{editingUser ? 'Nueva Contrasena (dejar vacio para no cambiar)' : 'Contrasena'}</Label>
-              <Input id="password" type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} placeholder={editingUser ? '••••••••' : 'Ingrese contrasena'} />
+              <PasswordInput id="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} placeholder={editingUser ? '••••••••' : 'Ingrese contrasena'} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="full_name">Nombre Completo</Label>

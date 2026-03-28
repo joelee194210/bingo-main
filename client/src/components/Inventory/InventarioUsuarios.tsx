@@ -13,6 +13,7 @@ import { getStatusColor } from '@/lib/badge-variants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -431,8 +432,7 @@ export default function InventarioUsuarios() {
                 <KeyRound className="h-4 w-4" />
                 Nueva Contraseña
               </Label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={editPassword}
                 onChange={(e) => setEditPassword(e.target.value)}
                 placeholder="Dejar vacio para no cambiar"
@@ -539,8 +539,7 @@ export default function InventarioUsuarios() {
               </div>
               <div className="space-y-2">
                 <Label>Contrasena</Label>
-                <Input
-                  type="password"
+                <PasswordInput
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Minimo 6 caracteres"

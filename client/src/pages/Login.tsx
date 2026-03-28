@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { APP_VERSION } from '@/version';
 
 /* ─── Floating bingo balls ─── */
@@ -224,9 +225,8 @@ export default function Login() {
                 <label htmlFor="password" className="text-slate-600 text-xs font-medium tracking-wide uppercase block">
                   Contrasena
                 </label>
-                <Input
+                <PasswordInput
                   id="password"
-                  type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Ingrese su contrasena"

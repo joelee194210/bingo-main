@@ -36,7 +36,7 @@ import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_LABELS } from '@/types/auth';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -329,8 +329,7 @@ export default function Layout() {
                 )}
                 <div className="space-y-2">
                   <Label>Contraseña actual</Label>
-                  <Input
-                    type="password"
+                  <PasswordInput
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Ingrese su contraseña actual"
@@ -338,8 +337,7 @@ export default function Layout() {
                 </div>
                 <div className="space-y-2">
                   <Label>Nueva contraseña</Label>
-                  <Input
-                    type="password"
+                  <PasswordInput
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Minimo 8 caracteres"
@@ -347,8 +345,7 @@ export default function Layout() {
                 </div>
                 <div className="space-y-2">
                   <Label>Confirmar nueva contraseña</Label>
-                  <Input
-                    type="password"
+                  <PasswordInput
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Repita la nueva contraseña"
