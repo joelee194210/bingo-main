@@ -412,27 +412,42 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
       doc.y = rowY + 13;
     }
 
+    // Fila de totales del resumen por día
+    if (resumen.length > 0) {
+      if (doc.y > doc.page.height - 80) doc.addPage();
+      const rTotY = doc.y + 2;
+      doc.rect(margin, rTotY - 1, pageWidth, 14).fill('#e8edf2');
+      doc.fillColor('#333').fontSize(8).font('Helvetica-Bold');
+      doc.text('TOTAL', margin + 5, rTotY + 2, { width: 200 });
+      doc.text(totalCartones.toLocaleString(), margin + 390, rTotY + 2, { width: 70, align: 'right' });
+      doc.y = rTotY + 16;
+      doc.font('Helvetica').fontSize(8);
+    }
+
     // Detalle de documentos
     doc.moveDown(1);
     if (doc.y > doc.page.height - 180) doc.addPage();
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#333').text('Detalle de Documentos de Venta');
     doc.moveDown(0.3);
 
-    const dHeaderY = doc.y;
-    doc.rect(margin, dHeaderY, pageWidth, 16).fill('#e8edf2');
-    doc.fillColor('#333').fontSize(7).font('Helvetica-Bold');
-    doc.text('Fecha', margin + 5, dHeaderY + 4, { width: 70 });
-    doc.text('Almacen', margin + 80, dHeaderY + 4, { width: 90 });
-    doc.text('Comprador', margin + 175, dHeaderY + 4, { width: 110 });
-    doc.text('Cedula', margin + 290, dHeaderY + 4, { width: 65 });
-    doc.text('Items', margin + 360, dHeaderY + 4, { width: 40, align: 'right' });
-    doc.text('Cartones', margin + 405, dHeaderY + 4, { width: 55, align: 'right' });
-    doc.y = dHeaderY + 18;
+    const drawDetalleHeader = () => {
+      const hY = doc.y;
+      doc.rect(margin, hY, pageWidth, 16).fill('#e8edf2');
+      doc.fillColor('#333').fontSize(7).font('Helvetica-Bold');
+      doc.text('Fecha', margin + 5, hY + 4, { width: 70 });
+      doc.text('Almacen', margin + 80, hY + 4, { width: 90 });
+      doc.text('Comprador', margin + 175, hY + 4, { width: 110 });
+      doc.text('Cedula', margin + 290, hY + 4, { width: 65 });
+      doc.text('Items', margin + 360, hY + 4, { width: 40, align: 'right' });
+      doc.text('Cartones', margin + 405, hY + 4, { width: 55, align: 'right' });
+      doc.y = hY + 18;
+      doc.font('Helvetica').fontSize(7);
+    };
 
-    doc.font('Helvetica').fontSize(7);
+    drawDetalleHeader();
     let totalCartonesDetalle = 0;
     for (let i = 0; i < docRows.length; i++) {
-      if (doc.y > doc.page.height - 80) doc.addPage();
+      if (doc.y > doc.page.height - 80) { doc.addPage(); drawDetalleHeader(); }
       const d = docRows[i];
       const rowY = doc.y;
       if (i % 2 === 0) { doc.rect(margin, rowY - 1, pageWidth, 12).fill('#fafafa'); doc.fillColor('#333'); }
@@ -450,6 +465,7 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
 
     // Fila de totales al final de la tabla de documentos
     if (docRows.length > 0) {
+      if (doc.y > doc.page.height - 80) doc.addPage();
       const totRowY = doc.y + 2;
       doc.rect(margin, totRowY - 1, pageWidth, 14).fill('#e8edf2');
       doc.fillColor('#333').fontSize(7).font('Helvetica-Bold');

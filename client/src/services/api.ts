@@ -302,7 +302,7 @@ export const addUsuarioToAlmacen = (almacenId: number, data: { user_id: number; 
 export const removeUsuarioFromAlmacen = (almacenId: number, userId: number) =>
   api.delete<ApiResponse<void>>(`/inventario/almacenes/${almacenId}/usuarios/${userId}`).then(r => r.data);
 
-export const updateUsuarioAlmacen = (almacenId: number, userId: number, data: { rol?: string; new_almacen_id?: number }) =>
+export const updateUsuarioAlmacen = (almacenId: number, userId: number, data: { rol?: string; new_almacen_id?: number; password?: string }) =>
   api.put<ApiResponse<AlmacenUsuario>>(`/inventario/almacenes/${almacenId}/usuarios/${userId}`, data).then(r => r.data);
 
 // =====================================================
