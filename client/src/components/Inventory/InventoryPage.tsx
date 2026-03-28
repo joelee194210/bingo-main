@@ -146,7 +146,7 @@ export default function InventoryPage() {
   const { eventId: eventIdParam } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const isAdmin = user?.role === 'admin';
   // Admin, moderator y loteria ven todo; inventory/seller solo su almacén
   const canSeeAll = user?.role === 'admin' || user?.role === 'moderator' || user?.role === 'loteria';
@@ -811,10 +811,12 @@ export default function InventoryPage() {
                   <span className="hidden sm:inline">Crear </span>Inventario
                 </Button>
               )}
-              <Button variant="outline" size="sm" onClick={() => setShowMovimientoDialog(true)}>
-                <Upload className="mr-1 h-4 w-4" />
-                Movimiento
-              </Button>
+              {hasPermission('inventory:move') && (
+                <Button variant="outline" size="sm" onClick={() => setShowMovimientoDialog(true)}>
+                  <Upload className="mr-1 h-4 w-4" />
+                  Movimiento
+                </Button>
+              )}
               {canSeeAll && (
                 <Button size="sm" onClick={openCreateAlmacen}>
                   <Plus className="mr-1 h-4 w-4" />
@@ -959,10 +961,12 @@ export default function InventoryPage() {
                 <Input className="pl-9 h-9" placeholder="Buscar movimiento..." value={movSearch} onChange={(e) => setMovSearch(e.target.value)} />
               </div>
               <DataExportMenu data={documentos as unknown as Record<string, unknown>[]} columns={MOVIMIENTOS_EXPORT_COLUMNS} filename="movimientos" />
-              <Button size="sm" onClick={() => setShowMovimientoDialog(true)}>
-                <Plus className="mr-1 h-4 w-4" />
-                <span className="hidden sm:inline">Nuevo </span>Movimiento
-              </Button>
+              {hasPermission('inventory:move') && (
+                <Button size="sm" onClick={() => setShowMovimientoDialog(true)}>
+                  <Plus className="mr-1 h-4 w-4" />
+                  <span className="hidden sm:inline">Nuevo </span>Movimiento
+                </Button>
+              )}
             </div>
           </div>
 
