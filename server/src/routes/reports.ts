@@ -422,32 +422,49 @@ router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
     doc.rect(margin, dHeaderY, pageWidth, 16).fill('#e8edf2');
     doc.fillColor('#333').fontSize(7).font('Helvetica-Bold');
     doc.text('Fecha', margin + 5, dHeaderY + 4, { width: 70 });
-    doc.text('Almacen', margin + 80, dHeaderY + 4, { width: 100 });
-    doc.text('Comprador', margin + 185, dHeaderY + 4, { width: 100 });
+    doc.text('Almacen', margin + 80, dHeaderY + 4, { width: 90 });
+    doc.text('Comprador', margin + 175, dHeaderY + 4, { width: 110 });
     doc.text('Cedula', margin + 290, dHeaderY + 4, { width: 65 });
     doc.text('Items', margin + 360, dHeaderY + 4, { width: 40, align: 'right' });
     doc.text('Cartones', margin + 405, dHeaderY + 4, { width: 55, align: 'right' });
     doc.y = dHeaderY + 18;
 
     doc.font('Helvetica').fontSize(7);
+    let totalCartonesDetalle = 0;
     for (let i = 0; i < docRows.length; i++) {
       if (doc.y > doc.page.height - 80) doc.addPage();
       const d = docRows[i];
       const rowY = doc.y;
       if (i % 2 === 0) { doc.rect(margin, rowY - 1, pageWidth, 12).fill('#fafafa'); doc.fillColor('#333'); }
       const fechaStr = new Date(d.fecha).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      const comprador = (d.comprador || '-').length > 22 ? (d.comprador || '-').substring(0, 22) + '...' : (d.comprador || '-');
       doc.text(fechaStr, margin + 5, rowY + 1, { width: 70 });
-      doc.text(d.almacen_nombre || '-', margin + 80, rowY + 1, { width: 100 });
-      doc.text(d.comprador || '-', margin + 185, rowY + 1, { width: 100 });
+      doc.text((d.almacen_nombre || '-').substring(0, 18), margin + 80, rowY + 1, { width: 90 });
+      doc.text(comprador, margin + 175, rowY + 1, { width: 110 });
       doc.text(d.cedula || '-', margin + 290, rowY + 1, { width: 65 });
       doc.text((d.total_items || 0).toString(), margin + 360, rowY + 1, { width: 40, align: 'right' });
       doc.text((d.total_cartones || 0).toLocaleString(), margin + 405, rowY + 1, { width: 55, align: 'right' });
+      totalCartonesDetalle += d.total_cartones || 0;
       doc.y = rowY + 12;
     }
 
-    // Footer
+    // Fila de totales al final de la tabla de documentos
+    if (docRows.length > 0) {
+      const totRowY = doc.y + 2;
+      doc.rect(margin, totRowY - 1, pageWidth, 14).fill('#e8edf2');
+      doc.fillColor('#333').fontSize(7).font('Helvetica-Bold');
+      doc.text('TOTALES', margin + 5, totRowY + 2, { width: 200 });
+      doc.text(`${docRows.length}`, margin + 360, totRowY + 2, { width: 40, align: 'right' });
+      doc.text(totalCartonesDetalle.toLocaleString(), margin + 405, totRowY + 2, { width: 55, align: 'right' });
+      doc.y = totRowY + 16;
+    }
+
+    // Footer con fecha y hora legible
+    const ahora = new Date();
+    const fechaReporte = ahora.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+    const horaReporte = ahora.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     doc.fontSize(7).font('Helvetica').fillColor('#999')
-      .text(`Generado por MegabingoTV - ${new Date().toISOString()}`, margin, doc.page.height - 40, { align: 'center', width: pageWidth });
+      .text(`Generado por MegabingoTV — ${fechaReporte} a las ${horaReporte}`, margin, doc.page.height - 40, { align: 'center', width: pageWidth });
 
     doc.end();
   } catch (error) {
