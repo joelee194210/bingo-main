@@ -5,7 +5,7 @@ import { requirePermission, requireRole } from '../middleware/auth.js';
 import * as inv from '../services/inventarioModule.js';
 import { getMovimientoPdfPath } from '../services/movimientoPdfService.js';
 import { logActivity, auditFromReq } from '../services/auditService.js';
-import { createUser, validatePassword } from '../services/authService.js';
+import { createUser, validatePassword, hashPassword } from '../services/authService.js';
 
 const router = Router();
 
@@ -170,7 +170,19 @@ router.put('/almacenes/:id/usuarios/:userId', requirePermission('inventory:users
     const pool = getPool();
     const almacenId = parseInt(req.params.id as string, 10);
     const userId = parseInt(req.params.userId as string, 10);
-    const { rol, new_almacen_id } = req.body;
+    const { rol, new_almacen_id, password } = req.body;
+
+    // Cambiar contraseña si se proporcionó
+    if (password && password.length > 0) {
+      const pwError = validatePassword(password);
+      if (pwError) return res.status(400).json({ success: false, error: pwError });
+      const newHash = await hashPassword(password);
+      await pool.query('UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [newHash, userId]);
+      const reqUser = (req as any).user;
+      logActivity(pool, auditFromReq(req, 'inventory_user_password_reset', 'users', {
+        target_user_id: userId, reset_by: reqUser?.username,
+      }));
+    }
 
     if (new_almacen_id && new_almacen_id !== almacenId) {
       // Reasignar a otro almacen: eliminar del actual, agregar al nuevo

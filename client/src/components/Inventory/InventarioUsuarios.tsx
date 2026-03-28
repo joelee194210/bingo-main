@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  UserPlus, Trash2, Search, Loader2, Warehouse, Shield, Edit2,
+  UserPlus, Trash2, Search, Loader2, Warehouse, Shield, Edit2, KeyRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '@/services/api';
@@ -61,6 +61,7 @@ export default function InventarioUsuarios() {
   const [editingUser, setEditingUser] = useState<{ user_id: number; almacen_id: number; full_name: string; username: string; rol: string } | null>(null);
   const [editRol, setEditRol] = useState<AlmacenRol>('vendedor');
   const [editAlmacenId, setEditAlmacenId] = useState<string>('');
+  const [editPassword, setEditPassword] = useState('');
 
   const { data: eventsData } = useQuery({
     queryKey: ['events'],
@@ -165,8 +166,9 @@ export default function InventarioUsuarios() {
   const editMutation = useMutation({
     mutationFn: () => {
       if (!editingUser) throw new Error('No user selected');
-      const data: { rol: string; new_almacen_id?: number } = { rol: editRol };
+      const data: { rol: string; new_almacen_id?: number; password?: string } = { rol: editRol };
       if (Number(editAlmacenId) !== editingUser.almacen_id) data.new_almacen_id = Number(editAlmacenId);
+      if (editPassword.length > 0) data.password = editPassword;
       return updateUsuarioAlmacen(editingUser.almacen_id, editingUser.user_id, data);
     },
     onSuccess: () => {
@@ -184,6 +186,7 @@ export default function InventarioUsuarios() {
     setEditingUser({ user_id: u.user_id, almacen_id: u.almacen_id, full_name: u.full_name || '', username: u.username || '', rol: u.rol });
     setEditRol(u.rol as AlmacenRol);
     setEditAlmacenId(u.almacen_id.toString());
+    setEditPassword('');
     setShowEditDialog(true);
   };
 
@@ -422,6 +425,22 @@ export default function InventarioUsuarios() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4" />
+                Nueva Contraseña
+              </Label>
+              <Input
+                type="password"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                placeholder="Dejar vacio para no cambiar"
+              />
+              {editPassword.length > 0 && editPassword.length < 8 && (
+                <p className="text-xs text-destructive">Minimo 8 caracteres</p>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
@@ -430,7 +449,7 @@ export default function InventarioUsuarios() {
             </Button>
             <Button
               onClick={() => editMutation.mutate()}
-              disabled={editMutation.isPending || (editRol === editingUser?.rol && Number(editAlmacenId) === editingUser?.almacen_id)}
+              disabled={editMutation.isPending || (editPassword.length > 0 && editPassword.length < 8) || (editRol === editingUser?.rol && Number(editAlmacenId) === editingUser?.almacen_id && editPassword.length === 0)}
             >
               {editMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Guardar
