@@ -9,12 +9,20 @@ import { createUser, validatePassword, hashPassword } from '../services/authServ
 
 const router = Router();
 
-// Helper: verifica si el usuario tiene acceso al almacen (admin/moderator/loteria bypasean)
+// Helper: verifica si el usuario tiene acceso al almacen
 async function verificarAccesoAlmacen(pool: ReturnType<typeof getPool>, userId: number, userRole: string, almacenIds: number[]): Promise<boolean> {
-  if (userRole === 'admin' || userRole === 'moderator' || userRole === 'loteria') return true;
+  if (userRole === 'admin' || userRole === 'moderator') return true;
   if (almacenIds.length === 0) return true;
   const validIds = almacenIds.filter(id => id && id > 0);
   if (validIds.length === 0) return false;
+  // Loteria solo puede acceder a almacenes que son agencias de lotería
+  if (userRole === 'loteria') {
+    const result = await pool.query(
+      `SELECT id FROM almacenes WHERE id = ANY($1) AND es_agencia_loteria = true`,
+      [validIds]
+    );
+    return result.rows.length === validIds.length;
+  }
   const result = await pool.query(
     `SELECT almacen_id FROM almacen_usuarios WHERE user_id = $1 AND almacen_id = ANY($2) AND is_active = TRUE`,
     [userId, validIds]
@@ -32,7 +40,8 @@ router.get('/almacenes', requirePermission('inventory:read'), async (req, res) =
     const pool = getPool();
     const eventId = parseInt(req.query.event_id as string, 10);
     if (!eventId) return res.status(400).json({ success: false, error: 'event_id requerido' });
-    const data = await inv.getAlmacenes(pool, eventId);
+    const soloAgencias = (req as any).user?.role === 'loteria';
+    const data = await inv.getAlmacenes(pool, eventId, soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -42,7 +51,8 @@ router.get('/almacenes', requirePermission('inventory:read'), async (req, res) =
 router.get('/almacenes/tree/:eventId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const data = await inv.getAlmacenTree(pool, parseInt(req.params.eventId as string, 10));
+    const soloAgencias = (req as any).user?.role === 'loteria';
+    const data = await inv.getAlmacenTree(pool, parseInt(req.params.eventId as string, 10), soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -280,7 +290,8 @@ router.get('/resumen/:eventId', requirePermission('inventory:read'), async (req,
   try {
     const pool = getPool();
     const almacenId = req.query.almacen_id ? parseInt(req.query.almacen_id as string, 10) : undefined;
-    const data = await inv.getResumenInventario(pool, parseInt(req.params.eventId as string, 10), almacenId);
+    const soloAgencias = (req as any).user?.role === 'loteria';
+    const data = await inv.getResumenInventario(pool, parseInt(req.params.eventId as string, 10), almacenId, soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -291,7 +302,8 @@ router.get('/resumen/:eventId', requirePermission('inventory:read'), async (req,
 router.get('/cajas-disponibles/:eventId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const data = await inv.getCajasDisponibles(pool, parseInt(req.params.eventId as string, 10));
+    const soloAgencias = (req as any).user?.role === 'loteria';
+    const data = await inv.getCajasDisponibles(pool, parseInt(req.params.eventId as string, 10), soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -345,7 +357,8 @@ router.get('/cajas/:eventId', requirePermission('inventory:read'), async (req, r
   try {
     const pool = getPool();
     const almacenId = req.query.almacen_id ? parseInt(req.query.almacen_id as string, 10) : undefined;
-    const data = await inv.getCajas(pool, parseInt(req.params.eventId as string, 10), almacenId);
+    const soloAgencias = (req as any).user?.role === 'loteria';
+    const data = await inv.getCajas(pool, parseInt(req.params.eventId as string, 10), almacenId, soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -711,11 +724,13 @@ router.get('/documentos/:eventId', requirePermission('inventory:read'), async (r
   try {
     const pool = getPool();
     const { almacen_id, accion, page, limit } = req.query;
+    const soloAgencias = (req as any).user?.role === 'loteria';
     const result = await inv.getDocumentos(pool, parseInt(req.params.eventId as string, 10), {
       almacen_id: almacen_id ? parseInt(almacen_id as string, 10) : undefined,
       accion: accion as string | undefined,
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
+      soloAgencias,
     });
     res.json({ success: true, data: result.data, pagination: { total: result.total } });
   } catch (error) {
@@ -761,6 +776,7 @@ router.get('/movimientos/:eventId', requirePermission('inventory:read'), async (
   try {
     const pool = getPool();
     const { almacen_id, tipo_entidad, accion, referencia, page, limit } = req.query;
+    const soloAgencias = (req as any).user?.role === 'loteria';
     const result = await inv.getMovimientos(pool, parseInt(req.params.eventId as string, 10), {
       almacen_id: almacen_id ? parseInt(almacen_id as string, 10) : undefined,
       tipo_entidad: tipo_entidad as string | undefined,
@@ -768,6 +784,7 @@ router.get('/movimientos/:eventId', requirePermission('inventory:read'), async (
       referencia: referencia as string | undefined,
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
+      soloAgencias,
     });
     res.json({ success: true, data: result.data, pagination: { total: result.total } });
   } catch (error) {

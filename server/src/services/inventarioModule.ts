@@ -98,8 +98,9 @@ export async function getAlmacen(pool: Pool, id: number): Promise<Almacen | unde
   return result.rows[0] as Almacen | undefined;
 }
 
-export async function getAlmacenes(pool: Pool, eventId: number): Promise<Almacen[]> {
-  const result = await pool.query('SELECT * FROM almacenes WHERE event_id = $1 ORDER BY name', [eventId]);
+export async function getAlmacenes(pool: Pool, eventId: number, soloAgencias?: boolean): Promise<Almacen[]> {
+  const agenciaFilter = soloAgencias ? ' AND es_agencia_loteria = true' : '';
+  const result = await pool.query(`SELECT * FROM almacenes WHERE event_id = $1${agenciaFilter} ORDER BY name`, [eventId]);
   return result.rows as Almacen[];
 }
 
@@ -333,7 +334,8 @@ export async function getDashboardGeneral(pool: Pool, eventId: number) {
   };
 }
 
-export async function getAlmacenTree(pool: Pool, eventId: number): Promise<Almacen[]> {
+export async function getAlmacenTree(pool: Pool, eventId: number, soloAgencias?: boolean): Promise<Almacen[]> {
+  const agenciaFilter = soloAgencias ? ' AND a.es_agencia_loteria = true' : '';
   const result = await pool.query(`
     SELECT a.*,
       COALESCE(cajas_stock.total_cajas, 0) AS inv_cajas,
@@ -361,7 +363,7 @@ export async function getAlmacenTree(pool: Pool, eventId: number): Promise<Almac
       FROM cards WHERE event_id = $1 AND is_sold = true AND almacen_id IS NOT NULL
       GROUP BY almacen_id
     ) sold ON sold.almacen_id = a.id
-    WHERE a.event_id = $1
+    WHERE a.event_id = $1${agenciaFilter}
     ORDER BY a.name
   `, [eventId]);
   const all = result.rows as (Almacen & { children?: Almacen[]; inv_cajas: number; inv_libretas: number; inv_cartones: number; inv_vendidos: number })[];
@@ -468,7 +470,7 @@ export async function getInventarioUsuarios(pool: Pool, eventId: number): Promis
 // RESUMEN DE INVENTARIO
 // =====================================================
 
-export async function getResumenInventario(pool: Pool, eventId: number, almacenId?: number): Promise<{
+export async function getResumenInventario(pool: Pool, eventId: number, almacenId?: number, soloAgencias?: boolean): Promise<{
   totalCartones: number;
   totalLibretas: number;
   totalCajas: number;
@@ -498,13 +500,23 @@ export async function getResumenInventario(pool: Pool, eventId: number, almacenI
     };
   }
 
-  // Global: all event inventory
+  // Global: all event inventory (o solo agencias para loteria)
+  const agenciaJoin = soloAgencias
+    ? ' JOIN almacenes a ON c.almacen_id = a.id AND a.es_agencia_loteria = true'
+    : '';
+  const agenciaJoinCajas = soloAgencias
+    ? ' JOIN almacenes a ON cj.almacen_id = a.id AND a.es_agencia_loteria = true'
+    : '';
+  const agenciaJoinLotes = soloAgencias
+    ? ' JOIN almacenes a ON l.almacen_id = a.id AND a.es_agencia_loteria = true'
+    : '';
+
   const totalRow = (await pool.query(
-    'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_sold = true) as vendidos FROM cards WHERE event_id = $1',
+    `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE c.is_sold = true) as vendidos FROM cards c${agenciaJoin} WHERE c.event_id = $1`,
     [eventId]
   )).rows[0];
-  const lotesRow = (await pool.query('SELECT COUNT(*) as total FROM lotes WHERE event_id = $1', [eventId])).rows[0];
-  const cajasRow = (await pool.query('SELECT COUNT(*) as total FROM cajas WHERE event_id = $1', [eventId])).rows[0];
+  const lotesRow = (await pool.query(`SELECT COUNT(*) as total FROM lotes l${agenciaJoinLotes} WHERE l.event_id = $1`, [eventId])).rows[0];
+  const cajasRow = (await pool.query(`SELECT COUNT(*) as total FROM cajas cj${agenciaJoinCajas} WHERE cj.event_id = $1`, [eventId])).rows[0];
   const sinAlmacenRow = (await pool.query('SELECT COUNT(*) as total FROM cajas WHERE event_id = $1 AND almacen_id IS NULL', [eventId])).rows[0];
 
   const totalCartones = Number(totalRow.total);
@@ -515,7 +527,7 @@ export async function getResumenInventario(pool: Pool, eventId: number, almacenI
     totalCajas: Number(cajasRow.total),
     cartonesAsignados: vendidos,
     cartonesDisponibles: totalCartones - vendidos,
-    cajasSinAlmacen: Number(sinAlmacenRow.total),
+    cajasSinAlmacen: soloAgencias ? 0 : Number(sinAlmacenRow.total),
   };
 }
 
@@ -523,16 +535,17 @@ export async function getResumenInventario(pool: Pool, eventId: number, almacenI
 // CARGAR INVENTARIO A ALMACEN
 // =====================================================
 
-export async function getCajasDisponibles(pool: Pool, eventId: number): Promise<{
+export async function getCajasDisponibles(pool: Pool, eventId: number, soloAgencias?: boolean): Promise<{
   id: number; caja_code: string; total_lotes: number; total_cartones: number; almacen_id: number | null; almacen_name: string | null;
 }[]> {
+  const agenciaFilter = soloAgencias ? ' AND a.es_agencia_loteria = true' : '';
   const result = await pool.query(`
     SELECT c.id, c.caja_code, c.total_lotes, c.almacen_id,
       COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND (c.almacen_id IS NULL OR ca.almacen_id = c.almacen_id)), 0) AS total_cartones,
       a.name AS almacen_name
     FROM cajas c
     LEFT JOIN almacenes a ON a.id = c.almacen_id
-    WHERE c.event_id = $1
+    WHERE c.event_id = $1${agenciaFilter}
     ORDER BY c.caja_code
   `, [eventId]);
   return result.rows.map(r => ({
@@ -1379,12 +1392,15 @@ export async function getDocumento(pool: Pool, documentoId: number): Promise<{
 export async function getDocumentos(
   pool: Pool,
   eventId: number,
-  params?: { almacen_id?: number; accion?: string; page?: number; limit?: number }
+  params?: { almacen_id?: number; accion?: string; page?: number; limit?: number; soloAgencias?: boolean }
 ): Promise<{ data: any[]; total: number }> {
   let where = 'd.event_id = $1';
   const values: unknown[] = [eventId];
   let paramIndex = 2;
 
+  if (params?.soloAgencias) {
+    where += ` AND (d.de_almacen_id IN (SELECT id FROM almacenes WHERE es_agencia_loteria = true) OR d.a_almacen_id IN (SELECT id FROM almacenes WHERE es_agencia_loteria = true))`;
+  }
   if (params?.almacen_id) { where += ` AND (d.de_almacen_id = $${paramIndex} OR d.a_almacen_id = $${paramIndex})`; paramIndex++; values.push(params.almacen_id); }
   if (params?.accion) { where += ` AND d.accion = $${paramIndex++}`; values.push(params.accion); }
 
@@ -1458,7 +1474,7 @@ export async function cargarInventario(pool: Pool, eventId: number, almacenId: n
 // CAJAS Y LOTES (TABLAS REALES)
 // =====================================================
 
-export async function getCajas(pool: Pool, eventId: number, almacenId?: number): Promise<{
+export async function getCajas(pool: Pool, eventId: number, almacenId?: number, soloAgencias?: boolean): Promise<{
   id: number;
   caja_code: string;
   total_lotes: number;
@@ -1469,7 +1485,8 @@ export async function getCajas(pool: Pool, eventId: number, almacenId?: number):
   almacen_name: string | null;
   lotes: { id: number; lote_code: string; series_number: string; total_cards: number; cards_sold: number; status: string }[];
 }[]> {
-  const where = almacenId ? 'c.event_id = $1 AND c.almacen_id = $2' : 'c.event_id = $1';
+  const agenciaFilter = soloAgencias && !almacenId ? ' AND a.es_agencia_loteria = true' : '';
+  const where = almacenId ? 'c.event_id = $1 AND c.almacen_id = $2' : `c.event_id = $1${agenciaFilter}`;
   const params = almacenId ? [eventId, almacenId] : [eventId];
   // Cuando se filtra por almacén, contar cards REALES en ese almacén (no total_cards del lote)
   const almId = almacenId ? Number(almacenId) : null;
@@ -2083,12 +2100,15 @@ export async function venderTodos(
 export async function getMovimientos(
   pool: Pool,
   eventId: number,
-  params?: { almacen_id?: number; tipo_entidad?: string; accion?: string; referencia?: string; page?: number; limit?: number }
+  params?: { almacen_id?: number; tipo_entidad?: string; accion?: string; referencia?: string; page?: number; limit?: number; soloAgencias?: boolean }
 ): Promise<{ data: (InvMovimiento & { realizado_por_nombre: string })[]; total: number }> {
   let where = 'im.event_id = $1';
   const values: unknown[] = [eventId];
   let paramIndex = 2;
 
+  if (params?.soloAgencias) {
+    where += ` AND im.almacen_id IN (SELECT id FROM almacenes WHERE es_agencia_loteria = true)`;
+  }
   if (params?.almacen_id) { where += ` AND im.almacen_id = $${paramIndex++}`; values.push(params.almacen_id); }
   if (params?.tipo_entidad) { where += ` AND im.tipo_entidad = $${paramIndex++}`; values.push(params.tipo_entidad); }
   if (params?.accion) { where += ` AND im.accion = $${paramIndex++}`; values.push(params.accion); }
