@@ -236,7 +236,7 @@ function App() {
         <Route
           path="reportes/ventas-agencias"
           element={
-            <ProtectedRoute permission="reports:sales">
+            <ProtectedRoute permission="reports:sales_agencias">
               <ReporteVentasAgencias />
             </ProtectedRoute>
           }

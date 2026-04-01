@@ -82,7 +82,7 @@ const navGroups = [
       { to: '/resumen-ventas', icon: Eye, label: 'Resumen Ventas', permission: 'inventory:dashboard' },
       { to: '/loteria', icon: BarChart3, label: 'Dashboard Loteria', permission: 'loteria:dashboard' },
       { to: '/reportes/ventas', icon: ClipboardList, label: 'Reporte Ventas', permission: 'reports:sales' },
-      { to: '/reportes/ventas-agencias', icon: ClipboardList, label: 'Reporte Ventas Agencias', permission: 'reports:sales' },
+      { to: '/reportes/ventas-agencias', icon: ClipboardList, label: 'Reporte Ventas Agencias', permission: 'reports:sales_agencias' },
       { to: '/inventory/usuarios', icon: UserCog, label: 'Usuarios Inv.', permission: 'inventory:users' },
     ],
   },

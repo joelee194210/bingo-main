@@ -23,6 +23,7 @@ import {
   getCardWins,
 } from '../services/reportService.js';
 import { requirePermission } from '../middleware/auth.js';
+import { hasPermission as checkPerm } from '../services/permissionService.js';
 
 const router = Router();
 
@@ -158,7 +159,7 @@ router.get('/recent-winners', async (req: Request, res: Response) => {
 // REPORTE DE VENTAS POR ALMACEN / VENDEDOR / RANGO
 // =====================================================
 
-router.get('/sales/:eventId', requirePermission('reports:sales'), async (req: Request, res: Response) => {
+router.get('/sales/:eventId', async (req: Request, res: Response) => {
   try {
     const eventId = parseInt(req.params.eventId as string, 10);
     const pool = getPool();
@@ -168,12 +169,17 @@ router.get('/sales/:eventId', requirePermission('reports:sales'), async (req: Re
     const vendedor_id = req.query.vendedor_id as string | undefined;
     const soloAgencias = req.query.solo_agencias === 'true';
 
+    // Verificar permiso según tipo de reporte
+    const user = (req as any).user;
+    const requiredPerm = soloAgencias ? 'reports:sales_agencias' : 'reports:sales';
+    if (!checkPerm(user.role, requiredPerm)) {
+      return res.status(403).json({ success: false, error: 'No tienes permisos para ver este reporte' });
+    }
+
     if (!desde || !hasta) {
       return res.status(400).json({ success: false, error: 'Se requiere desde y hasta (YYYY-MM-DD)' });
     }
 
-    // Verificar permisos: si no es admin/moderator, solo ve sus almacenes
-    const user = (req as any).user;
     let almacenFilter = almacen_id ? parseInt(almacen_id as string, 10) : null;
     let vendedorFilter = vendedor_id ? parseInt(vendedor_id as string, 10) : null;
 
@@ -273,7 +279,7 @@ router.get('/sales/:eventId', requirePermission('reports:sales'), async (req: Re
 });
 
 // GET /api/reports/sales/:eventId/pdf — Generar PDF del reporte de ventas
-router.get('/sales/:eventId/pdf', requirePermission('reports:sales'), async (req: Request, res: Response) => {
+router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
   try {
     const eventId = parseInt(req.params.eventId as string, 10);
     const pool = getPool();
@@ -283,11 +289,17 @@ router.get('/sales/:eventId/pdf', requirePermission('reports:sales'), async (req
     const vendedor_id = req.query.vendedor_id as string | undefined;
     const soloAgencias = req.query.solo_agencias === 'true';
 
+    // Verificar permiso según tipo de reporte
+    const user = (req as any).user;
+    const requiredPerm = soloAgencias ? 'reports:sales_agencias' : 'reports:sales';
+    if (!checkPerm(user.role, requiredPerm)) {
+      return res.status(403).json({ success: false, error: 'No tienes permisos para ver este reporte' });
+    }
+
     if (!desde || !hasta) {
       return res.status(400).json({ success: false, error: 'Se requiere desde y hasta' });
     }
 
-    const user = (req as any).user;
     let almacenFilter = almacen_id ? parseInt(almacen_id as string, 10) : null;
     let vendedorFilter = vendedor_id ? parseInt(vendedor_id as string, 10) : null;
 
