@@ -86,6 +86,10 @@ router.get('/almacenes/:id', requirePermission('inventory:read'), async (req, re
     const pool = getPool();
     const data = await inv.getAlmacen(pool, parseInt(req.params.id as string, 10));
     if (!data) return res.status(404).json({ success: false, error: 'Almacen no encontrado' });
+    // Loteria solo puede ver almacenes que son agencias
+    if ((req as any).user?.role === 'loteria' && !data.es_agencia_loteria) {
+      return res.status(403).json({ success: false, error: 'No tienes acceso a este almacen' });
+    }
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -168,7 +172,8 @@ router.post('/almacenes/:id/usuarios', requirePermission('inventory:users'), asy
 router.get('/usuarios/:eventId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const data = await inv.getInventarioUsuarios(pool, parseInt(req.params.eventId as string, 10));
+    const soloAgencias = (req as any).user?.role === 'loteria';
+    const data = await inv.getInventarioUsuarios(pool, parseInt(req.params.eventId as string, 10), soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -368,7 +373,8 @@ router.get('/cajas/:eventId', requirePermission('inventory:read'), async (req, r
 router.get('/lotes/:eventId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const data = await inv.getLotes(pool, parseInt(req.params.eventId as string, 10));
+    const soloAgencias = (req as any).user?.role === 'loteria';
+    const data = await inv.getLotes(pool, parseInt(req.params.eventId as string, 10), soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -379,7 +385,12 @@ router.get('/lotes/:eventId', requirePermission('inventory:read'), async (req, r
 router.get('/libretas-sueltas/:eventId/:almacenId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const data = await inv.getLibretasSueltas(pool, parseInt(req.params.eventId as string, 10), parseInt(req.params.almacenId as string, 10));
+    const almacenId = parseInt(req.params.almacenId as string, 10);
+    const reqUser = (req as any).user;
+    if (!await verificarAccesoAlmacen(pool, reqUser.id, reqUser.role, [almacenId])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
+    }
+    const data = await inv.getLibretasSueltas(pool, parseInt(req.params.eventId as string, 10), almacenId);
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -390,7 +401,12 @@ router.get('/libretas-sueltas/:eventId/:almacenId', requirePermission('inventory
 router.get('/cartones-sueltos/:eventId/:almacenId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const data = await inv.getCartonesSueltos(pool, parseInt(req.params.eventId as string, 10), parseInt(req.params.almacenId as string, 10));
+    const almacenId = parseInt(req.params.almacenId as string, 10);
+    const reqUser = (req as any).user;
+    if (!await verificarAccesoAlmacen(pool, reqUser.id, reqUser.role, [almacenId])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
+    }
+    const data = await inv.getCartonesSueltos(pool, parseInt(req.params.eventId as string, 10), almacenId);
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -428,6 +444,11 @@ router.get('/asignaciones/detalle/:id', requirePermission('inventory:read'), asy
     const pool = getPool();
     const data = await inv.getAsignacion(pool, parseInt(req.params.id as string, 10));
     if (!data) return res.status(404).json({ success: false, error: 'Asignacion no encontrada' });
+    // Loteria solo ve asignaciones de agencias
+    const reqUser = (req as any).user;
+    if (reqUser.role === 'loteria' && !await verificarAccesoAlmacen(pool, reqUser.id, reqUser.role, [data.almacen_id])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a esta asignacion' });
+    }
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -438,6 +459,7 @@ router.get('/asignaciones/:eventId', requirePermission('inventory:read'), async 
   try {
     const pool = getPool();
     const { almacen_id, estado, proposito, persona, page, limit } = req.query;
+    const soloAgencias = (req as any).user?.role === 'loteria';
     const result = await inv.getAsignaciones(pool, parseInt(req.params.eventId as string, 10), {
       almacen_id: almacen_id ? parseInt(almacen_id as string, 10) : undefined,
       estado: estado as string | undefined,
@@ -445,6 +467,7 @@ router.get('/asignaciones/:eventId', requirePermission('inventory:read'), async 
       persona: persona as string | undefined,
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
+      soloAgencias,
     });
     res.json({ success: true, data: result.data, pagination: { total: result.total } });
   } catch (error) {

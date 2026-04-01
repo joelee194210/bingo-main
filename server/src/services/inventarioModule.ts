@@ -451,16 +451,17 @@ export async function getMisAlmacenes(pool: Pool, userId: number): Promise<{
   return result.rows;
 }
 
-export async function getInventarioUsuarios(pool: Pool, eventId: number): Promise<{
+export async function getInventarioUsuarios(pool: Pool, eventId: number, soloAgencias?: boolean): Promise<{
   id: number; almacen_id: number; user_id: number; rol: string; is_active: boolean; created_at: string;
   full_name: string; username: string; almacen_name: string; almacen_code: string;
 }[]> {
+  const agenciaFilter = soloAgencias ? ' AND a.es_agencia_loteria = true' : '';
   const result = await pool.query(`
     SELECT au.*, u.full_name, u.username, a.name AS almacen_name, a.code AS almacen_code
     FROM almacen_usuarios au
     JOIN users u ON u.id = au.user_id
     JOIN almacenes a ON a.id = au.almacen_id
-    WHERE a.event_id = $1 AND au.is_active = TRUE
+    WHERE a.event_id = $1 AND au.is_active = TRUE${agenciaFilter}
     ORDER BY a.name, u.full_name
   `, [eventId]);
   return result.rows;
@@ -1574,7 +1575,7 @@ export async function getCartonesSueltos(pool: Pool, eventId: number, almacenId:
   return result.rows;
 }
 
-export async function getLotes(pool: Pool, eventId: number): Promise<{
+export async function getLotes(pool: Pool, eventId: number, soloAgencias?: boolean): Promise<{
   id: number;
   lote_code: string;
   series_number: string;
@@ -1584,10 +1585,12 @@ export async function getLotes(pool: Pool, eventId: number): Promise<{
   cards_sold: number;
   status: string;
 }[]> {
+  const agenciaJoin = soloAgencias ? ' JOIN almacenes a ON a.id = l.almacen_id AND a.es_agencia_loteria = true' : '';
   const result = await pool.query(`
     SELECT l.*, c.caja_code
     FROM lotes l
     LEFT JOIN cajas c ON c.id = l.caja_id
+    ${agenciaJoin}
     WHERE l.event_id = $1
     ORDER BY l.lote_code
   `, [eventId]);
@@ -1767,12 +1770,15 @@ export async function createAsignacion(
 export async function getAsignaciones(
   pool: Pool,
   eventId: number,
-  params?: { almacen_id?: number; estado?: string; proposito?: string; persona?: string; page?: number; limit?: number }
+  params?: { almacen_id?: number; estado?: string; proposito?: string; persona?: string; page?: number; limit?: number; soloAgencias?: boolean }
 ): Promise<{ data: (InvAsignacion & { almacen_name: string; asignado_por_nombre: string })[]; total: number }> {
   let where = 'ia.event_id = $1';
   const values: unknown[] = [eventId];
   let paramIndex = 2;
 
+  if (params?.soloAgencias) {
+    where += ` AND ia.almacen_id IN (SELECT id FROM almacenes WHERE es_agencia_loteria = true)`;
+  }
   if (params?.almacen_id) { where += ` AND ia.almacen_id = $${paramIndex++}`; values.push(params.almacen_id); }
   if (params?.estado) { where += ` AND ia.estado = $${paramIndex++}`; values.push(params.estado); }
   if (params?.proposito) { where += ` AND ia.proposito = $${paramIndex++}`; values.push(params.proposito); }
