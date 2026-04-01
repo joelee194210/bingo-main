@@ -28,7 +28,7 @@ import { hasPermission as checkPerm } from '../services/permissionService.js';
 const router = Router();
 
 // GET /api/reports/game/:gameId - Obtener reporte de un juego
-router.get('/game/:gameId', async (req: Request, res: Response) => {
+router.get('/game/:gameId', requirePermission('reports:read'), async (req: Request, res: Response) => {
   try {
     const gameId = parseInt(req.params.gameId as string, 10);
     const pool = getPool();
@@ -47,7 +47,7 @@ router.get('/game/:gameId', async (req: Request, res: Response) => {
 });
 
 // GET /api/reports/game/:gameId/pdf - Descargar PDF del reporte
-router.get('/game/:gameId/pdf', async (req: Request, res: Response) => {
+router.get('/game/:gameId/pdf', requirePermission('reports:read'), async (req: Request, res: Response) => {
   try {
     const gameId = parseInt(req.params.gameId as string, 10);
     const pool = getPool();
@@ -68,7 +68,7 @@ router.get('/game/:gameId/pdf', async (req: Request, res: Response) => {
 });
 
 // GET /api/reports/game/:gameId/winners - Obtener ganadores de un juego
-router.get('/game/:gameId/winners', async (req: Request, res: Response) => {
+router.get('/game/:gameId/winners', requirePermission('reports:read'), async (req: Request, res: Response) => {
   try {
     const gameId = parseInt(req.params.gameId as string, 10);
     const pool = getPool();
@@ -83,7 +83,7 @@ router.get('/game/:gameId/winners', async (req: Request, res: Response) => {
 });
 
 // GET /api/reports/game/:gameId/balls - Obtener historial de balotas
-router.get('/game/:gameId/balls', async (req: Request, res: Response) => {
+router.get('/game/:gameId/balls', requirePermission('reports:read'), async (req: Request, res: Response) => {
   try {
     const gameId = parseInt(req.params.gameId as string, 10);
     const pool = getPool();
@@ -98,7 +98,7 @@ router.get('/game/:gameId/balls', async (req: Request, res: Response) => {
 });
 
 // GET /api/reports/card/:cardId/wins - Obtener juegos donde un cartón ganó
-router.get('/card/:cardId/wins', async (req: Request, res: Response) => {
+router.get('/card/:cardId/wins', requirePermission('reports:read'), async (req: Request, res: Response) => {
   try {
     const cardId = parseInt(req.params.cardId as string, 10);
     const pool = getPool();
@@ -113,7 +113,7 @@ router.get('/card/:cardId/wins', async (req: Request, res: Response) => {
 });
 
 // GET /api/reports/event/:eventId/winners - Todos los ganadores de un evento
-router.get('/event/:eventId/winners', async (req: Request, res: Response) => {
+router.get('/event/:eventId/winners', requirePermission('reports:read'), async (req: Request, res: Response) => {
   try {
     const eventId = parseInt(req.params.eventId as string, 10);
     const pool = getPool();
@@ -134,7 +134,7 @@ router.get('/event/:eventId/winners', async (req: Request, res: Response) => {
 });
 
 // GET /api/reports/recent-winners - Ganadores recientes
-router.get('/recent-winners', async (req: Request, res: Response) => {
+router.get('/recent-winners', requirePermission('reports:read'), async (req: Request, res: Response) => {
   try {
     const limit = Math.min(50, parseInt(req.query.limit as string, 10) || 10);
     const pool = getPool();
