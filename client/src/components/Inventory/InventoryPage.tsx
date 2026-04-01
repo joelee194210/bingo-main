@@ -150,6 +150,8 @@ export default function InventoryPage() {
   const isAdmin = user?.role === 'admin';
   // Admin, moderator y loteria ven todo; inventory/seller solo su almacén
   const canSeeAll = user?.role === 'admin' || user?.role === 'moderator' || user?.role === 'loteria';
+  // Solo quienes tienen inventory:manage pueden crear/editar almacenes
+  const canManageAlmacenes = hasPermission('inventory:manage');
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedEventId, setSelectedEventId] = useState<number | undefined>(
     eventIdParam ? Number(eventIdParam) : undefined
@@ -817,7 +819,7 @@ export default function InventoryPage() {
                   Movimiento
                 </Button>
               )}
-              {canSeeAll && (
+              {canManageAlmacenes && (
                 <Button size="sm" onClick={openCreateAlmacen}>
                   <Plus className="mr-1 h-4 w-4" />
                   Almacen
@@ -841,7 +843,7 @@ export default function InventoryPage() {
               ) : (
                 <div className="divide-y">
                   {tree.map((a) => (
-                    <AlmacenNode key={a.id} almacen={a} level={0} onEdit={openEditAlmacen} canEdit={canSeeAll} />
+                    <AlmacenNode key={a.id} almacen={a} level={0} onEdit={openEditAlmacen} canEdit={canManageAlmacenes} />
                   ))}
                 </div>
               )}
