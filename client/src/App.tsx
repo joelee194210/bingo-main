@@ -228,7 +228,7 @@ function App() {
         <Route
           path="reportes/ventas"
           element={
-            <ProtectedRoute permission="reports:read">
+            <ProtectedRoute permission="reports:sales">
               <ReporteVentas />
             </ProtectedRoute>
           }
@@ -236,7 +236,7 @@ function App() {
         <Route
           path="reportes/ventas-agencias"
           element={
-            <ProtectedRoute permission="reports:read">
+            <ProtectedRoute permission="reports:sales">
               <ReporteVentasAgencias />
             </ProtectedRoute>
           }

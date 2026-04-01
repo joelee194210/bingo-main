@@ -22,6 +22,7 @@ import {
   getBallHistory,
   getCardWins,
 } from '../services/reportService.js';
+import { requirePermission } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -157,7 +158,7 @@ router.get('/recent-winners', async (req: Request, res: Response) => {
 // REPORTE DE VENTAS POR ALMACEN / VENDEDOR / RANGO
 // =====================================================
 
-router.get('/sales/:eventId', async (req: Request, res: Response) => {
+router.get('/sales/:eventId', requirePermission('reports:sales'), async (req: Request, res: Response) => {
   try {
     const eventId = parseInt(req.params.eventId as string, 10);
     const pool = getPool();
@@ -272,7 +273,7 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
 });
 
 // GET /api/reports/sales/:eventId/pdf — Generar PDF del reporte de ventas
-router.get('/sales/:eventId/pdf', async (req: Request, res: Response) => {
+router.get('/sales/:eventId/pdf', requirePermission('reports:sales'), async (req: Request, res: Response) => {
   try {
     const eventId = parseInt(req.params.eventId as string, 10);
     const pool = getPool();

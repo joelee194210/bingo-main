@@ -10,7 +10,7 @@ const ALL_PERMISSIONS = [
   'events:read', 'events:create', 'events:update', 'events:delete',
   'cards:read', 'cards:create', 'cards:sell', 'cards:export',
   'games:read', 'games:create', 'games:play', 'games:finish',
-  'reports:read', 'reports:export',
+  'reports:read', 'reports:export', 'reports:sales',
   'inventory:read', 'inventory:sell', 'inventory:move', 'inventory:dashboard', 'inventory:users', 'inventory:manage',
   'loteria:dashboard',
   'dashboard:read',
