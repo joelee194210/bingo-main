@@ -55,9 +55,9 @@ export class YappyButtonClient {
       secretToken: process.env.YAPPY_BTN_SECRET_TOKEN || '',
       domainUrl: process.env.YAPPY_BTN_DOMAIN || '',
       ipnUrl: process.env.YAPPY_BTN_IPN_URL || '',
-      baseUrl: sandbox
+      baseUrl: process.env.YAPPY_BTN_BASE_URL || (sandbox
         ? 'https://api-comecom-uat.yappycloud.com'
-        : 'https://apipagosbg.bgeneral.cloud',
+        : 'https://apipagosbg.bgeneral.cloud'),
       sandbox,
     };
 
