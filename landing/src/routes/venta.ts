@@ -363,6 +363,8 @@ function renderLayout(title: string, body: string): string {
     .bingo-ball .number { font-weight: 800; color: #334155; line-height: 1; }
     .container { position: relative; z-index: 1; }
     @keyframes ball-float { 0% { transform: translateY(0px) rotate(0deg); } 100% { transform: translateY(-20px) rotate(5deg); } }
+    btn-yappy { display: block; }
+    btn-yappy::part(modal), btn-yappy div[class*="modal"], btn-yappy div[class*="overlay"] { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; display: flex !important; align-items: center !important; justify-content: center !important; z-index: 9999 !important; }
     .avail-tag { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 8px; background: #f1f5f9; display: inline-block; padding: 4px 14px; border-radius: 20px; }
     .avail-wrap { text-align: center; margin-bottom: 4px; }
     @media (max-width: 480px) { .card { padding: 24px 20px; } h1 { font-size: 20px; } .price-display .amount { font-size: 30px; } }
