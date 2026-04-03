@@ -373,7 +373,7 @@ function renderLayout(title: string, body: string): string {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', -apple-system, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%); color: #1e293b; min-height: 100vh; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: #ffffff; color: #1e293b; min-height: 100vh; overflow-x: hidden; position: relative; }
     .container { max-width: 520px; margin: 0 auto; padding: 20px; }
     .logo { text-align: center; padding: 24px 0 8px; }
     .logo img { max-width: 240px; height: auto; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
@@ -411,15 +411,30 @@ function renderLayout(title: string, body: string): string {
     .info-row:last-child { border-bottom: none; }
     .info-label { color: #64748b; }
     .info-value { font-weight: 600; color: #1e293b; }
-    .footer { text-align: center; margin-top: 20px; padding: 16px; font-size: 11px; color: rgba(255,255,255,0.4); }
+    .footer { text-align: center; margin-top: 20px; padding: 16px; font-size: 11px; color: #94a3b8; }
     .footer span { display: block; margin-bottom: 8px; }
-    .footer img { max-width: 80px; height: auto; opacity: 0.5; }
+    .footer img { max-width: 80px; height: auto; opacity: 0.6; }
+    .bingo-ball { position: fixed; pointer-events: none; z-index: 0; border-radius: 50%; }
+    .bingo-ball .inner { position: absolute; border-radius: 50%; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .bingo-ball .letter { font-weight: 800; color: #94a3b8; line-height: 1; }
+    .bingo-ball .number { font-weight: 800; color: #334155; line-height: 1; }
+    .container { position: relative; z-index: 1; }
+    @keyframes ball-float { 0% { transform: translateY(0px) rotate(0deg); } 100% { transform: translateY(-20px) rotate(5deg); } }
     .avail-tag { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 8px; background: #f1f5f9; display: inline-block; padding: 4px 14px; border-radius: 20px; }
     .avail-wrap { text-align: center; margin-bottom: 4px; }
     @media (max-width: 480px) { .card { padding: 24px 20px; } h1 { font-size: 20px; } .price-display .amount { font-size: 30px; } }
   </style>
 </head>
 <body>
+  <div class="bingo-ball" style="left:5%;top:15%;width:55px;height:55px;background:radial-gradient(circle at 35% 30%,hsl(217 91% 60%/.5),hsl(217 91% 60%/.2) 60%,hsl(217 91% 60%/.08));animation:ball-float 18s ease-in-out infinite alternate"><div class="inner" style="inset:8px"><span class="letter" style="font-size:8px">B</span><span class="number" style="font-size:15px">7</span></div></div>
+  <div class="bingo-ball" style="left:85%;top:10%;width:45px;height:45px;background:radial-gradient(circle at 35% 30%,hsl(142 71% 45%/.5),hsl(142 71% 45%/.2) 60%,hsl(142 71% 45%/.08));animation:ball-float 22s ease-in-out 2s infinite alternate"><div class="inner" style="inset:7px"><span class="letter" style="font-size:7px">G</span><span class="number" style="font-size:13px">46</span></div></div>
+  <div class="bingo-ball" style="left:8%;top:55%;width:40px;height:40px;background:radial-gradient(circle at 35% 30%,hsl(0 72% 51%/.5),hsl(0 72% 51%/.2) 60%,hsl(0 72% 51%/.08));animation:ball-float 20s ease-in-out 1s infinite alternate"><div class="inner" style="inset:6px"><span class="letter" style="font-size:6px">B</span><span class="number" style="font-size:12px">14</span></div></div>
+  <div class="bingo-ball" style="left:88%;top:45%;width:50px;height:50px;background:radial-gradient(circle at 35% 30%,hsl(280 70% 55%/.5),hsl(280 70% 55%/.2) 60%,hsl(280 70% 55%/.08));animation:ball-float 25s ease-in-out 3s infinite alternate"><div class="inner" style="inset:8px"><span class="letter" style="font-size:7px">I</span><span class="number" style="font-size:14px">28</span></div></div>
+  <div class="bingo-ball" style="left:12%;top:82%;width:35px;height:35px;background:radial-gradient(circle at 35% 30%,hsl(45 93% 47%/.5),hsl(45 93% 47%/.2) 60%,hsl(45 93% 47%/.08));animation:ball-float 21s ease-in-out 4s infinite alternate"><div class="inner" style="inset:5px"><span class="letter" style="font-size:5px">N</span><span class="number" style="font-size:10px">38</span></div></div>
+  <div class="bingo-ball" style="left:82%;top:78%;width:42px;height:42px;background:radial-gradient(circle at 35% 30%,hsl(210 90% 55%/.5),hsl(210 90% 55%/.2) 60%,hsl(210 90% 55%/.08));animation:ball-float 19s ease-in-out 5s infinite alternate"><div class="inner" style="inset:6px"><span class="letter" style="font-size:6px">O</span><span class="number" style="font-size:12px">67</span></div></div>
+  <div class="bingo-ball" style="left:50%;top:5%;width:30px;height:30px;background:radial-gradient(circle at 35% 30%,hsl(142 71% 45%/.4),hsl(142 71% 45%/.15) 60%,hsl(142 71% 45%/.05));animation:ball-float 23s ease-in-out 6s infinite alternate"><div class="inner" style="inset:5px"><span class="letter" style="font-size:5px">G</span><span class="number" style="font-size:9px">59</span></div></div>
+  <div class="bingo-ball" style="left:45%;top:92%;width:32px;height:32px;background:radial-gradient(circle at 35% 30%,hsl(0 72% 51%/.4),hsl(0 72% 51%/.15) 60%,hsl(0 72% 51%/.05));animation:ball-float 17s ease-in-out 7s infinite alternate"><div class="inner" style="inset:5px"><span class="letter" style="font-size:5px">O</span><span class="number" style="font-size:9px">71</span></div></div>
+
   <div class="container">
     <div class="logo">
       <img src="/assets/logo.png" alt="Mega Bingo Digital" onerror="this.style.display='none'">
