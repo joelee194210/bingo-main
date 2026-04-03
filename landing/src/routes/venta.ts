@@ -411,7 +411,9 @@ function renderLayout(title: string, body: string): string {
     .info-row:last-child { border-bottom: none; }
     .info-label { color: #64748b; }
     .info-value { font-weight: 600; color: #1e293b; }
-    .footer { text-align: center; margin-top: 20px; padding: 16px; font-size: 12px; color: rgba(255,255,255,0.4); }
+    .footer { text-align: center; margin-top: 20px; padding: 16px; font-size: 11px; color: rgba(255,255,255,0.4); }
+    .footer span { display: block; margin-bottom: 8px; }
+    .footer img { max-width: 80px; height: auto; opacity: 0.5; }
     .avail-tag { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 8px; background: #f1f5f9; display: inline-block; padding: 4px 14px; border-radius: 20px; }
     .avail-wrap { text-align: center; margin-bottom: 4px; }
     @media (max-width: 480px) { .card { padding: 24px 20px; } h1 { font-size: 20px; } .price-display .amount { font-size: 30px; } }
@@ -423,7 +425,10 @@ function renderLayout(title: string, body: string): string {
       <img src="/assets/logo.png" alt="Mega Bingo Digital" onerror="this.style.display='none'">
     </div>
     ${body}
-    <div class="footer">Mega Bingo Digital</div>
+    <div class="footer">
+      <span>Powered by</span>
+      <img src="/assets/yotumi_logo.png" alt="Yotumi">
+    </div>
   </div>
 </body>
 </html>`;
