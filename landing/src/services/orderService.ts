@@ -184,7 +184,17 @@ export async function confirmPayment(
       throw new Error(`La orden tiene status "${order.status}", no se puede confirmar`);
     }
 
-    // Marcar cartones como vendidos
+    // Obtener almacen y evento info
+    const { rows: configRows } = await client.query<OnlineSalesConfig>(
+      'SELECT * FROM online_sales_config WHERE event_id = $1', [order.event_id]
+    );
+    const almacenId = configRows[0]?.almacen_id;
+    const { rows: almRows } = await client.query<{ name: string }>(
+      'SELECT name FROM almacenes WHERE id = $1', [almacenId]
+    );
+    const almacenName = almRows[0]?.name || 'silver_sol';
+
+    // Marcar cartones como vendidos (igual que POS)
     if (order.card_ids.length > 0) {
       await client.query(
         `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP,
@@ -192,6 +202,45 @@ export async function confirmPayment(
          WHERE id = ANY($4)`,
         [order.buyer_name, order.buyer_phone, order.buyer_cedula, order.card_ids]
       );
+
+      // Actualizar cards_sold en lotes afectados
+      await client.query(
+        `UPDATE lotes SET cards_sold = (SELECT COUNT(*) FROM cards WHERE lote_id = lotes.id AND is_sold = true)
+         WHERE id IN (SELECT DISTINCT lote_id FROM cards WHERE id = ANY($1) AND lote_id IS NOT NULL)`,
+        [order.card_ids]
+      );
+
+      // Marcar lotes vendido_completo si aplica
+      await client.query(
+        `UPDATE lotes SET status = 'vendido_completo'
+         WHERE id IN (SELECT DISTINCT lote_id FROM cards WHERE id = ANY($1) AND lote_id IS NOT NULL)
+           AND cards_sold >= total_cards AND status != 'vendido_completo'`,
+        [order.card_ids]
+      );
+
+      // Crear documento de venta (inv_documentos)
+      const docResult = await client.query(
+        `INSERT INTO inv_documentos (event_id, accion, de_almacen_id, de_nombre, a_nombre, a_cedula, total_items, total_cartones, realizado_por)
+         VALUES ($1, 'venta', $2, $3, $4, $5, $6, $7, 1) RETURNING id`,
+        [order.event_id, almacenId, almacenName, 'VD-' + order.buyer_name, order.buyer_cedula || null,
+         order.card_ids.length, order.card_ids.length]
+      );
+      const documentoId = docResult.rows[0].id;
+
+      // Registrar movimiento por cada cartón vendido
+      for (const cardId of order.card_ids) {
+        const { rows: cardInfo } = await client.query<{ card_code: string; lote_id: number | null }>(
+          'SELECT card_code, lote_id FROM cards WHERE id = $1', [cardId]
+        );
+        const ref = cardInfo[0]?.card_code || String(cardId);
+        await client.query(
+          `INSERT INTO inv_movimientos (event_id, almacen_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, detalles, realizado_por, documento_id)
+           VALUES ($1, $2, 'carton', $3, 'venta', $4, $5, 1, $6, 1, $7)`,
+          [order.event_id, almacenId, ref, almacenName, 'VD-' + order.buyer_name,
+           JSON.stringify({ buyer_phone: order.buyer_phone, buyer_email: order.buyer_email, order_code: order.order_code, source: 'venta_digital' }),
+           documentoId]
+        );
+      }
     }
 
     // Obtener datos de cartones para PDF
