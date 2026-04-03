@@ -61,8 +61,15 @@ app.get('/', (_req, res) => {
 
 // Ruta /go para tracking de QR codes
 app.get('/go', (req, res) => {
-  const source = req.query.a || 'direct';
+  const source = (req.query.a as string) || 'direct';
   const defaultEvent = process.env.DEFAULT_EVENT_ID;
+
+  // Guardar escaneo en BD (fire-and-forget)
+  getPool().query(
+    'INSERT INTO qr_scans (source, ip, user_agent, referer) VALUES ($1, $2, $3, $4)',
+    [source, req.ip, req.headers['user-agent'] || null, req.headers['referer'] || null]
+  ).catch(err => console.error('Error guardando QR scan:', err));
+
   console.log(`📊 QR scan: source=${source}, ip=${req.ip}`);
   if (defaultEvent) {
     res.redirect(`/venta/${defaultEvent}?ref=${source}`);
