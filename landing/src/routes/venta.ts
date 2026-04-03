@@ -480,7 +480,7 @@ function renderLanding(
       <div class="avail-wrap"><span class="avail-tag">${available} cartones disponibles</span></div>
 
       <form id="orderForm">
-        <label for="quantity">Cantidad de cartones</label>
+        <label for="quantity">Selecciona la cantidad de cartones que quieres comprar</label>
         <select id="quantity" name="quantity">
           ${Array.from({ length: maxOrder - config.min_cards_per_order + 1 }, (_, i) => {
             const n = i + config.min_cards_per_order;
@@ -490,7 +490,7 @@ function renderLanding(
 
         <div class="price-display">
           <div class="amount" id="totalPrice">$${(config.min_cards_per_order * price).toFixed(2)}</div>
-          <div class="detail" id="priceDetail">${config.min_cards_per_order} x $${price.toFixed(2)} c/u</div>
+          <div class="detail" id="priceDetail">${config.min_cards_per_order} ${config.min_cards_per_order > 1 ? 'cartones' : 'carton'} x $${price.toFixed(2)} c/u</div>
         </div>
 
         <h2>Datos del comprador</h2>
@@ -522,7 +522,7 @@ function renderLanding(
         var qty = parseInt(document.getElementById('quantity').value);
         var total = qty * PRICE;
         document.getElementById('totalPrice').textContent = '$' + total.toFixed(2);
-        document.getElementById('priceDetail').textContent = qty + ' x $' + PRICE.toFixed(2) + ' c/u';
+        document.getElementById('priceDetail').textContent = qty + (qty > 1 ? ' cartones' : ' carton') + ' x $' + PRICE.toFixed(2) + ' c/u';
       }
 
       document.getElementById('quantity').addEventListener('change', updatePrice);
