@@ -1,9 +1,20 @@
 import { Router, Request, Response } from 'express';
+import { createHmac } from 'crypto';
 import { getPool } from '../database.js';
 import { createOrder, getOrderByCode, getOrderByDownloadToken, getSalesConfig, confirmPayment } from '../services/orderService.js';
 import { getYappyButtonClient } from '../services/yappyButtonService.js';
 import { sendPurchaseEmail } from '../services/emailService.js';
 import { createReadStream, existsSync } from 'fs';
+
+// Token de confirmación firmado — previene confirmaciones sin pago real
+const CONFIRM_SECRET = process.env.CONFIRM_SECRET || 'megabingo-confirm-2026';
+function generateConfirmToken(orderCode: string, transactionId: string): string {
+  return createHmac('sha256', CONFIRM_SECRET).update(orderCode + ':' + transactionId).digest('hex');
+}
+function validateConfirmToken(orderCode: string, transactionId: string, token: string): boolean {
+  const expected = generateConfirmToken(orderCode, transactionId);
+  return token === expected;
+}
 
 const router = Router();
 
@@ -121,8 +132,11 @@ router.post('/api/yappy/initiate', async (req: Request, res: Response) => {
       tel,
     });
 
+    // Generar token firmado para confirm-success
+    const confirmToken = generateConfirmToken(order.order_code, params.transactionId);
+
     console.log(`✅ Yappy orden iniciada: ${order.order_code} → txn ${params.transactionId}`);
-    res.json({ success: true, body: params });
+    res.json({ success: true, body: params, confirmToken });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error iniciando pago';
     console.error('Error Yappy initiate:', msg);
@@ -131,10 +145,20 @@ router.post('/api/yappy/initiate', async (req: Request, res: Response) => {
 });
 
 // POST /venta/api/yappy/confirm-success - Confirmación desde eventSuccess del web component
+// Requiere confirmToken firmado generado en /initiate (previene confirmaciones sin pago)
 router.post('/api/yappy/confirm-success', async (req: Request, res: Response) => {
   try {
-    const { order_code } = req.body;
+    const { order_code, confirmToken, transactionId } = req.body;
     if (!order_code) return res.status(400).json({ success: false, error: 'Falta order_code' });
+    if (!confirmToken || !transactionId) {
+      return res.status(400).json({ success: false, error: 'Token de confirmacion invalido' });
+    }
+
+    // Validar token firmado
+    if (!validateConfirmToken(order_code.toUpperCase(), transactionId, confirmToken)) {
+      console.error(`⚠️ confirm-success token inválido para ${order_code}`);
+      return res.status(403).json({ success: false, error: 'Token de confirmacion invalido' });
+    }
 
     const order = await getOrderByCode(order_code.toUpperCase());
     if (!order) return res.status(404).json({ success: false, error: 'Orden no encontrada' });
@@ -153,8 +177,8 @@ router.post('/api/yappy/confirm-success', async (req: Request, res: Response) =>
       { source: 'web_component_eventSuccess', confirmed_at: new Date().toISOString() }
     );
 
-    // Email en background
-    if (confirmed.pdf_path && confirmed.download_token) {
+    // Email en background (solo si fue una confirmación nueva, no duplicada)
+    if (confirmed.pdf_path && confirmed.download_token && !(confirmed as any)._alreadyConfirmed) {
       const pool = getPool();
       const { rows: cards } = await pool.query<{ card_code: string }>(
         'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
@@ -221,6 +245,9 @@ router.get('/estado/:orderCode', async (req: Request, res: Response) => {
 // GET /venta/preview-pdf/:eventId - Preview PDF (solo dev/test)
 // ?card_code=XXXXX para un cartón específico, sin param = random
 router.get('/preview-pdf/:eventId', async (req: Request, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).send('Not found');
+  }
   try {
     const eventId = parseInt(req.params.eventId as string, 10);
     const cardCode = req.query.card_code as string | undefined;
@@ -596,6 +623,10 @@ function renderLanding(
             var result = await res.json();
 
             if (result.success && result.body.token && result.body.documentName && result.body.transactionId) {
+              // Guardar para confirm-success
+              window._yappyConfirmToken = result.confirmToken;
+              window._yappyTransactionId = result.body.transactionId;
+
               btnyappy.eventPayment({
                 transactionId: result.body.transactionId,
                 documentName: result.body.documentName,
@@ -621,7 +652,7 @@ function renderLanding(
           fetch('/venta/api/yappy/confirm-success', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_code: orderCode })
+            body: JSON.stringify({ order_code: orderCode, confirmToken: window._yappyConfirmToken, transactionId: window._yappyTransactionId })
           })
           .then(function() { window.location.href = '/venta/estado/' + orderCode; })
           .catch(function() { window.location.href = '/venta/estado/' + orderCode; });

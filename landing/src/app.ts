@@ -36,13 +36,27 @@ const altAssetsPath = resolve(process.cwd(), 'assets');
 app.use('/assets', express.static(assetsPath, { maxAge: '7d' }));
 app.use('/assets', express.static(altAssetsPath, { maxAge: '7d' }));
 
-// Rate limit en creación de órdenes
+// Rate limits
 const orderLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   message: { success: false, error: 'Demasiados intentos. Intente en 15 minutos.' },
 });
 app.use('/venta/api/orders', orderLimiter);
+
+const confirmLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, error: 'Demasiados intentos.' },
+});
+app.use('/venta/api/yappy/confirm-success', confirmLimiter);
+
+const ipnLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 60,
+  message: { success: false },
+});
+app.use('/venta/api/yappy/ipn', ipnLimiter);
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'bingo-landing' }));

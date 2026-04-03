@@ -187,9 +187,10 @@ export async function confirmPayment(
     if (orderRows.length === 0) throw new Error('Orden no encontrada');
     order = orderRows[0];
 
-    // Idempotente: si ya está completada, retornar sin error
+    // Idempotente: si ya está completada, retornar sin error (con flag)
     if (order.status === 'completed') {
       await client.query('ROLLBACK');
+      (order as any)._alreadyConfirmed = true;
       return order;
     }
 
