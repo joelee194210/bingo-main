@@ -353,8 +353,6 @@ function renderPage(card: CardRow | null, error: string | null): string {
         </div>` : ''}
       </div>
 
-      ${card!.numbers ? renderNumbers(card!.numbers, card!.use_free_center) : ''}
-
       ${card!.promo_text ? `<div class="promo">🎁 ${escapeHtml(card!.promo_text)}</div>` : ''}
     `}
     </div>
