@@ -19,6 +19,7 @@
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
+    "@types/pdfkit": "^0.13.8",
     "@types/pg": "^8.11.10",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3"
