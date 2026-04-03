@@ -403,7 +403,9 @@ function renderLanding(
 
       <!-- Sección de pago Yappy (oculta hasta que se cree la orden) -->
       <div id="paymentSection" style="display:none;margin-top:24px;text-align:center;">
-        <p style="color:#64748b;font-size:14px;margin-bottom:16px;">Orden creada. Haz clic en el boton de Yappy para pagar:</p>
+        <p style="color:#64748b;font-size:14px;margin-bottom:8px;">Tu orden ha sido creada:</p>
+        <div id="orderCodeDisplay" class="order-code" style="margin-bottom:16px;"></div>
+        <p style="color:#64748b;font-size:14px;margin-bottom:16px;">Haz clic en el boton de Yappy para pagar:</p>
         <div style="display:flex;justify-content:center;">
           <btn-yappy theme="darkBlue"></btn-yappy>
         </div>
@@ -460,6 +462,7 @@ function renderLanding(
           // Ocultar formulario, mostrar boton Yappy
           document.getElementById('orderForm').style.display = 'none';
           document.getElementById('paymentSection').style.display = 'block';
+          document.getElementById('orderCodeDisplay').textContent = orderCode;
         })
         .catch(function() {
           errEl.textContent = 'Error de conexion. Intenta de nuevo.';
