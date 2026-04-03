@@ -1,188 +1,213 @@
 import { createHmac } from 'crypto';
 
-interface YappyButtonConfig {
+/**
+ * Yappy Botón de Pago V2
+ *
+ * Flujo:
+ * 1. POST /payments/validate/merchant → obtiene token + epochTime
+ * 2. POST /payments/payment-wc → crea orden, obtiene transactionId + token + documentName
+ * 3. Frontend: <btn-yappy> web component ejecuta eventPayment(params)
+ * 4. IPN: Yappy llama GET a ipnUrl con orderId, status, Hash, domain
+ */
+
+interface YappyV2Config {
   merchantId: string;
-  secretToken: string;
-  successUrl: string;
-  failUrl: string;
+  secretToken: string;  // base64 encoded: "signingKey.merchantSecret"
   domainUrl: string;
-  checkoutUrl: string;
+  ipnUrl: string;
+  baseUrl: string;      // https://apipagosbg.bgeneral.cloud o UAT
   sandbox: boolean;
 }
 
-interface PaymentRequest {
+interface CreateOrderRequest {
   orderId: string;
   total: number;
   subtotal: number;
   taxes: number;
+  discount?: number;
+  tel?: string;
 }
 
-interface PaymentUrlResult {
-  redirectUrl: string;
-  success: boolean;
+interface ValidateMerchantResponse {
+  status: { code: string; description: string };
+  body: { epochTime: number; token: string };
 }
 
-interface YappyCallbackParams {
-  orderId?: string;
-  status?: string;         // E = ejecutado, R = rechazado, C = cancelado
-  confirmationNumber?: string;
-  hash?: string;
+interface CreateOrderResponse {
+  status: { code: string; description: string };
+  body: { transactionId: string; token: string; documentName: string };
+}
+
+export interface PaymentParams {
+  transactionId: string;
+  token: string;
+  documentName: string;
 }
 
 export class YappyButtonClient {
-  private config: YappyButtonConfig;
-  private merchantSecret: string; // parte después del '.' en secretToken decodificado
-  private signingKey: string;     // parte antes del '.' en secretToken decodificado
+  private config: YappyV2Config;
+  private signingKey: string;
 
   constructor() {
+    const sandbox = process.env.YAPPY_BTN_SANDBOX === 'true';
     this.config = {
       merchantId: process.env.YAPPY_BTN_MERCHANT_ID || '',
       secretToken: process.env.YAPPY_BTN_SECRET_TOKEN || '',
-      successUrl: process.env.YAPPY_BTN_SUCCESS_URL || '',
-      failUrl: process.env.YAPPY_BTN_FAIL_URL || '',
       domainUrl: process.env.YAPPY_BTN_DOMAIN || '',
-      checkoutUrl: process.env.YAPPY_BTN_CHECKOUT_URL || '',
-      sandbox: process.env.YAPPY_BTN_SANDBOX === 'true',
+      ipnUrl: process.env.YAPPY_BTN_IPN_URL || '',
+      baseUrl: sandbox
+        ? 'https://api-comecom-uat.yappycloud.com'
+        : 'https://apipagosbg.bgeneral.cloud',
+      sandbox,
     };
 
     // Decodificar secretToken: base64 → "signingKey.merchantSecret"
     const decoded = Buffer.from(this.config.secretToken, 'base64').toString('utf-8');
     const parts = decoded.split('.');
     this.signingKey = parts[0] || '';
-    this.merchantSecret = parts[1] || '';
   }
 
   /**
-   * Paso 1: Obtener JWT token de Yappy
+   * Paso 1: Validar comercio → obtiene token de sesión
+   * POST /payments/validate/merchant
    */
-  private async getJwtToken(): Promise<string> {
-    const res = await fetch('https://pagosbg.bgeneral.com/validateapikeymerchand', {
+  async validateMerchant(): Promise<{ token: string; epochTime: number }> {
+    const url = `${this.config.baseUrl}/payments/validate/merchant`;
+
+    const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.merchantSecret,
-        'version': 'P1.0.0',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         merchantId: this.config.merchantId,
         urlDomain: this.config.domainUrl,
       }),
     });
 
-    const data = await res.json() as { success?: boolean; accessToken?: string; message?: string };
+    const data = await res.json() as ValidateMerchantResponse;
 
-    if (!data.success || !data.accessToken) {
-      console.error('Yappy JWT error:', data);
-      throw new Error(`Error obteniendo token de Yappy: ${data.message || 'unknown'}`);
+    if (data.status?.code !== 'YP-0000' || !data.body?.token) {
+      console.error('Yappy validate/merchant error:', JSON.stringify(data));
+      throw new Error(`Error validando comercio: ${data.status?.description || res.status}`);
     }
 
-    return data.accessToken;
+    return { token: data.body.token, epochTime: data.body.epochTime };
   }
 
   /**
-   * Paso 2: Generar firma HMAC-SHA256 y construir URL de pago
+   * Paso 2: Crear orden de pago
+   * POST /payments/payment-wc
    */
-  private buildRedirectUrl(jwtToken: string, payment: PaymentRequest, paymentDate: number): string {
-    const { merchantId, successUrl, failUrl, domainUrl, checkoutUrl, sandbox } = this.config;
+  async createPaymentOrder(
+    authToken: string,
+    order: CreateOrderRequest
+  ): Promise<PaymentParams> {
+    const url = `${this.config.baseUrl}/payments/payment-wc`;
 
-    // Concatenar campos en orden exacto para la firma
-    const signatureInput =
-      payment.total.toFixed(2) +
-      merchantId +
-      payment.subtotal.toFixed(2) +
-      payment.taxes.toFixed(2) +
-      paymentDate.toString() +
-      'YAP' +
-      'VEN' +
-      payment.orderId +
-      successUrl +
-      failUrl +
-      domainUrl;
-
-    const signature = createHmac('sha256', this.signingKey)
-      .update(signatureInput)
-      .digest('hex');
-
-    const params = new URLSearchParams({
-      sbx: sandbox ? 'yes' : 'no',
-      donation: 'no',
-      checkoutUrl,
-      signature,
-      merchantId,
-      total: payment.total.toFixed(2),
-      subtotal: payment.subtotal.toFixed(2),
-      taxes: payment.taxes.toFixed(2),
-      paymentDate: paymentDate.toString(),
-      paymentMethod: 'YAP',
-      transactionType: 'VEN',
-      orderId: payment.orderId,
-      successUrl,
-      failUrl,
-      domain: domainUrl,
-      aliasYappy: '',
-      platform: 'desarrollopropiophp',
-      jwtToken,
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authToken,
+      },
+      body: JSON.stringify({
+        merchantId: this.config.merchantId,
+        orderId: order.orderId,
+        domain: this.config.domainUrl,
+        paymentDate: Date.now().toString(),
+        aliasYappy: order.tel || '',
+        ipnUrl: this.config.ipnUrl,
+        discount: (order.discount ?? 0).toFixed(2),
+        taxes: order.taxes.toFixed(2),
+        subtotal: order.subtotal.toFixed(2),
+        total: order.total.toFixed(2),
+      }),
     });
 
-    return `https://pagosbg.bgeneral.com?${params.toString()}`;
-  }
+    const data = await res.json() as CreateOrderResponse;
 
-  /**
-   * Genera URL de pago completa (JWT + firma + redirect URL)
-   */
-  async getPaymentUrl(payment: PaymentRequest): Promise<PaymentUrlResult> {
-    try {
-      const jwtToken = await this.getJwtToken();
-      const paymentDate = Date.now();
-      const redirectUrl = this.buildRedirectUrl(jwtToken, payment, paymentDate);
-
-      return { redirectUrl, success: true };
-    } catch (err) {
-      console.error('Error generando URL de pago Yappy:', err);
-      return { redirectUrl: '', success: false };
+    if (data.status?.code !== 'YP-0000' || !data.body?.transactionId) {
+      console.error('Yappy payment-wc error:', JSON.stringify(data));
+      throw new Error(`Error creando orden Yappy: ${data.status?.description || res.status}`);
     }
+
+    return {
+      transactionId: data.body.transactionId,
+      token: data.body.token,
+      documentName: data.body.documentName,
+    };
   }
 
   /**
-   * Valida los parámetros del callback de Yappy
+   * Flujo completo: validate merchant + create order
    */
-  validateCallback(params: YappyCallbackParams): {
-    valid: boolean;
-    orderId: string;
-    status: 'completed' | 'rejected' | 'cancelled';
-    confirmationNumber: string;
-  } {
-    const { orderId, status, confirmationNumber } = params;
+  async initiatePayment(order: CreateOrderRequest): Promise<PaymentParams> {
+    const { token } = await this.validateMerchant();
+    return this.createPaymentOrder(token, order);
+  }
+
+  /**
+   * Valida el hash del IPN (webhook) de Yappy
+   * Hash = HMAC-SHA256(orderId + status + domain, signingKey)
+   */
+  validateIPN(params: {
+    orderId?: string;
+    status?: string;
+    Hash?: string;
+    domain?: string;
+  }): { valid: boolean; orderId: string; status: 'completed' | 'rejected' | 'cancelled' | 'expired' } {
+    const { orderId, status, Hash, domain } = params;
 
     if (!orderId || !status) {
-      return { valid: false, orderId: '', status: 'rejected', confirmationNumber: '' };
+      return { valid: false, orderId: '', status: 'rejected' };
     }
 
-    const statusMap: Record<string, 'completed' | 'rejected' | 'cancelled'> = {
+    // Verificar hash
+    if (Hash && this.signingKey) {
+      const expected = createHmac('sha256', this.signingKey)
+        .update(orderId + status + domain)
+        .digest('hex');
+
+      if (Hash !== expected) {
+        console.error(`IPN hash mismatch: expected=${expected}, got=${Hash}`);
+        return { valid: false, orderId, status: 'rejected' };
+      }
+    }
+
+    const statusMap: Record<string, 'completed' | 'rejected' | 'cancelled' | 'expired'> = {
       'E': 'completed',
       'R': 'rejected',
       'C': 'cancelled',
+      'X': 'expired',
     };
 
     return {
       valid: true,
       orderId,
       status: statusMap[status] || 'rejected',
-      confirmationNumber: confirmationNumber || '',
     };
   }
 
   isConfigured(): boolean {
     return !!(this.config.merchantId && this.config.secretToken && this.config.domainUrl);
   }
+
+  get cdnUrl(): string {
+    return this.config.sandbox
+      ? 'https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js'
+      : 'https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js';
+  }
+
+  get domain(): string {
+    return this.config.domainUrl;
+  }
 }
 
 // Singleton
-let buttonClient: YappyButtonClient | null = null;
+let client: YappyButtonClient | null = null;
 
 export function getYappyButtonClient(): YappyButtonClient {
-  if (!buttonClient) {
-    buttonClient = new YappyButtonClient();
+  if (!client) {
+    client = new YappyButtonClient();
   }
-  return buttonClient;
+  return client;
 }

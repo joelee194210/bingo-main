@@ -50,7 +50,8 @@ router.get('/:eventId', async (req: Request, res: Response) => {
     );
     const available = parseInt(availRows[0].count, 10);
 
-    res.send(renderLanding(event, config, available));
+    const yappy = getYappyButtonClient();
+    res.send(renderLanding(event, config, available, yappy.cdnUrl));
   } catch (err) {
     console.error('Error en landing:', err);
     res.status(500).send(renderError('Error del servidor'));
@@ -62,7 +63,6 @@ router.post('/api/orders', async (req: Request, res: Response) => {
   try {
     const { event_id, quantity, buyer_name, buyer_email, buyer_phone, buyer_cedula } = req.body;
 
-    // Validaciones
     if (!event_id || !quantity || !buyer_name || !buyer_email || !buyer_phone) {
       return res.status(400).json({ success: false, error: 'Faltan campos requeridos' });
     }
@@ -81,26 +81,6 @@ router.post('/api/orders', async (req: Request, res: Response) => {
       buyer_cedula: buyer_cedula?.trim() || undefined,
     });
 
-    // Intentar generar URL de pago Yappy (Botón de Pago)
-    let yappyPaymentUrl: string | null = null;
-    const yappyBtn = getYappyButtonClient();
-    if (yappyBtn.isConfigured()) {
-      try {
-        const totalNum = Number(order.total_amount);
-        const result = await yappyBtn.getPaymentUrl({
-          orderId: order.order_code,
-          total: totalNum,
-          subtotal: totalNum,
-          taxes: 0,
-        });
-        if (result.success) {
-          yappyPaymentUrl = result.redirectUrl;
-        }
-      } catch (err) {
-        console.error('Error generando URL Yappy, fallback a QR:', err);
-      }
-    }
-
     res.json({
       success: true,
       data: {
@@ -108,14 +88,42 @@ router.post('/api/orders', async (req: Request, res: Response) => {
         total_amount: order.total_amount,
         status: order.status,
         expires_at: order.expires_at,
-        redirect_url: yappyPaymentUrl || `/venta/estado/${order.order_code}`,
-        payment_method: yappyPaymentUrl ? 'yappy_button' : 'qr',
       },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error creando orden';
     console.error('Error creando orden:', msg);
     res.status(400).json({ success: false, error: msg });
+  }
+});
+
+// POST /venta/api/yappy/initiate - Backend orquesta validate/merchant + payment-wc
+router.post('/api/yappy/initiate', async (req: Request, res: Response) => {
+  try {
+    const { order_code } = req.body;
+    if (!order_code) return res.status(400).json({ success: false, error: 'Falta order_code' });
+
+    const order = await getOrderByCode(order_code.toUpperCase());
+    if (!order) return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    if (order.status !== 'pending_payment') {
+      return res.status(400).json({ success: false, error: 'Orden no está pendiente de pago' });
+    }
+
+    const yappy = getYappyButtonClient();
+    const totalNum = Number(order.total_amount);
+    const params = await yappy.initiatePayment({
+      orderId: order.order_code,
+      total: totalNum,
+      subtotal: totalNum,
+      taxes: 0,
+    });
+
+    console.log(`✅ Yappy orden iniciada: ${order.order_code} → txn ${params.transactionId}`);
+    res.json({ success: true, body: params });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Error iniciando pago';
+    console.error('Error Yappy initiate:', msg);
+    res.status(500).json({ success: false, error: msg });
   }
 });
 
@@ -173,163 +181,36 @@ router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
   }
 });
 
-// GET /venta/yappy/callback - Captura hash/query params o auto-confirma con order_code
-router.get('/yappy/callback', (req: Request, res: Response) => {
-  // Si vienen query params de Yappy, confirmar directamente
-  if (req.query.orderId && req.query.status) {
-    return handleYappyConfirm(req, res);
-  }
-
-  // Yappy puede enviar params como hash fragment o no enviar nada
-  // El JS captura hash fragments y/o usa el order_code guardado para auto-confirmar
-  res.send(renderLayout('Procesando pago...', `
-    <div class="card" style="text-align:center;">
-      <h1>Confirmando tu pago...</h1>
-      <p id="msg" style="color:#64748b;margin-top:12px;">Espera un momento mientras procesamos tu compra.</p>
-      <div id="spinner" style="margin:20px auto;width:40px;height:40px;border:4px solid #e2e8f0;border-top:4px solid #1e40af;border-radius:50%;animation:spin 1s linear infinite;"></div>
-      <style>@keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}</style>
-      <div id="errorBox" style="display:none;margin-top:20px;">
-        <p id="errorMsg" style="color:#dc2626;"></p>
-        <a href="/" class="btn btn-primary" style="text-decoration:none;text-align:center;margin-top:16px;">Volver al inicio</a>
-      </div>
-    </div>
-    <script>
-      (function() {
-        var hash = window.location.hash.substring(1);
-        var search = window.location.search.substring(1);
-        var paramStr = hash || search;
-
-        if (paramStr) {
-          localStorage.removeItem('yappy_order_code');
-          window.location.href = '/venta/yappy/confirm?' + paramStr;
-          return;
-        }
-
-        // Auto-confirmar con order_code guardado
-        var orderCode = localStorage.getItem('yappy_order_code');
-        localStorage.removeItem('yappy_order_code');
-
-        if (!orderCode) {
-          document.getElementById('spinner').style.display = 'none';
-          document.getElementById('errorMsg').textContent = 'No se encontro informacion de la orden.';
-          document.getElementById('errorBox').style.display = 'block';
-          return;
-        }
-
-        // Llamar al endpoint de auto-confirmacion
-        fetch('/venta/api/yappy/auto-confirm', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_code: orderCode })
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data.success) {
-            window.location.href = '/venta/estado/' + orderCode;
-          } else {
-            document.getElementById('spinner').style.display = 'none';
-            document.getElementById('errorMsg').textContent = data.error || 'Error confirmando pago.';
-            document.getElementById('errorBox').style.display = 'block';
-          }
-        })
-        .catch(function() {
-          window.location.href = '/venta/estado/' + orderCode;
-        });
-      })();
-    </script>`));
-});
-
-// POST /venta/api/yappy/auto-confirm - Auto-confirma orden al regresar de Yappy
-router.post('/api/yappy/auto-confirm', async (req: Request, res: Response) => {
+// GET /venta/api/yappy/ipn - IPN (Instant Payment Notification) de Yappy
+// Yappy llama este endpoint con orderId, Hash, status, domain
+router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
   try {
-    const { order_code } = req.body;
-    if (!order_code) {
-      return res.status(400).json({ success: false, error: 'Falta order_code' });
-    }
+    const params = req.query as Record<string, string>;
+    console.log('📩 Yappy IPN recibido:', JSON.stringify(params));
 
-    const order = await getOrderByCode(order_code.toUpperCase());
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
-    }
+    const yappy = getYappyButtonClient();
+    const result = yappy.validateIPN(params);
 
-    // Si ya está completada, solo devolver éxito
-    if (order.status === 'completed') {
-      return res.json({ success: true, already_confirmed: true });
-    }
-
-    if (order.status !== 'pending_payment') {
-      return res.status(400).json({ success: false, error: `Orden en status: ${order.status}` });
-    }
-
-    // Auto-confirmar: el usuario pasó por el flujo de Yappy y fue redirigido de vuelta
-    const confirmed = await confirmPayment(
-      order.id,
-      'yappy_auto',
-      undefined,
-      { source: 'yappy_button_auto_confirm', confirmed_at: new Date().toISOString() }
-    );
-
-    // Enviar email en background
-    if (confirmed.pdf_path && confirmed.download_token) {
-      const pool = getPool();
-      const { rows: cards } = await pool.query<{ card_code: string }>(
-        'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
-        [confirmed.card_ids]
-      );
-
-      sendPurchaseEmail({
-        order_code: confirmed.order_code,
-        buyer_name: confirmed.buyer_name,
-        buyer_email: confirmed.buyer_email,
-        quantity: confirmed.quantity,
-        total_amount: Number(confirmed.total_amount),
-        download_token: confirmed.download_token,
-        card_codes: cards.map(c => c.card_code),
-      }, confirmed.pdf_path).then(sent => {
-        if (sent) {
-          pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
-        }
-      }).catch(err => console.error('Error enviando email post-Yappy:', err));
-    }
-
-    console.log(`✅ Auto-confirmada orden ${confirmed.order_code}`);
-    res.json({ success: true, order_code: confirmed.order_code });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Error confirmando';
-    console.error('Error auto-confirm:', msg);
-    res.status(500).json({ success: false, error: msg });
-  }
-});
-
-// GET /venta/yappy/confirm - Procesa confirmación con params de Yappy
-router.get('/yappy/confirm', handleYappyConfirm as never);
-router.post('/yappy/callback', handleYappyConfirm as never);
-
-async function handleYappyConfirm(req: Request, res: Response) {
-  try {
-    const params = { ...req.query, ...req.body } as Record<string, string>;
-    console.log('Yappy confirm params:', JSON.stringify(params));
-
-    const yappyBtn = getYappyButtonClient();
-    const result = yappyBtn.validateCallback(params);
-
-    if (!result.valid || !result.orderId) {
-      return res.status(400).send(renderError('Respuesta de pago no válida'));
+    if (!result.valid) {
+      console.error('IPN inválido — hash no coincide o faltan params');
+      return res.json({ success: false });
     }
 
     const order = await getOrderByCode(result.orderId.toUpperCase());
     if (!order) {
-      return res.status(404).send(renderError('Orden no encontrada'));
+      console.error(`IPN: orden ${result.orderId} no encontrada`);
+      return res.json({ success: false });
     }
 
     if (result.status === 'completed' && order.status === 'pending_payment') {
       const confirmed = await confirmPayment(
         order.id,
-        'yappy_button',
-        result.confirmationNumber,
-        { status: result.status, confirmationNumber: result.confirmationNumber, source: 'yappy_button' }
+        'yappy_ipn',
+        undefined,
+        { source: 'yappy_ipn', status: params.status, hash: params.Hash, domain: params.domain }
       );
 
+      // Enviar email en background
       if (confirmed.pdf_path && confirmed.download_token) {
         const pool = getPool();
         const { rows: cards } = await pool.query<{ card_code: string }>(
@@ -349,16 +230,20 @@ async function handleYappyConfirm(req: Request, res: Response) {
           if (sent) {
             pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
           }
-        }).catch(err => console.error('Error enviando email post-Yappy:', err));
+        }).catch(err => console.error('Error enviando email post-IPN:', err));
       }
+
+      console.log(`✅ IPN: orden ${confirmed.order_code} confirmada`);
+    } else if (result.status !== 'completed') {
+      console.log(`⚠️ IPN: orden ${result.orderId} status=${result.status}`);
     }
 
-    res.redirect(`/venta/estado/${order.order_code}`);
+    res.json({ success: true });
   } catch (err) {
-    console.error('Error en Yappy confirm:', err);
-    res.status(500).send(renderError('Error procesando pago'));
+    console.error('Error en IPN:', err);
+    res.json({ success: false });
   }
-}
+});
 
 // ─── HTML Renderers ──────────────────────────────────────────
 
@@ -453,7 +338,8 @@ function renderLayout(title: string, body: string): string {
 function renderLanding(
   event: { id: number; name: string },
   config: { price_per_card: number; min_cards_per_order: number; max_cards_per_order: number; landing_title: string | null; landing_description: string | null },
-  available: number
+  available: number,
+  yappyCdnUrl: string
 ): string {
   const title = config.landing_title || event.name;
   const price = Number(config.price_per_card);
@@ -505,19 +391,28 @@ function renderLanding(
         <label for="buyer_phone">Telefono *</label>
         <input type="tel" id="buyer_phone" name="buyer_phone" required placeholder="+507 6123-4567">
 
-
         <div id="errorMsg" class="error-msg"></div>
 
         <button type="submit" class="btn btn-primary" id="submitBtn">
-          Comprar Cartones
+          Continuar
         </button>
       </form>
+
+      <!-- Sección de pago Yappy (oculta hasta que se cree la orden) -->
+      <div id="paymentSection" style="display:none;margin-top:24px;text-align:center;">
+        <p style="color:#64748b;font-size:14px;margin-bottom:16px;">Orden creada. Haz clic en el boton de Yappy para pagar:</p>
+        <div style="display:flex;justify-content:center;">
+          <btn-yappy theme="brand"></btn-yappy>
+        </div>
+        <p id="payStatus" style="color:#64748b;font-size:13px;margin-top:12px;"></p>
+      </div>
     </div>
 
+    <script type="module" src="${yappyCdnUrl}"></script>
     <script>
       var PRICE = ${price};
       var EVENT_ID = ${event.id};
-      var MIN = ${config.min_cards_per_order};
+      var orderCode = null;
 
       function updatePrice() {
         var qty = parseInt(document.getElementById('quantity').value);
@@ -525,9 +420,9 @@ function renderLanding(
         document.getElementById('totalPrice').textContent = '$' + total.toFixed(2);
         document.getElementById('priceDetail').textContent = qty + (qty > 1 ? ' cartones' : ' carton') + ' x $' + PRICE.toFixed(2) + ' c/u';
       }
-
       document.getElementById('quantity').addEventListener('change', updatePrice);
 
+      // Paso 1: Crear orden en nuestro backend
       document.getElementById('orderForm').addEventListener('submit', function(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -535,42 +430,90 @@ function renderLanding(
         var errEl = document.getElementById('errorMsg');
         errEl.style.display = 'none';
         btn.disabled = true;
-        btn.textContent = 'Procesando...';
-
-        var body = JSON.stringify({
-          event_id: EVENT_ID,
-          quantity: parseInt(document.getElementById('quantity').value),
-          buyer_name: document.getElementById('buyer_name').value,
-          buyer_email: document.getElementById('buyer_email').value,
-          buyer_phone: document.getElementById('buyer_phone').value,
-          buyer_cedula: '',
-        });
+        btn.textContent = 'Creando orden...';
 
         fetch('/venta/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: body
+          body: JSON.stringify({
+            event_id: EVENT_ID,
+            quantity: parseInt(document.getElementById('quantity').value),
+            buyer_name: document.getElementById('buyer_name').value,
+            buyer_email: document.getElementById('buyer_email').value,
+            buyer_phone: document.getElementById('buyer_phone').value,
+            buyer_cedula: '',
+          })
         })
-        .then(function(res) { return res.json(); })
+        .then(function(r) { return r.json(); })
         .then(function(data) {
           if (!data.success) {
             errEl.textContent = data.error || 'Error al crear la orden';
             errEl.style.display = 'block';
             btn.disabled = false;
-            btn.textContent = 'Comprar Cartones';
+            btn.textContent = 'Continuar';
             return;
           }
-          if (data.data.payment_method === 'yappy_button') {
-            btn.textContent = 'Redirigiendo a Yappy...';
-            localStorage.setItem('yappy_order_code', data.data.order_code);
-          }
-          window.location.href = data.data.redirect_url;
+          orderCode = data.data.order_code;
+          // Ocultar formulario, mostrar boton Yappy
+          document.getElementById('orderForm').style.display = 'none';
+          document.getElementById('paymentSection').style.display = 'block';
         })
         .catch(function() {
           errEl.textContent = 'Error de conexion. Intenta de nuevo.';
           errEl.style.display = 'block';
           btn.disabled = false;
-          btn.textContent = 'Comprar Cartones';
+          btn.textContent = 'Continuar';
+        });
+      });
+
+      // Paso 2: Web component btn-yappy eventos
+      window.addEventListener('load', function() {
+        var btnyappy = document.querySelector('btn-yappy');
+        if (!btnyappy) return;
+
+        // Click en boton Yappy → llamar backend para iniciar pago
+        btnyappy.addEventListener('eventClick', async function() {
+          if (!orderCode) return;
+          try {
+            document.getElementById('payStatus').textContent = 'Conectando con Yappy...';
+            btnyappy.isButtonLoading = true;
+
+            var res = await fetch('/venta/api/yappy/initiate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ order_code: orderCode })
+            });
+            var result = await res.json();
+
+            if (result.success && result.body.token && result.body.documentName && result.body.transactionId) {
+              btnyappy.eventPayment({
+                transactionId: result.body.transactionId,
+                documentName: result.body.documentName,
+                token: result.body.token,
+              });
+              document.getElementById('payStatus').textContent = 'Confirma el pago en tu app de Yappy...';
+            } else {
+              document.getElementById('payStatus').textContent = result.error || 'Error iniciando pago';
+              btnyappy.isButtonLoading = false;
+            }
+          } catch (err) {
+            document.getElementById('payStatus').textContent = 'Error de conexion';
+            btnyappy.isButtonLoading = false;
+          }
+        });
+
+        // Pago exitoso
+        btnyappy.addEventListener('eventSuccess', function(ev) {
+          console.log('Yappy eventSuccess:', ev.detail);
+          document.getElementById('payStatus').textContent = 'Pago confirmado. Redirigiendo...';
+          window.location.href = '/venta/estado/' + orderCode;
+        });
+
+        // Pago fallido
+        btnyappy.addEventListener('eventError', function(ev) {
+          console.log('Yappy eventError:', ev.detail);
+          document.getElementById('payStatus').textContent = 'El pago no se completo. Intenta de nuevo.';
+          btnyappy.isButtonLoading = false;
         });
       });
     </script>`;
