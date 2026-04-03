@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { getPool } from '../database.js';
 import { generateUniqueCode } from './utils.js';
 import { generateCardsPDF } from './pdfService.js';
@@ -318,7 +319,7 @@ export async function confirmPayment(
   // Generar PDF FUERA de la transacción (no bloquea la BD)
   try {
     const pdfPath = await generateCardsPDF(cardDataForPdf, { cardsPerPage: 4 });
-    const downloadToken = generateUniqueCode(20);
+    const downloadToken = randomBytes(32).toString('hex');
 
     await pool.query(
       `UPDATE online_orders SET pdf_path = $1, download_token = $2, updated_at = NOW() WHERE id = $3`,
