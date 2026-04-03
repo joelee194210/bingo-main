@@ -52,6 +52,7 @@ interface CardNumbers {
 }
 
 const DEFAULT_PRICE = 5.00;
+const VENTA_DIGITAL_USER_ID = parseInt(process.env.VENTA_DIGITAL_USER_ID || '57', 10);
 
 export async function getSalesConfig(eventId: number): Promise<OnlineSalesConfig | null> {
   const pool = getPool();
@@ -221,9 +222,9 @@ export async function confirmPayment(
       // Crear documento de venta (inv_documentos)
       const docResult = await client.query(
         `INSERT INTO inv_documentos (event_id, accion, de_almacen_id, de_nombre, a_nombre, a_cedula, total_items, total_cartones, realizado_por)
-         VALUES ($1, 'venta', $2, $3, $4, $5, $6, $7, 1) RETURNING id`,
+         VALUES ($1, 'venta', $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
         [order.event_id, almacenId, almacenName, 'VD-' + order.buyer_name, order.buyer_cedula || null,
-         order.card_ids.length, order.card_ids.length]
+         order.card_ids.length, order.card_ids.length, VENTA_DIGITAL_USER_ID]
       );
       const documentoId = docResult.rows[0].id;
 
@@ -235,10 +236,10 @@ export async function confirmPayment(
         const ref = cardInfo[0]?.card_code || String(cardId);
         await client.query(
           `INSERT INTO inv_movimientos (event_id, almacen_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, detalles, realizado_por, documento_id)
-           VALUES ($1, $2, 'carton', $3, 'venta', $4, $5, 1, $6, 1, $7)`,
+           VALUES ($1, $2, 'carton', $3, 'venta', $4, $5, 1, $6, $7, $8)`,
           [order.event_id, almacenId, ref, almacenName, 'VD-' + order.buyer_name,
            JSON.stringify({ buyer_phone: order.buyer_phone, buyer_email: order.buyer_email, order_code: order.order_code, source: 'venta_digital' }),
-           documentoId]
+           VENTA_DIGITAL_USER_ID, documentoId]
         );
       }
     }
