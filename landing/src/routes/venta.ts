@@ -439,7 +439,7 @@ function renderLanding(
           buyer_name: document.getElementById('buyer_name').value,
           buyer_email: document.getElementById('buyer_email').value,
           buyer_phone: document.getElementById('buyer_phone').value,
-          buyer_cedula: document.getElementById('buyer_cedula').value,
+          buyer_cedula: '',
         });
 
         fetch('/venta/api/orders', {
