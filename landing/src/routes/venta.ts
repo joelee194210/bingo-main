@@ -664,6 +664,10 @@ function renderStatus(
         Descargar Cartones (PDF)
       </a>
 
+      <a href="/venta/${order.event_id}" class="btn btn-primary" style="text-decoration:none;text-align:center;margin-top:12px;">
+        Comprar mas cartones
+      </a>
+
       <p style="text-align:center;font-size:14px;color:#64748b;margin-top:16px;">
         Tambien enviamos un enlace de descarga a tu email.
       </p>`;
