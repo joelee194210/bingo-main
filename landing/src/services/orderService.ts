@@ -231,25 +231,45 @@ export async function confirmPayment(
         [order.card_ids]
       );
 
+      // Obtener seriales y códigos de los cartones
+      const { rows: cardInfoRows } = await client.query<{ id: number; card_code: string; serial: string; lote_id: number | null }>(
+        'SELECT id, card_code, serial, lote_id FROM cards WHERE id = ANY($1) ORDER BY card_number',
+        [order.card_ids]
+      );
+      const seriales = cardInfoRows.map(c => c.serial).filter(Boolean);
+
+      // Detalles completos de la venta digital
+      const ventaDetalles = {
+        source: 'venta_digital',
+        order_code: order.order_code,
+        buyer_name: order.buyer_name,
+        buyer_phone: order.buyer_phone,
+        buyer_email: order.buyer_email,
+        buyer_cedula: order.buyer_cedula || null,
+        cantidad: order.quantity,
+        precio_unitario: Number(order.unit_price),
+        monto_total: Number(order.total_amount),
+        yappy_transaction_id: yappyTxnId || null,
+        yappy_confirmed_by: confirmedBy,
+        yappy_data: yappyTxnData || null,
+        seriales,
+      };
+
       // Crear documento de venta (inv_documentos)
       const docResult = await client.query(
         `INSERT INTO inv_documentos (event_id, accion, de_almacen_id, de_nombre, a_nombre, a_cedula, total_items, total_cartones, realizado_por)
          VALUES ($1, 'venta', $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-        [order.event_id, almacenId, almacenName, 'VD-' + order.buyer_name, order.buyer_cedula || null,
+        [order.event_id, almacenId, almacenName, order.buyer_name, order.buyer_cedula || null,
          order.card_ids.length, order.card_ids.length, VENTA_DIGITAL_USER_ID]
       );
       const documentoId = docResult.rows[0].id;
 
-      for (const cardId of order.card_ids) {
-        const { rows: cardInfo } = await client.query<{ card_code: string; lote_id: number | null }>(
-          'SELECT card_code, lote_id FROM cards WHERE id = $1', [cardId]
-        );
-        const ref = cardInfo[0]?.card_code || String(cardId);
+      for (const cardRow of cardInfoRows) {
         await client.query(
           `INSERT INTO inv_movimientos (event_id, almacen_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, detalles, realizado_por, documento_id)
            VALUES ($1, $2, 'carton', $3, 'venta', $4, $5, 1, $6, $7, $8)`,
-          [order.event_id, almacenId, ref, almacenName, 'VD-' + order.buyer_name,
-           JSON.stringify({ buyer_phone: order.buyer_phone, buyer_email: order.buyer_email, order_code: order.order_code, source: 'venta_digital' }),
+          [order.event_id, almacenId, cardRow.card_code, almacenName, order.buyer_name,
+           JSON.stringify(ventaDetalles),
            VENTA_DIGITAL_USER_ID, documentoId]
         );
       }

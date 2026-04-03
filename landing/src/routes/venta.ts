@@ -173,8 +173,8 @@ router.post('/api/yappy/confirm-success', async (req: Request, res: Response) =>
     const confirmed = await confirmPayment(
       order.id,
       'yappy_event_success',
-      undefined,
-      { source: 'web_component_eventSuccess', confirmed_at: new Date().toISOString() }
+      transactionId,
+      { source: 'web_component_eventSuccess', transactionId, confirmed_at: new Date().toISOString() }
     );
 
     // Email en background (solo si fue una confirmación nueva, no duplicada)
@@ -338,8 +338,8 @@ router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
       const confirmed = await confirmPayment(
         order.id,
         'yappy_ipn',
-        undefined,
-        { source: 'yappy_ipn', status: params.status, hash: params.Hash, domain: params.domain }
+        params.orderId || undefined,
+        { source: 'yappy_ipn', status: params.status, hash: params.Hash, domain: params.domain, orderId: params.orderId }
       );
 
       // Enviar email en background
