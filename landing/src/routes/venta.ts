@@ -294,7 +294,7 @@ function renderLayout(title: string, body: string): string {
     body { font-family: 'Inter', -apple-system, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%); color: #1e293b; min-height: 100vh; }
     .container { max-width: 520px; margin: 0 auto; padding: 20px; }
     .logo { text-align: center; padding: 24px 0 8px; }
-    .logo img { max-width: 160px; height: auto; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
+    .logo img { max-width: 240px; height: auto; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
     .card { background: white; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.15); padding: 32px; margin-top: 12px; position: relative; overflow: hidden; }
     .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6); }
     .rainbow { display: none; }
