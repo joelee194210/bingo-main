@@ -130,6 +130,61 @@ router.post('/api/yappy/initiate', async (req: Request, res: Response) => {
   }
 });
 
+// POST /venta/api/yappy/confirm-success - Confirmación desde eventSuccess del web component
+router.post('/api/yappy/confirm-success', async (req: Request, res: Response) => {
+  try {
+    const { order_code } = req.body;
+    if (!order_code) return res.status(400).json({ success: false, error: 'Falta order_code' });
+
+    const order = await getOrderByCode(order_code.toUpperCase());
+    if (!order) return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+
+    if (order.status === 'completed') {
+      return res.json({ success: true, already_confirmed: true });
+    }
+    if (order.status !== 'pending_payment') {
+      return res.json({ success: true });
+    }
+
+    const confirmed = await confirmPayment(
+      order.id,
+      'yappy_event_success',
+      undefined,
+      { source: 'web_component_eventSuccess', confirmed_at: new Date().toISOString() }
+    );
+
+    // Email en background
+    if (confirmed.pdf_path && confirmed.download_token) {
+      const pool = getPool();
+      const { rows: cards } = await pool.query<{ card_code: string }>(
+        'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
+        [confirmed.card_ids]
+      );
+
+      sendPurchaseEmail({
+        order_code: confirmed.order_code,
+        buyer_name: confirmed.buyer_name,
+        buyer_email: confirmed.buyer_email,
+        quantity: confirmed.quantity,
+        total_amount: Number(confirmed.total_amount),
+        download_token: confirmed.download_token,
+        card_codes: cards.map(c => c.card_code),
+      }, confirmed.pdf_path).then(sent => {
+        if (sent) {
+          pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
+        }
+      }).catch(err => console.error('Error enviando email:', err));
+    }
+
+    console.log(`✅ Orden ${confirmed.order_code} confirmada via eventSuccess`);
+    res.json({ success: true, order_code: confirmed.order_code });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Error confirmando';
+    console.error('Error confirm-success:', msg);
+    res.status(500).json({ success: false, error: msg });
+  }
+});
+
 // GET /venta/api/orders/:orderCode/status - Status JSON (para polling)
 router.get('/api/orders/:orderCode/status', async (req: Request, res: Response) => {
   try {
@@ -511,8 +566,16 @@ function renderLanding(
         // Pago exitoso
         btnyappy.addEventListener('eventSuccess', function(ev) {
           console.log('Yappy eventSuccess:', ev.detail);
-          document.getElementById('payStatus').textContent = 'Pago confirmado. Redirigiendo...';
-          window.location.href = '/venta/estado/' + orderCode;
+          document.getElementById('payStatus').textContent = 'Pago confirmado. Procesando tu compra...';
+
+          // Confirmar la orden en el backend
+          fetch('/venta/api/yappy/confirm-success', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_code: orderCode })
+          })
+          .then(function() { window.location.href = '/venta/estado/' + orderCode; })
+          .catch(function() { window.location.href = '/venta/estado/' + orderCode; });
         });
 
         // Pago fallido
