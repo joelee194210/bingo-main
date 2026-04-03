@@ -161,16 +161,19 @@ export class YappyButtonClient {
       return { valid: false, orderId: '', status: 'rejected' };
     }
 
-    // Verificar hash
-    if (Hash && this.signingKey) {
-      const expected = createHmac('sha256', this.signingKey)
-        .update(orderId + status + domain)
-        .digest('hex');
+    // Hash y signingKey son OBLIGATORIOS — sin ellos, rechazar siempre
+    if (!Hash || !this.signingKey) {
+      console.error('IPN rechazado: hash o signingKey faltante');
+      return { valid: false, orderId, status: 'rejected' };
+    }
 
-      if (Hash !== expected) {
-        console.error(`IPN hash mismatch: expected=${expected}, got=${Hash}`);
-        return { valid: false, orderId, status: 'rejected' };
-      }
+    const expected = createHmac('sha256', this.signingKey)
+      .update(orderId + status + domain)
+      .digest('hex');
+
+    if (Hash !== expected) {
+      console.error(`IPN hash mismatch: expected=${expected}, got=${Hash}`);
+      return { valid: false, orderId, status: 'rejected' };
     }
 
     const statusMap: Record<string, 'completed' | 'rejected' | 'cancelled' | 'expired'> = {

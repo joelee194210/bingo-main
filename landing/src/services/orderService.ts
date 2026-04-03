@@ -172,6 +172,9 @@ export async function confirmPayment(
   const pool = getPool();
   const client = await pool.connect();
 
+  let order: OnlineOrder;
+  let cardDataForPdf: Array<{ cardNumber: number; cardCode: string; validationCode: string; numbers: CardNumbers; useFreeCenter: boolean }> = [];
+
   try {
     await client.query('BEGIN');
 
@@ -179,10 +182,17 @@ export async function confirmPayment(
       'SELECT * FROM online_orders WHERE id = $1 FOR UPDATE', [orderId]
     );
     if (orderRows.length === 0) throw new Error('Orden no encontrada');
-    const order = orderRows[0];
+    order = orderRows[0];
+
+    // Idempotente: si ya está completada, retornar sin error
+    if (order.status === 'completed') {
+      await client.query('ROLLBACK');
+      return order;
+    }
 
     if (order.status !== 'pending_payment') {
-      throw new Error(`La orden tiene status "${order.status}", no se puede confirmar`);
+      await client.query('ROLLBACK');
+      return order;
     }
 
     // Obtener almacen y evento info
@@ -204,14 +214,12 @@ export async function confirmPayment(
         [order.buyer_name, order.buyer_phone, order.buyer_cedula, order.card_ids]
       );
 
-      // Actualizar cards_sold en lotes afectados
       await client.query(
         `UPDATE lotes SET cards_sold = (SELECT COUNT(*) FROM cards WHERE lote_id = lotes.id AND is_sold = true)
          WHERE id IN (SELECT DISTINCT lote_id FROM cards WHERE id = ANY($1) AND lote_id IS NOT NULL)`,
         [order.card_ids]
       );
 
-      // Marcar lotes vendido_completo si aplica
       await client.query(
         `UPDATE lotes SET status = 'vendido_completo'
          WHERE id IN (SELECT DISTINCT lote_id FROM cards WHERE id = ANY($1) AND lote_id IS NOT NULL)
@@ -228,7 +236,6 @@ export async function confirmPayment(
       );
       const documentoId = docResult.rows[0].id;
 
-      // Registrar movimiento por cada cartón vendido
       for (const cardId of order.card_ids) {
         const { rows: cardInfo } = await client.query<{ card_code: string; lote_id: number | null }>(
           'SELECT card_code, lote_id FROM cards WHERE id = $1', [cardId]
@@ -244,7 +251,7 @@ export async function confirmPayment(
       }
     }
 
-    // Obtener datos de cartones para PDF
+    // Obtener datos de cartones para PDF (dentro de la transacción para consistencia)
     const { rows: cards } = await client.query<CardRow>(
       `SELECT c.id, c.card_number, c.card_code, c.validation_code, c.numbers,
               e.use_free_center
@@ -253,8 +260,7 @@ export async function confirmPayment(
       [order.card_ids]
     );
 
-    // Generar PDF
-    const cardData = cards.map(c => ({
+    cardDataForPdf = cards.map(c => ({
       cardNumber: c.card_number,
       cardCode: c.card_code,
       validationCode: c.validation_code,
@@ -262,33 +268,43 @@ export async function confirmPayment(
       useFreeCenter: c.use_free_center ?? true,
     }));
 
-    const pdfPath = await generateCardsPDF(cardData, { cardsPerPage: 4 });
-    const downloadToken = generateUniqueCode(20);
-
-    const { rows: updated } = await client.query<OnlineOrder>(
+    // Marcar como completada (sin PDF aún)
+    await client.query(
       `UPDATE online_orders SET
         status = 'completed',
         payment_confirmed_at = NOW(),
         payment_confirmed_by = $1,
         yappy_transaction_id = $2,
         yappy_transaction_data = $3,
-        pdf_path = $4,
-        download_token = $5,
         updated_at = NOW()
-       WHERE id = $6
-       RETURNING *`,
-      [confirmedBy, yappyTxnId || null, yappyTxnData ? JSON.stringify(yappyTxnData) : null,
-       pdfPath, downloadToken, orderId]
+       WHERE id = $4`,
+      [confirmedBy, yappyTxnId || null, yappyTxnData ? JSON.stringify(yappyTxnData) : null, orderId]
     );
 
     await client.query('COMMIT');
-    return updated[0];
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
   }
+
+  // Generar PDF FUERA de la transacción (no bloquea la BD)
+  try {
+    const pdfPath = await generateCardsPDF(cardDataForPdf, { cardsPerPage: 4 });
+    const downloadToken = generateUniqueCode(20);
+
+    await pool.query(
+      `UPDATE online_orders SET pdf_path = $1, download_token = $2, updated_at = NOW() WHERE id = $3`,
+      [pdfPath, downloadToken, orderId]
+    );
+  } catch (err) {
+    console.error(`Error generando PDF para orden ${orderId}:`, err);
+  }
+
+  // Retornar orden actualizada
+  const { rows } = await pool.query<OnlineOrder>('SELECT * FROM online_orders WHERE id = $1', [orderId]);
+  return rows[0];
 }
 
 export async function expireStaleOrders(): Promise<number> {
