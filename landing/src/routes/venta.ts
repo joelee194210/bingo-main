@@ -173,23 +173,25 @@ router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
   }
 });
 
-// GET /venta/yappy/callback - Captura hash fragments de Yappy y reenvía al backend
+// GET /venta/yappy/callback - Captura hash/query params o auto-confirma con order_code
 router.get('/yappy/callback', (req: Request, res: Response) => {
-  // Si ya vienen query params, procesar directamente
+  // Si vienen query params de Yappy, confirmar directamente
   if (req.query.orderId && req.query.status) {
     return handleYappyConfirm(req, res);
   }
 
-  // Yappy envía params como hash fragment (#orderId=X&status=E)
-  // Los fragments no llegan al server, hay que capturarlos con JS
+  // Yappy puede enviar params como hash fragment o no enviar nada
+  // El JS captura hash fragments y/o usa el order_code guardado para auto-confirmar
   res.send(renderLayout('Procesando pago...', `
     <div class="card" style="text-align:center;">
-      <h1>Procesando tu pago...</h1>
-      <div class="rainbow"></div>
-      <p id="msg" style="color:#64748b;">Espera un momento mientras confirmamos tu pago con Yappy.</p>
+      <h1>Confirmando tu pago...</h1>
+      <p id="msg" style="color:#64748b;margin-top:12px;">Espera un momento mientras procesamos tu compra.</p>
       <div id="spinner" style="margin:20px auto;width:40px;height:40px;border:4px solid #e2e8f0;border-top:4px solid #1e40af;border-radius:50%;animation:spin 1s linear infinite;"></div>
       <style>@keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}</style>
-      <a id="fallbackLink" href="/venta/13" class="btn btn-primary" style="display:none;text-decoration:none;text-align:center;">Volver</a>
+      <div id="errorBox" style="display:none;margin-top:20px;">
+        <p id="errorMsg" style="color:#dc2626;"></p>
+        <a href="/" class="btn btn-primary" style="text-decoration:none;text-align:center;margin-top:16px;">Volver al inicio</a>
+      </div>
     </div>
     <script>
       (function() {
@@ -198,27 +200,108 @@ router.get('/yappy/callback', (req: Request, res: Response) => {
         var paramStr = hash || search;
 
         if (paramStr) {
-          // Yappy envió params — confirmar pago
           localStorage.removeItem('yappy_order_code');
           window.location.href = '/venta/yappy/confirm?' + paramStr;
-        } else {
-          // Yappy no envió params — usar order_code guardado
-          var orderCode = localStorage.getItem('yappy_order_code');
-          localStorage.removeItem('yappy_order_code');
-          if (orderCode) {
+          return;
+        }
+
+        // Auto-confirmar con order_code guardado
+        var orderCode = localStorage.getItem('yappy_order_code');
+        localStorage.removeItem('yappy_order_code');
+
+        if (!orderCode) {
+          document.getElementById('spinner').style.display = 'none';
+          document.getElementById('errorMsg').textContent = 'No se encontro informacion de la orden.';
+          document.getElementById('errorBox').style.display = 'block';
+          return;
+        }
+
+        // Llamar al endpoint de auto-confirmacion
+        fetch('/venta/api/yappy/auto-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_code: orderCode })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
             window.location.href = '/venta/estado/' + orderCode;
           } else {
             document.getElementById('spinner').style.display = 'none';
-            document.getElementById('msg').textContent =
-              'No recibimos confirmacion de Yappy. Si ya pagaste, tu orden se confirmara automaticamente en unos minutos.';
-            document.getElementById('fallbackLink').style.display = 'block';
+            document.getElementById('errorMsg').textContent = data.error || 'Error confirmando pago.';
+            document.getElementById('errorBox').style.display = 'block';
           }
-        }
+        })
+        .catch(function() {
+          window.location.href = '/venta/estado/' + orderCode;
+        });
       })();
     </script>`));
 });
 
-// GET /venta/yappy/confirm - Procesa la confirmación real con params
+// POST /venta/api/yappy/auto-confirm - Auto-confirma orden al regresar de Yappy
+router.post('/api/yappy/auto-confirm', async (req: Request, res: Response) => {
+  try {
+    const { order_code } = req.body;
+    if (!order_code) {
+      return res.status(400).json({ success: false, error: 'Falta order_code' });
+    }
+
+    const order = await getOrderByCode(order_code.toUpperCase());
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+
+    // Si ya está completada, solo devolver éxito
+    if (order.status === 'completed') {
+      return res.json({ success: true, already_confirmed: true });
+    }
+
+    if (order.status !== 'pending_payment') {
+      return res.status(400).json({ success: false, error: `Orden en status: ${order.status}` });
+    }
+
+    // Auto-confirmar: el usuario pasó por el flujo de Yappy y fue redirigido de vuelta
+    const confirmed = await confirmPayment(
+      order.id,
+      'yappy_auto',
+      undefined,
+      { source: 'yappy_button_auto_confirm', confirmed_at: new Date().toISOString() }
+    );
+
+    // Enviar email en background
+    if (confirmed.pdf_path && confirmed.download_token) {
+      const pool = getPool();
+      const { rows: cards } = await pool.query<{ card_code: string }>(
+        'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
+        [confirmed.card_ids]
+      );
+
+      sendPurchaseEmail({
+        order_code: confirmed.order_code,
+        buyer_name: confirmed.buyer_name,
+        buyer_email: confirmed.buyer_email,
+        quantity: confirmed.quantity,
+        total_amount: Number(confirmed.total_amount),
+        download_token: confirmed.download_token,
+        card_codes: cards.map(c => c.card_code),
+      }, confirmed.pdf_path).then(sent => {
+        if (sent) {
+          pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
+        }
+      }).catch(err => console.error('Error enviando email post-Yappy:', err));
+    }
+
+    console.log(`✅ Auto-confirmada orden ${confirmed.order_code}`);
+    res.json({ success: true, order_code: confirmed.order_code });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Error confirmando';
+    console.error('Error auto-confirm:', msg);
+    res.status(500).json({ success: false, error: msg });
+  }
+});
+
+// GET /venta/yappy/confirm - Procesa confirmación con params de Yappy
 router.get('/yappy/confirm', handleYappyConfirm as never);
 router.post('/yappy/callback', handleYappyConfirm as never);
 
@@ -247,7 +330,6 @@ async function handleYappyConfirm(req: Request, res: Response) {
         { status: result.status, confirmationNumber: result.confirmationNumber, source: 'yappy_button' }
       );
 
-      // Enviar email en background
       if (confirmed.pdf_path && confirmed.download_token) {
         const pool = getPool();
         const { rows: cards } = await pool.query<{ card_code: string }>(
