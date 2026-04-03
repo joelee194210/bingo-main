@@ -784,7 +784,20 @@ router.get('/movimientos/pdf/:movimientoId', requirePermission('inventory:read')
       }
     }
 
-    if (!mov.pdf_path) return res.status(404).json({ success: false, error: 'PDF no disponible para este movimiento' });
+    if (!mov.pdf_path) {
+      // Para ventas digitales que no generan PDF de movimiento, retornar info JSON
+      const detailRows = await pool.query(
+        `SELECT m.referencia, m.accion, m.de_persona, m.a_persona, m.cantidad_cartones, m.detalles, m.created_at,
+                d.accion as doc_accion, d.de_nombre, d.a_nombre, d.total_cartones as doc_total
+         FROM inv_movimientos m LEFT JOIN inv_documentos d ON d.id = m.documento_id
+         WHERE m.id = $1`,
+        [parseInt(req.params.movimientoId as string, 10)]
+      );
+      if (detailRows.rows.length > 0) {
+        return res.json({ success: true, data: detailRows.rows[0], pdf_available: false });
+      }
+      return res.status(404).json({ success: false, error: 'PDF no disponible para este movimiento' });
+    }
 
     const filepath = getMovimientoPdfPath(mov.pdf_path);
     if (!existsSync(filepath)) return res.status(404).json({ success: false, error: 'Archivo PDF no encontrado' });
