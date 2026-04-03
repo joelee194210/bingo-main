@@ -402,7 +402,7 @@ function renderLanding(
       <div id="paymentSection" style="display:none;margin-top:24px;text-align:center;">
         <p style="color:#64748b;font-size:14px;margin-bottom:16px;">Orden creada. Haz clic en el boton de Yappy para pagar:</p>
         <div style="display:flex;justify-content:center;">
-          <btn-yappy theme="brand"></btn-yappy>
+          <btn-yappy theme="darkBlue"></btn-yappy>
         </div>
         <p id="payStatus" style="color:#64748b;font-size:13px;margin-top:12px;"></p>
       </div>
