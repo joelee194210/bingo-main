@@ -85,7 +85,7 @@ export class YappyButtonClient {
 
     const data = await res.json() as ValidateMerchantResponse;
 
-    if (data.status?.code !== 'YP-0000' || !data.body?.token) {
+    if (!['YP-0000', '0000'].includes(data.status?.code) || !data.body?.token) {
       console.error('Yappy validate/merchant error:', JSON.stringify(data));
       throw new Error(`Error validando comercio: ${data.status?.description || res.status}`);
     }
@@ -125,7 +125,7 @@ export class YappyButtonClient {
 
     const data = await res.json() as CreateOrderResponse;
 
-    if (data.status?.code !== 'YP-0000' || !data.body?.transactionId) {
+    if (!['YP-0000', '0000'].includes(data.status?.code) || !data.body?.transactionId) {
       console.error('Yappy payment-wc error:', JSON.stringify(data));
       throw new Error(`Error creando orden Yappy: ${data.status?.description || res.status}`);
     }
