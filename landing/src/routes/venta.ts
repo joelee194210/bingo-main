@@ -446,8 +446,8 @@ function renderLanding(
         <label for="buyer_email">Email *</label>
         <input type="email" id="buyer_email" name="buyer_email" required placeholder="tu@email.com">
 
-        <label for="buyer_phone">Telefono *</label>
-        <input type="tel" id="buyer_phone" name="buyer_phone" required placeholder="+507 6123-4567">
+        <label for="buyer_phone">Telefono asociado a tu cuenta Yappy *</label>
+        <input type="tel" id="buyer_phone" name="buyer_phone" required placeholder="6123-4567">
 
         <div id="errorMsg" class="error-msg"></div>
 
