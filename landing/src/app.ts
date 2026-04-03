@@ -4,6 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { resolve } from 'path';
 import { initPool, getPool } from './database.js';
 import ventaRouter from './routes/venta.js';
 import { expireStaleOrders } from './services/orderService.js';
@@ -16,6 +17,10 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Servir assets estáticos (logo)
+const assetsPath = resolve(import.meta.dirname, 'assets');
+app.use('/assets', express.static(assetsPath, { maxAge: '7d' }));
 
 // Rate limit en creación de órdenes
 const orderLimiter = rateLimit({

@@ -349,6 +349,9 @@ function renderLanding(
   if (available <= 0) {
     const body = `
     <div class="card" style="text-align:center;">
+      <div style="margin-bottom:16px;">
+        <img src="/assets/logo.png" alt="Mega Bingo Digital" style="max-width:180px;height:auto;">
+      </div>
       <h1>${escapeHtml(title)}</h1>
       <div class="rainbow"></div>
       <div style="margin:30px 0;">
@@ -363,6 +366,9 @@ function renderLanding(
 
   const body = `
     <div class="card">
+      <div style="text-align:center;margin-bottom:16px;">
+        <img src="/assets/logo.png" alt="Mega Bingo Digital" style="max-width:180px;height:auto;">
+      </div>
       <h1>${escapeHtml(title)}</h1>
       <div class="rainbow"></div>
       ${config.landing_description ? `<p class="subtitle">${escapeHtml(config.landing_description)}</p>` : ''}

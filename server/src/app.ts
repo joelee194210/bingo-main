@@ -128,7 +128,7 @@ app.use('/api/auth/change-password', authSensitiveLimiter);
 // Rate limiting en creación de órdenes de venta
 const ventaOrderLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
+  max: 10,
   message: { success: false, error: 'Demasiados intentos. Intente en 15 minutos.' },
   standardHeaders: true,
   legacyHeaders: false,
