@@ -494,6 +494,7 @@ function renderLanding(
         </div>
 
         <h2>Datos del comprador</h2>
+        <p style="color:#64748b;font-size:13px;margin-bottom:8px;line-height:1.5;">Para enviarte tus cartones en formato digital, por favor ingresa la siguiente informacion.</p>
 
         <label for="buyer_name">Nombre completo *</label>
         <input type="text" id="buyer_name" name="buyer_name" required placeholder="Juan Perez">
