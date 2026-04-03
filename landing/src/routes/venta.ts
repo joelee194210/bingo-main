@@ -218,6 +218,53 @@ router.get('/estado/:orderCode', async (req: Request, res: Response) => {
   }
 });
 
+// GET /venta/preview-pdf/:eventId - Preview PDF (solo dev/test)
+// ?card_code=XXXXX para un cartón específico, sin param = random
+router.get('/preview-pdf/:eventId', async (req: Request, res: Response) => {
+  try {
+    const eventId = parseInt(req.params.eventId as string, 10);
+    const cardCode = req.query.card_code as string | undefined;
+    const pool = getPool();
+
+    const whereCard = cardCode ? 'AND c.card_code = $2' : '';
+    const orderBy = cardCode ? '' : 'ORDER BY RANDOM()';
+    const params: unknown[] = [eventId];
+    if (cardCode) params.push(cardCode.toUpperCase());
+
+    const { rows: cards } = await pool.query<{ card_number: number; card_code: string; validation_code: string; serial: string; numbers: any; use_free_center: boolean; series_number: string }>(
+      `SELECT c.card_number, c.card_code, c.validation_code, c.serial, c.numbers,
+              e.use_free_center, l.series_number
+       FROM cards c JOIN events e ON e.id = c.event_id LEFT JOIN lotes l ON l.id = c.lote_id
+       WHERE c.event_id = $1 ${whereCard} ${orderBy} LIMIT 1`, params
+    );
+    if (cards.length === 0) return res.status(404).send('No hay cartones disponibles');
+    const c = cards[0];
+
+    // Buscar premio raspadito
+    let prizeName = 'Gracias por participar';
+    if (c.series_number) {
+      const { rows: prizes } = await pool.query<{ prize_name: string }>(
+        `SELECT prize_name FROM promo_fixed_rules WHERE event_id = $1 AND $2 BETWEEN series_from AND series_to LIMIT 1`,
+        [eventId, parseInt(c.series_number, 10)]
+      );
+      if (prizes.length > 0) prizeName = prizes[0].prize_name;
+    }
+
+    const { generateCardsPDF } = await import('../services/pdfService.js');
+    const pdfPath = await generateCardsPDF([{
+      cardNumber: c.card_number, cardCode: c.card_code, validationCode: c.validation_code,
+      serial: c.serial || '', numbers: c.numbers, useFreeCenter: c.use_free_center ?? true, prizeName,
+    }]);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="preview.pdf"');
+    createReadStream(pdfPath).pipe(res);
+  } catch (err) {
+    console.error('Error preview PDF:', err);
+    res.status(500).send('Error generando preview');
+  }
+});
+
 // GET /venta/descargar/:downloadToken - Descarga PDF
 router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
   try {
