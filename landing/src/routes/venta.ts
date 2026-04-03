@@ -401,8 +401,6 @@ function renderLanding(
         <label for="buyer_phone">Telefono *</label>
         <input type="tel" id="buyer_phone" name="buyer_phone" required placeholder="+507 6123-4567">
 
-        <label for="buyer_cedula">Cedula</label>
-        <input type="text" id="buyer_cedula" name="buyer_cedula" placeholder="8-123-456">
 
         <div id="errorMsg" class="error-msg"></div>
 
