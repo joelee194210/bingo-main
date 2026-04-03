@@ -111,11 +111,14 @@ router.post('/api/yappy/initiate', async (req: Request, res: Response) => {
 
     const yappy = getYappyButtonClient();
     const totalNum = Number(order.total_amount);
+    // Limpiar teléfono: quitar +507, espacios, guiones — dejar solo dígitos
+    const tel = order.buyer_phone.replace(/[\s\-\+]/g, '').replace(/^507/, '');
     const params = await yappy.initiatePayment({
       orderId: order.order_code,
       total: totalNum,
       subtotal: totalNum,
       taxes: 0,
+      tel,
     });
 
     console.log(`✅ Yappy orden iniciada: ${order.order_code} → txn ${params.transactionId}`);
