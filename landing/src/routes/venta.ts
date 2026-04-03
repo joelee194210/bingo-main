@@ -287,51 +287,61 @@ function renderLayout(title: string, body: string): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; color: #1e293b; min-height: 100vh; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%); color: #1e293b; min-height: 100vh; }
     .container { max-width: 520px; margin: 0 auto; padding: 20px; }
-    .card { background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 32px; margin-top: 20px; }
-    .rainbow { height: 4px; background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6); border-radius: 2px; margin: 16px 0 24px; }
-    h1 { font-size: 24px; font-weight: 700; color: #1e40af; text-align: center; }
-    h2 { font-size: 18px; font-weight: 600; color: #334155; margin-bottom: 16px; }
-    .subtitle { text-align: center; color: #64748b; margin-top: 8px; font-size: 14px; }
-    label { display: block; font-size: 14px; font-weight: 500; color: #475569; margin-bottom: 6px; margin-top: 16px; }
-    input, select { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 15px; transition: border-color 0.2s; }
-    input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
-    .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 24px; }
-    .btn-primary { background: #1e40af; color: white; }
-    .btn-primary:hover { background: #1e3a8a; }
-    .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
-    .btn-success { background: #059669; color: white; }
-    .btn-success:hover { background: #047857; }
-    .price-display { text-align: center; background: #f0fdf4; border: 2px solid #bbf7d0; border-radius: 12px; padding: 16px; margin: 20px 0; }
-    .price-display .amount { font-size: 32px; font-weight: 700; color: #059669; }
+    .logo { text-align: center; padding: 24px 0 8px; }
+    .logo img { max-width: 160px; height: auto; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
+    .card { background: white; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.15); padding: 32px; margin-top: 12px; position: relative; overflow: hidden; }
+    .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6); }
+    .rainbow { display: none; }
+    h1 { font-size: 22px; font-weight: 800; color: #1e293b; text-align: center; letter-spacing: -0.5px; }
+    h2 { font-size: 16px; font-weight: 600; color: #334155; margin-bottom: 16px; }
+    .subtitle { text-align: center; color: #64748b; margin-top: 8px; font-size: 14px; line-height: 1.5; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 6px; margin-top: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+    input, select { width: 100%; padding: 12px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 15px; font-family: 'Inter', sans-serif; transition: all 0.2s; background: #f8fafc; }
+    input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,0.12); background: white; }
+    .btn { display: block; width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-top: 24px; letter-spacing: 0.3px; }
+    .btn-primary { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; box-shadow: 0 4px 14px rgba(30,64,175,0.4); }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(30,64,175,0.5); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { background: #94a3b8; box-shadow: none; cursor: not-allowed; transform: none; }
+    .btn-success { background: linear-gradient(135deg, #059669, #10b981); color: white; box-shadow: 0 4px 14px rgba(5,150,105,0.4); }
+    .btn-success:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(5,150,105,0.5); }
+    .price-display { text-align: center; background: linear-gradient(135deg, #f0fdf4, #ecfdf5); border: 2px solid #86efac; border-radius: 14px; padding: 20px; margin: 20px 0; }
+    .price-display .amount { font-size: 36px; font-weight: 800; color: #059669; letter-spacing: -1px; }
     .price-display .detail { font-size: 13px; color: #64748b; margin-top: 4px; }
-    .status-badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+    .status-badge { display: inline-block; padding: 8px 16px; border-radius: 24px; font-size: 13px; font-weight: 700; letter-spacing: 0.3px; }
     .status-pending { background: #fef3c7; color: #92400e; }
     .status-completed { background: #d1fae5; color: #065f46; }
     .status-expired { background: #fee2e2; color: #991b1b; }
-    .order-code { font-family: monospace; font-size: 28px; font-weight: 700; text-align: center; color: #1e40af; background: #eff6ff; padding: 16px; border-radius: 12px; margin: 16px 0; letter-spacing: 2px; }
-    .instructions { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 16px; margin: 16px 0; font-size: 14px; color: #92400e; }
+    .order-code { font-family: 'Courier New', monospace; font-size: 28px; font-weight: 700; text-align: center; color: #1e40af; background: linear-gradient(135deg, #eff6ff, #dbeafe); padding: 18px; border-radius: 14px; margin: 16px 0; letter-spacing: 3px; border: 2px solid #bfdbfe; }
+    .instructions { background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 1px solid #fde68a; border-radius: 12px; padding: 18px; margin: 16px 0; font-size: 14px; color: #92400e; }
     .instructions ol { padding-left: 20px; }
-    .instructions li { margin: 6px 0; }
+    .instructions li { margin: 8px 0; line-height: 1.5; }
     .qr-container { text-align: center; margin: 20px 0; }
-    .qr-container img { max-width: 250px; border-radius: 12px; border: 2px solid #e2e8f0; }
-    .error-msg { color: #dc2626; font-size: 14px; margin-top: 8px; display: none; }
-    .loading { display: none; }
-    .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+    .qr-container img { max-width: 250px; border-radius: 14px; border: 2px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .error-msg { color: #dc2626; font-size: 14px; margin-top: 8px; display: none; background: #fef2f2; padding: 10px 14px; border-radius: 8px; border: 1px solid #fecaca; }
+    .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
     .info-row:last-child { border-bottom: none; }
     .info-label { color: #64748b; }
     .info-value { font-weight: 600; color: #1e293b; }
-    .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #94a3b8; }
-    .avail-tag { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 8px; }
+    .footer { text-align: center; margin-top: 20px; padding: 16px; font-size: 12px; color: rgba(255,255,255,0.4); }
+    .avail-tag { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 8px; background: #f1f5f9; display: inline-block; padding: 4px 14px; border-radius: 20px; }
+    .avail-wrap { text-align: center; margin-bottom: 4px; }
+    @media (max-width: 480px) { .card { padding: 24px 20px; } h1 { font-size: 20px; } .price-display .amount { font-size: 30px; } }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="logo">
+      <img src="/assets/logo.png" alt="Mega Bingo Digital" onerror="this.style.display='none'">
+    </div>
     ${body}
-    <div class="footer">Powered by Bingo Platform</div>
+    <div class="footer">Mega Bingo Digital</div>
   </div>
 </body>
 </html>`;
@@ -349,15 +359,11 @@ function renderLanding(
   if (available <= 0) {
     const body = `
     <div class="card" style="text-align:center;">
-      <div style="margin-bottom:16px;">
-        <img src="/assets/logo.png" alt="Mega Bingo Digital" style="max-width:180px;height:auto;">
-      </div>
       <h1>${escapeHtml(title)}</h1>
-      <div class="rainbow"></div>
       <div style="margin:30px 0;">
         <div style="font-size:48px;">🔄</div>
         <h2 style="margin-top:16px;">Estamos actualizando nuestro inventario</h2>
-        <p style="color:#64748b;margin-top:12px;">En este momento no hay cartones disponibles. Vuelve a intentarlo en unos minutos.</p>
+        <p style="color:#64748b;margin-top:12px;line-height:1.6;">En este momento no hay cartones disponibles.<br>Vuelve a intentarlo en unos minutos.</p>
       </div>
       <button onclick="location.reload()" class="btn btn-primary">Reintentar</button>
     </div>`;
@@ -366,13 +372,9 @@ function renderLanding(
 
   const body = `
     <div class="card">
-      <div style="text-align:center;margin-bottom:16px;">
-        <img src="/assets/logo.png" alt="Mega Bingo Digital" style="max-width:180px;height:auto;">
-      </div>
       <h1>${escapeHtml(title)}</h1>
-      <div class="rainbow"></div>
       ${config.landing_description ? `<p class="subtitle">${escapeHtml(config.landing_description)}</p>` : ''}
-      <p class="avail-tag">${available} cartones disponibles</p>
+      <div class="avail-wrap"><span class="avail-tag">${available} cartones disponibles</span></div>
 
       <form id="orderForm">
         <label for="quantity">Cantidad de cartones</label>

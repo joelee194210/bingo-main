@@ -18,9 +18,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servir assets estáticos (logo)
-const assetsPath = resolve(import.meta.dirname, 'assets');
+// Servir assets estáticos (logo) — busca en src/ o dist/
+const assetsPath = resolve(process.cwd(), 'src', 'assets');
+const altAssetsPath = resolve(process.cwd(), 'assets');
 app.use('/assets', express.static(assetsPath, { maxAge: '7d' }));
+app.use('/assets', express.static(altAssetsPath, { maxAge: '7d' }));
 
 // Rate limit en creación de órdenes
 const orderLimiter = rateLimit({
