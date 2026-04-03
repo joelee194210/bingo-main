@@ -36,6 +36,7 @@ const ActivityLog = lazy(() => import('./pages/ActivityLog'));
 const MisUsuarios = lazy(() => import('./pages/MisUsuarios'));
 const ReporteVentas = lazy(() => import('./components/Reports/ReporteVentas'));
 const ReporteVentasAgencias = lazy(() => import('./components/Reports/ReporteVentasAgencias'));
+const DescargarCartonDigital = lazy(() => import('./components/Venta/DescargarCartonDigital'));
 
 function LazyFallback() {
   return (
@@ -238,6 +239,16 @@ function App() {
           element={
             <ProtectedRoute permission="reports:sales_agencias">
               <ReporteVentasAgencias />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Descargar Cartón Digital */}
+        <Route
+          path="descargar-digital"
+          element={
+            <ProtectedRoute permission="cards:sell">
+              <DescargarCartonDigital />
             </ProtectedRoute>
           }
         />

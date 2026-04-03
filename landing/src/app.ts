@@ -17,7 +17,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://bt-cdn.yappy.cloud", "https://bt-cdn-uat.yappycloud.com"],
+      scriptSrc: ["'self'", "https://bt-cdn.yappy.cloud", "https://bt-cdn-uat.yappycloud.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https://*.yappy.cloud", "https://*.yappycloud.com"],

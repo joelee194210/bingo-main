@@ -13,11 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getEvents, getDashboardVentas } from '@/services/api';
-
-const COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
-];
+import { CHART_COLORS as COLORS, PIE_SOLD_COLOR, PIE_AVAILABLE_COLOR } from '@/lib/chart-colors';
 
 function formatNumber(n: number): string {
   return n.toLocaleString('es-DO');
@@ -54,8 +50,8 @@ export default function DashboardVentas() {
   const pieData = useMemo(() => {
     if (!dashboard) return [];
     return [
-      { name: 'Vendidos', value: dashboard.resumen.cartones_vendidos, color: '#10b981' },
-      { name: 'Disponibles', value: dashboard.resumen.cartones_disponibles, color: '#e2e8f0' },
+      { name: 'Vendidos', value: dashboard.resumen.cartones_vendidos, color: PIE_SOLD_COLOR },
+      { name: 'Disponibles', value: dashboard.resumen.cartones_disponibles, color: PIE_AVAILABLE_COLOR },
     ];
   }, [dashboard]);
 

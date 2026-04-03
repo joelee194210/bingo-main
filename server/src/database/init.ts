@@ -285,4 +285,13 @@ async function runMigrations(p: Pool): Promise<void> {
 
   // Limpiar función PL/pgSQL que ya no se usa (reemplazada por JSONB inline)
   await p.query('DROP FUNCTION IF EXISTS bingo_check_pattern(JSONB, INT[], INT[][], BOOLEAN)').catch(() => {});
+
+  // Migration: online_sales tables (landing de venta con Yappy)
+  const onlineOrdersExists = await p.query(`SELECT to_regclass('public.online_orders') as exists`);
+  if (!onlineOrdersExists.rows[0].exists) {
+    const migrationPath = join(__dirname, 'migration_online_sales.sql');
+    const migrationSql = readFileSync(migrationPath, 'utf-8');
+    await p.query(migrationSql);
+    console.log('✅ Migración aplicada: tablas online_sales_config y online_orders creadas');
+  }
 }
