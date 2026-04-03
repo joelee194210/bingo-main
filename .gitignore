@@ -60,3 +60,7 @@ coverage/
 # Vite
 vite.config.ts.timestamp-*
 .playwright-mcp/
+.playwright-cli/
+exports/
+landing/exports/
+server/.env

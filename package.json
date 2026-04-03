@@ -6,7 +6,8 @@
   "type": "module",
   "workspaces": [
     "client",
-    "server"
+    "server",
+    "landing"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",

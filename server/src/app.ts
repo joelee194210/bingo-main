@@ -31,6 +31,8 @@ import permissionsRouter from './routes/permissions.js';
 import activityLogRouter from './routes/activityLog.js';
 import verificarRouter from './routes/verificar.js';
 import misUsuariosRouter from './routes/misUsuarios.js';
+import ventaRouter from './routes/venta.js';
+import ventaAdminRouter from './routes/ventaAdmin.js';
 
 const app = express();
 
@@ -89,13 +91,14 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "https://challenges.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:"],
       connectSrc: ["'self'"],
       fontSrc: ["'self'"],
       frameSrc: ["https://challenges.cloudflare.com"],
       objectSrc: ["'none'"],
+      scriptSrcAttr: ["'unsafe-inline'"],
       frameAncestors: ["'none'"],
     },
   },
@@ -122,6 +125,16 @@ const authSensitiveLimiter = rateLimit({
 });
 app.use('/api/auth/change-password', authSensitiveLimiter);
 
+// Rate limiting en creación de órdenes de venta
+const ventaOrderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  message: { success: false, error: 'Demasiados intentos. Intente en 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/venta/api/orders', ventaOrderLimiter);
+
 // Rate limiting general
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
@@ -139,6 +152,7 @@ app.use((req, _res, next) => {
 
 // Rutas públicas
 app.use('/verificar', verificarRouter); // verificación de cartón vía QR (sin auth)
+app.use('/venta', ventaRouter); // landing de venta online (sin auth)
 app.use('/api/auth', authRouter);
 app.use('/api/backup', backupProgressRouter); // progreso sin auth (jobId es secreto)
 
@@ -155,6 +169,7 @@ app.use('/api/backup', authenticate, backupRouter);
 app.use('/api/permissions', authenticate, permissionsRouter);
 app.use('/api/activity-log', authenticate, activityLogRouter);
 app.use('/api/mis-usuarios', misUsuariosRouter); // auth interno en el router
+app.use('/api/venta', authenticate, ventaAdminRouter); // admin de venta online
 
 // Ruta de salud
 app.get('/api/health', (_req, res) => {
@@ -385,9 +400,24 @@ async function start() {
 ║   API:        ${protocol}://0.0.0.0:${PORT}/api                ║
 ║   WebSocket:  ${wsProtocol}://0.0.0.0:${PORT}                  ║
 ║   Health:     ${protocol}://localhost:${PORT}/api/health        ║
+║   Venta:      ${protocol}://localhost:${PORT}/venta/:eventId   ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
       `);
+
+      // Background jobs: expirar órdenes de venta cada 5 minutos
+      import('./services/onlineOrderService.js').then(({ expireStaleOrders }) => {
+        setInterval(() => expireStaleOrders(), 5 * 60 * 1000);
+      });
+
+      // Yappy polling cada 60s (solo si está configurado)
+      if (process.env.YAPPY_ENABLED === 'true') {
+        import('./services/yappyService.js').then(({ getYappyClient }) => {
+          const yappy = getYappyClient();
+          setInterval(() => yappy.matchPendingOrders(), 60 * 1000);
+          console.log('✅ Yappy polling activado');
+        });
+      }
     });
   } catch (error) {
     console.error('❌ Error iniciando servidor:', error);
