@@ -72,7 +72,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   try {
     const pdfBuffer = readFileSync(pdfPath);
     attachments = [{
-      filename: `cartones_${data.order_code}.pdf`,
+      filename: `Mega_Bingo_TV_Mundial_${data.order_code}.pdf`,
       content: pdfBuffer.toString('base64'),
     }];
   } catch {

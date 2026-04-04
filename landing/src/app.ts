@@ -126,7 +126,11 @@ app.get('/', (_req, res) => {
   }
 });
 
-// Ruta /go para tracking de enlaces referidos
+// Ruta /go para tracking de enlaces referidos.
+// DEFAULT_EVENT_ID: env var (Railway) con el ID del evento activo al que
+// redirige cualquier escaneo. Si no está seteada, /go registra el scan
+// y redirige a '/' (fallback). Debe coincidir con un evento con
+// online_sales_config.is_enabled = TRUE, o la landing mostrará error.
 app.get('/go', (req, res) => {
   const data = captureRequestData(req);
   const defaultEvent = process.env.DEFAULT_EVENT_ID;

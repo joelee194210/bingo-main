@@ -70,6 +70,20 @@ function header(req: Request, name: string): string | null {
 
 const BOT_REGEX = /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|telegrambot|preview|headless|curl|wget|python-requests|axios|okhttp/i;
 
+// Keys del query string que redactamos antes de guardar en raw_query.
+// Defensa en profundidad: hoy no circulan tokens por /go, pero si algún
+// partner externo anexa uno al enlace, no queremos persistirlo en claro.
+const SENSITIVE_QUERY_KEYS = /token|key|secret|auth|password|session|sig|signature|pwd|apikey/i;
+
+function redactQueryString(raw: string): string {
+  return raw.split('&').map(pair => {
+    const eq = pair.indexOf('=');
+    if (eq < 0) return pair;
+    const key = pair.slice(0, eq);
+    return SENSITIVE_QUERY_KEYS.test(key) ? `${key}=[REDACTED]` : pair;
+  }).join('&');
+}
+
 export function captureRequestData(req: Request): TrackingData {
   const q = req.query as Record<string, unknown>;
 
@@ -118,7 +132,7 @@ export function captureRequestData(req: Request): TrackingData {
     utm_term:     firstString(q.utm_term),
     gclid:        firstString(q.gclid),
     fbclid:       firstString(q.fbclid),
-    raw_query:    req.originalUrl.includes('?') ? req.originalUrl.split('?')[1] : null,
+    raw_query:    req.originalUrl.includes('?') ? redactQueryString(req.originalUrl.split('?')[1]) : null,
 
     ip,
     ip_chain: ipChain,
