@@ -8,6 +8,7 @@ import { resolve } from 'path';
 import { initPool, getPool } from './database.js';
 import ventaRouter from './routes/venta.js';
 import { expireStaleOrders } from './services/orderService.js';
+import { captureRequestData } from './services/tracking.js';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -125,20 +126,48 @@ app.get('/', (_req, res) => {
   }
 });
 
-// Ruta /go para tracking de QR codes
+// Ruta /go para tracking de enlaces referidos
 app.get('/go', (req, res) => {
-  const source = (req.query.a as string) || 'direct';
+  const data = captureRequestData(req);
   const defaultEvent = process.env.DEFAULT_EVENT_ID;
 
   // Guardar escaneo en BD (fire-and-forget)
   getPool().query(
-    'INSERT INTO qr_scans (source, ip, user_agent, referer) VALUES ($1, $2, $3, $4)',
-    [source, req.ip, req.headers['user-agent'] || null, req.headers['referer'] || null]
+    `INSERT INTO qr_scans (
+      source, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+      gclid, fbclid, raw_query,
+      ip, ip_chain, country, region, city, timezone, lat, lon,
+      user_agent, browser_name, browser_version, os_name, os_version,
+      device_type, device_vendor, device_model, engine_name, is_bot, language,
+      ch_ua, ch_ua_mobile, ch_ua_platform,
+      dnt, sec_gpc,
+      referer, host, protocol, visitor_hash
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6,
+      $7, $8, $9,
+      $10, $11, $12, $13, $14, $15, $16, $17,
+      $18, $19, $20, $21, $22,
+      $23, $24, $25, $26, $27, $28,
+      $29, $30, $31,
+      $32, $33,
+      $34, $35, $36, $37
+    )`,
+    [
+      data.source, data.utm_source, data.utm_medium, data.utm_campaign, data.utm_content, data.utm_term,
+      data.gclid, data.fbclid, data.raw_query,
+      data.ip, data.ip_chain, data.country, data.region, data.city, data.timezone, data.lat, data.lon,
+      data.user_agent, data.browser_name, data.browser_version, data.os_name, data.os_version,
+      data.device_type, data.device_vendor, data.device_model, data.engine_name, data.is_bot, data.language,
+      data.ch_ua, data.ch_ua_mobile, data.ch_ua_platform,
+      data.dnt, data.sec_gpc,
+      data.referer, data.host, data.protocol, data.visitor_hash,
+    ]
   ).catch(err => console.error('Error guardando QR scan:', err));
 
-  console.log(`📊 QR scan: source=${source}, ip=${req.ip}`);
+  console.log(`📊 Scan: source=${data.source} country=${data.country ?? '?'} device=${data.device_type ?? '?'} bot=${data.is_bot} ip=${data.ip}`);
+
   if (defaultEvent) {
-    res.redirect(`/venta/${defaultEvent}?ref=${source}`);
+    res.redirect(`/venta/${defaultEvent}?ref=${encodeURIComponent(data.source)}`);
   } else {
     res.redirect('/');
   }
