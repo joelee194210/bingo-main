@@ -19,13 +19,6 @@ interface CardInfo {
   almacen_name: string | null;
 }
 
-interface DownloadResult {
-  card_code: string;
-  serial: string;
-  card_number: number;
-  download_url: string;
-}
-
 export default function DescargarCartonDigital() {
   const [serial, setSerial] = useState('');
   const [cardInfo, setCardInfo] = useState<CardInfo | null>(null);
@@ -48,28 +41,18 @@ export default function DescargarCartonDigital() {
 
   const downloadMutation = useMutation({
     mutationFn: async (s: string) => {
-      const res = await api.post<{ success: boolean; data: DownloadResult; error?: string }>('/venta/descargar-digital', { serial: s });
-      return res.data;
+      const resp = await api.post('/venta/descargar-digital', { serial: s }, { responseType: 'blob' });
+      return resp.data as Blob;
     },
-    onSuccess: async (data) => {
-      if (data.success && data.data.download_url) {
-        try {
-          // download_url viene como /api/export/..., quitar /api prefix para axios baseURL
-          const path = data.data.download_url.replace(/^\/api/, '');
-          const resp = await api.get(path, { responseType: 'blob' });
-          const blob = new Blob([resp.data], { type: 'application/pdf' });
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.setAttribute('download', `carton_${data.data.serial}.pdf`);
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          setTimeout(() => window.URL.revokeObjectURL(url), 200);
-        } catch {
-          setError('Error descargando el PDF');
-        }
-      }
+    onSuccess: (blob) => {
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `carton_${cardInfo?.serial || 'digital'}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(url), 200);
     },
     onError: (err: any) => {
       setError(err.response?.data?.error || 'Error generando PDF');

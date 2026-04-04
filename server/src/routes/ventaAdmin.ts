@@ -226,15 +226,14 @@ router.post('/descargar-digital', requirePermission('cards:sell'), async (req: R
     const username = (req as unknown as { user?: { username?: string } }).user?.username || 'admin';
     console.log(`📥 Descarga digital por ${username}: serial=${serial}, card_code=${card.card_code}`);
 
-    res.json({
-      success: true,
-      data: {
-        card_code: card.card_code,
-        serial: card.serial,
-        card_number: card.card_number,
-        download_url: `/api/export/download/${pdfPath.split('/').pop()}`,
-      },
-    });
+    // Servir PDF directamente
+    const { createReadStream, existsSync } = await import('fs');
+    if (!existsSync(pdfPath)) {
+      return res.status(500).json({ success: false, error: 'PDF generado pero no encontrado en disco' });
+    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="carton_${card.serial}.pdf"`);
+    createReadStream(pdfPath).pipe(res);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error generando PDF';
     console.error('Error descarga digital:', msg);
