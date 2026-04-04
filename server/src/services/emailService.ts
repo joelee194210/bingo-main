@@ -38,7 +38,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 20px; margin: 20px 0;">
     <h3 style="margin-top: 0; color: #0369a1;">Resumen de tu Orden</h3>
     <table style="width: 100%; border-collapse: collapse;">
-      <tr><td style="padding: 5px 0; color: #666;">Orden:</td><td style="padding: 5px 0; font-weight: bold;">${data.order_code}</td></tr>
+      <tr><td style="padding: 5px 0; color: #666;">Orden:</td><td style="padding: 5px 0; font-weight: bold;">${escapeHtml(data.order_code)}</td></tr>
       <tr><td style="padding: 5px 0; color: #666;">Cantidad:</td><td style="padding: 5px 0;">${data.quantity} cartones</td></tr>
       <tr><td style="padding: 5px 0; color: #666;">Total:</td><td style="padding: 5px 0; font-weight: bold; font-size: 1.2em; color: #059669;">$${data.total_amount.toFixed(2)}</td></tr>
     </table>
@@ -53,7 +53,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   <div style="background: #f8fafc; border-radius: 8px; padding: 15px; margin: 20px 0;">
     <p style="margin: 0 0 10px 0; font-weight: bold; color: #475569;">Codigos de tus cartones:</p>
     <p style="margin: 0; font-family: monospace; font-size: 14px; word-break: break-all; color: #64748b;">
-      ${data.card_codes.join(' &bull; ')}
+      ${data.card_codes.map(escapeHtml).join(' &bull; ')}
     </p>
   </div>
 

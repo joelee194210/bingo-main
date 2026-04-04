@@ -93,6 +93,11 @@ async function ensureQrScansTable(): Promise<void> {
   for (const [col, type] of extraCols) {
     await pool.query(`ALTER TABLE qr_scans ADD COLUMN IF NOT EXISTS ${col} ${type}`);
   }
+
+  // Atribución: persistir el ref/source que llegó vía /go → /venta/:id?ref=xxx
+  // en la orden final, para cruzar escaneos con compras reales.
+  await pool.query(`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS ref_source TEXT`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_online_orders_ref_source ON online_orders (ref_source)`);
 }
 
 export function getPool(): pg.Pool {

@@ -164,7 +164,7 @@ app.get('/go', (req, res) => {
     ]
   ).catch(err => console.error('Error guardando QR scan:', err));
 
-  console.log(`📊 Scan: source=${data.source} country=${data.country ?? '?'} device=${data.device_type ?? '?'} bot=${data.is_bot} ip=${data.ip}`);
+  console.log(`📊 Scan: source=${data.source} country=${data.country ?? '?'} device=${data.device_type ?? '?'} bot=${data.is_bot} visitor=${data.visitor_hash?.slice(0, 8) ?? '?'}`);
 
   if (defaultEvent) {
     res.redirect(`/venta/${defaultEvent}?ref=${encodeURIComponent(data.source)}`);

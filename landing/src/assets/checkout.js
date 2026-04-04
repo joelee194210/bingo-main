@@ -11,6 +11,7 @@
   if (!config) return;
   var PRICE = parseFloat(config.dataset.price);
   var EVENT_ID = parseInt(config.dataset.eventId, 10);
+  var REF_SOURCE = config.dataset.ref || null;
   var orderCode = null;
 
   function updatePrice() {
@@ -41,6 +42,7 @@
         buyer_email: document.getElementById('buyer_email').value,
         buyer_phone: document.getElementById('buyer_phone').value,
         buyer_cedula: '',
+        ref_source: REF_SOURCE,
       })
     })
     .then(function(r) { return r.json(); })

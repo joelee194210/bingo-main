@@ -62,7 +62,9 @@ router.get('/:eventId', async (req: Request, res: Response) => {
     const available = parseInt(availRows[0].count, 10);
 
     const yappy = getYappyButtonClient();
-    res.send(renderLanding(event, config, available, yappy.cdnUrl));
+    const refRaw = req.query.ref;
+    const ref = typeof refRaw === 'string' ? refRaw.slice(0, 120) : null;
+    res.send(renderLanding(event, config, available, yappy.cdnUrl, ref));
   } catch (err) {
     console.error('Error en landing:', err);
     res.status(500).send(renderError('Error del servidor'));
@@ -72,7 +74,7 @@ router.get('/:eventId', async (req: Request, res: Response) => {
 // POST /venta/api/orders - Crear orden
 router.post('/api/orders', async (req: Request, res: Response) => {
   try {
-    const { event_id, quantity, buyer_name, buyer_email, buyer_phone, buyer_cedula } = req.body;
+    const { event_id, quantity, buyer_name, buyer_email, buyer_phone, buyer_cedula, ref_source } = req.body;
 
     if (!event_id || !quantity || !buyer_name || !buyer_email || !buyer_phone) {
       return res.status(400).json({ success: false, error: 'Faltan campos requeridos' });
@@ -85,12 +87,17 @@ router.post('/api/orders', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Email no válido' });
     }
 
-    const order = await createOrder(parseInt(event_id, 10), qty, {
-      buyer_name: buyer_name.trim(),
-      buyer_email: buyer_email.trim().toLowerCase(),
-      buyer_phone: buyer_phone.trim(),
-      buyer_cedula: buyer_cedula?.trim() || undefined,
-    });
+    const order = await createOrder(
+      parseInt(event_id, 10),
+      qty,
+      {
+        buyer_name: buyer_name.trim(),
+        buyer_email: buyer_email.trim().toLowerCase(),
+        buyer_phone: buyer_phone.trim(),
+        buyer_cedula: buyer_cedula?.trim() || undefined,
+      },
+      typeof ref_source === 'string' ? ref_source : null
+    );
 
     res.json({
       success: true,
@@ -474,7 +481,8 @@ function renderLanding(
   event: { id: number; name: string },
   config: { price_per_card: number; min_cards_per_order: number; max_cards_per_order: number; landing_title: string | null; landing_description: string | null },
   available: number,
-  yappyCdnUrl: string
+  yappyCdnUrl: string,
+  ref: string | null
 ): string {
   const title = config.landing_title || event.name;
   const price = Number(config.price_per_card);
@@ -545,7 +553,7 @@ function renderLanding(
       </div>
     </div>
 
-    <div id="appConfig" data-price="${escapeHtml(String(price))}" data-event-id="${escapeHtml(String(event.id))}"></div>
+    <div id="appConfig" data-price="${escapeHtml(String(price))}" data-event-id="${escapeHtml(String(event.id))}" data-ref="${ref ? escapeHtml(ref) : ''}"></div>
     <script type="module" src="${yappyCdnUrl}"></script>`;
 
   return renderLayout(`Comprar Cartones - ${title}`, body);

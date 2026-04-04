@@ -26,6 +26,7 @@ export interface OnlineOrder {
   expires_at: string;
   created_at: string;
   updated_at: string;
+  ref_source: string | null;
 }
 
 export interface OnlineSalesConfig {
@@ -67,7 +68,8 @@ export async function getSalesConfig(eventId: number): Promise<OnlineSalesConfig
 export async function createOrder(
   eventId: number,
   quantity: number,
-  buyer: { buyer_name: string; buyer_email: string; buyer_phone: string; buyer_cedula?: string }
+  buyer: { buyer_name: string; buyer_email: string; buyer_phone: string; buyer_cedula?: string },
+  refSource?: string | null
 ): Promise<OnlineOrder> {
   const pool = getPool();
   const client = await pool.connect();
@@ -119,13 +121,14 @@ export async function createOrder(
 
     const { rows: orderRows } = await client.query<OnlineOrder>(
       `INSERT INTO online_orders (event_id, order_code, quantity, unit_price, total_amount,
-        buyer_name, buyer_email, buyer_phone, buyer_cedula, card_ids, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + INTERVAL '1 minute' * $11)
+        buyer_name, buyer_email, buyer_phone, buyer_cedula, card_ids, expires_at, ref_source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + INTERVAL '1 minute' * $11, $12)
        RETURNING *`,
       [
         eventId, orderCode, quantity, unitPrice, totalAmount,
         buyer.buyer_name, buyer.buyer_email, buyer.buyer_phone,
         buyer.buyer_cedula || null, cardIds, expiryMinutes,
+        refSource?.trim()?.slice(0, 120) || null,
       ]
     );
 
