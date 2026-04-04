@@ -90,7 +90,7 @@ function renderComingSoon(): string {
     </div>
     <div class="card">
       <h1>Próximamente</h1>
-      <p>Pronto podrá comprar sus cartones del <strong>Mega Bingo TV Mundial</strong> aquí.</p>
+      <p>Pronto podrá comprar sus cartones del <strong style="color:#dc2626;">Mega Bingo TV Mundial</strong> aquí.</p>
       <div class="badge">Venta digital en camino</div>
     </div>
   </div>

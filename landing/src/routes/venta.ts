@@ -460,7 +460,7 @@ function renderLayout(title: string, body: string): string {
     </div>
     ${body}
     <div class="footer">
-      <span>Vendedor autorizado del Mega Bingo TV Mundial</span>
+      <span>Vendedor autorizado del <strong style="color:#dc2626;">Mega Bingo TV Mundial</strong></span>
       <span style="font-weight:600;color:#64748b;margin-bottom:10px;">Yotumi S.A.</span>
       <img src="/assets/yotumi_logo.png" alt="Yotumi">
     </div>
