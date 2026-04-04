@@ -11,71 +11,26 @@ export async function initPool(): Promise<void> {
   await ensureQrScansTable();
 }
 
-// Auto-migración idempotente de qr_scans. Retención indefinida.
+// Auto-migración idempotente de qr_scans en 3 fases ordenadas:
+//   1. CREATE TABLE IF NOT EXISTS — solo garantiza que la tabla exista (base mínima).
+//   2. ALTER TABLE ADD COLUMN IF NOT EXISTS — añade todas las columnas modernas.
+//   3. CREATE INDEX IF NOT EXISTS — después de que las columnas existan.
+// Retención indefinida.
 async function ensureQrScansTable(): Promise<void> {
   const p = getPool();
+
+  // Fase 1 — tabla base. No incluye índices que dependan de columnas nuevas,
+  // porque si la tabla ya existe con schema viejo, el CREATE TABLE es no-op
+  // y los índices se intentarían crear sobre columnas inexistentes.
   await p.query(`
     CREATE TABLE IF NOT EXISTS qr_scans (
       id              BIGSERIAL PRIMARY KEY,
-
-      -- Atribución (query string)
       source          TEXT NOT NULL,
-      utm_source      TEXT,
-      utm_medium      TEXT,
-      utm_campaign    TEXT,
-      utm_content     TEXT,
-      utm_term        TEXT,
-      gclid           TEXT,
-      fbclid          TEXT,
-      raw_query       TEXT,
-
-      -- Red
       ip              INET,
-      ip_chain        TEXT,
-      country         TEXT,
-      region          TEXT,
-      city            TEXT,
-      timezone        TEXT,
-      lat             NUMERIC(8,4),
-      lon             NUMERIC(8,4),
-
-      -- Cliente (headers + parsed UA)
       user_agent      TEXT,
-      browser_name    TEXT,
-      browser_version TEXT,
-      os_name         TEXT,
-      os_version      TEXT,
-      device_type     TEXT,
-      device_vendor   TEXT,
-      device_model    TEXT,
-      engine_name     TEXT,
-      is_bot          BOOLEAN DEFAULT FALSE,
-      language        TEXT,
-
-      -- Client Hints
-      ch_ua           TEXT,
-      ch_ua_mobile    TEXT,
-      ch_ua_platform  TEXT,
-
-      -- Privacidad (señales del cliente, respetadas)
-      dnt             BOOLEAN DEFAULT FALSE,
-      sec_gpc         BOOLEAN DEFAULT FALSE,
-
-      -- Origen
       referer         TEXT,
-      host            TEXT,
-      protocol        TEXT,
-
-      -- Dedupe
-      visitor_hash    TEXT,
-
       created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-
-    CREATE INDEX IF NOT EXISTS idx_qr_scans_source_created ON qr_scans (source, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_qr_scans_created        ON qr_scans (created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_qr_scans_visitor        ON qr_scans (visitor_hash);
-    CREATE INDEX IF NOT EXISTS idx_qr_scans_country        ON qr_scans (country);
   `);
 
   // ALTER TABLE idempotente para instalaciones viejas que ya tenían qr_scans mínimo.
@@ -116,15 +71,28 @@ async function ensureQrScansTable(): Promise<void> {
     { col: 'protocol',        type: 'TEXT' },
     { col: 'visitor_hash',    type: 'TEXT' },
   ];
+  // Fase 2 — ALTER TABLE idempotente. Añade cualquier columna faltante.
   for (const { col, type, default: def } of extraCols) {
     const defaultClause = def ? ` DEFAULT ${def}` : '';
     await p.query(`ALTER TABLE qr_scans ADD COLUMN IF NOT EXISTS ${col} ${type}${defaultClause}`);
   }
 
+  // Fase 3 — índices. Ahora que todas las columnas existen, los índices
+  // se crean sin riesgo de referenciar columnas inexistentes.
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_qr_scans_source_created ON qr_scans (source, created_at DESC)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_qr_scans_created ON qr_scans (created_at DESC)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_qr_scans_visitor ON qr_scans (visitor_hash)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_qr_scans_country ON qr_scans (country)`);
+
   // Atribución: persistir el ref/source que llegó vía /go → /venta/:id?ref=xxx
-  // en la orden final, para cruzar escaneos con compras reales.
-  await p.query(`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS ref_source TEXT`);
-  await p.query(`CREATE INDEX IF NOT EXISTS idx_online_orders_ref_source ON online_orders (ref_source)`);
+  // en la orden final, para cruzar escaneos con compras reales. Tolerante a
+  // que online_orders no exista (ej. si landing corre contra DB separada).
+  try {
+    await p.query(`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS ref_source TEXT`);
+    await p.query(`CREATE INDEX IF NOT EXISTS idx_online_orders_ref_source ON online_orders (ref_source)`);
+  } catch (err) {
+    console.warn('⚠️ No se pudo migrar online_orders.ref_source:', (err as Error).message);
+  }
 }
 
 export function getPool(): pg.Pool {
