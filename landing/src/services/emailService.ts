@@ -46,7 +46,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   </div>
 
   <div style="text-align: center; margin: 30px 0;">
-    <a href="${downloadUrl}" style="display: inline-block; background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; text-decoration: none; padding: 16px 36px; border-radius: 10px; font-size: 16px; font-weight: bold;">
+    <a href="${downloadUrl}" style="display: inline-block; background: linear-gradient(135deg, #b91c1c, #dc2626); color: white; text-decoration: none; padding: 16px 36px; border-radius: 10px; font-size: 16px; font-weight: bold;">
       Descargar mis cartones
     </a>
   </div>
