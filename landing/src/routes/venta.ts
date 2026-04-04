@@ -515,7 +515,7 @@ function renderLanding(
         </div>
 
         <h2>Datos del comprador</h2>
-        <p style="color:#64748b;font-size:13px;margin-bottom:8px;line-height:1.5;">Para enviarte tus cartones en formato digital, por favor ingresa la siguiente informacion.</p>
+        <p style="color:#64748b;font-size:13px;margin-bottom:8px;line-height:1.5;">Para enviarte tus cartones en formato digital, por favor ingresa la siguiente información.</p>
 
         <label for="buyer_name">Nombre completo *</label>
         <input type="text" id="buyer_name" name="buyer_name" required placeholder="Juan Perez">
@@ -537,7 +537,7 @@ function renderLanding(
       <div id="paymentSection" style="display:none;margin-top:24px;text-align:center;">
         <p style="color:#64748b;font-size:14px;margin-bottom:8px;">Tu orden ha sido creada:</p>
         <div id="orderCodeDisplay" class="order-code" style="margin-bottom:16px;"></div>
-        <p style="color:#64748b;font-size:14px;margin-bottom:16px;">Haz clic en el boton de Yappy para pagar:</p>
+        <p style="color:#64748b;font-size:14px;margin-bottom:16px;">Haz clic en el botón de Yappy para pagar:</p>
         <div style="display:flex;justify-content:center;">
           <btn-yappy theme="darkBlue"></btn-yappy>
         </div>
@@ -588,16 +588,16 @@ function renderStatus(
         <strong>Instrucciones de pago:</strong>
         <ol>
           <li>Abre tu app de Yappy</li>
-          ${config?.yappy_qr_image ? '<li>Escanea el codigo QR de arriba</li>' : '<li>Busca nuestro comercio en Yappy</li>'}
+          ${config?.yappy_qr_image ? '<li>Escanea el código QR de arriba</li>' : '<li>Busca nuestro comercio en Yappy</li>'}
           <li>Ingresa el monto: <strong>$${Number(order.total_amount).toFixed(2)}</strong></li>
-          <li>En la descripcion/nota escribe: <strong>${escapeHtml(order.order_code)}</strong></li>
+          <li>En la descripción/nota escribe: <strong>${escapeHtml(order.order_code)}</strong></li>
           <li>Confirma el pago</li>
         </ol>
         ${config?.payment_instructions ? `<p style="margin-top:10px;">${escapeHtml(config.payment_instructions)}</p>` : ''}
       </div>
 
       <p style="text-align:center;font-size:13px;color:#94a3b8;margin-top:16px;">
-        Esta pagina se actualiza automaticamente. Tu orden expira a las ${expiresAt.toLocaleTimeString('es-PA')}.
+        Esta página se actualiza automáticamente. Tu orden expira a las ${expiresAt.toLocaleTimeString('es-PA')}.
       </p>
 
       <div id="appConfig" data-order-code="${escapeHtml(order.order_code)}"></div>
@@ -621,7 +621,7 @@ function renderStatus(
       </a>
 
       <p style="text-align:center;font-size:14px;color:#64748b;margin-top:16px;">
-        Tambien enviamos un enlace de descarga a tu email.
+        También enviamos un enlace de descarga a tu email.
       </p>`;
   } else if (order.status === 'expired') {
     statusHtml = `
@@ -630,7 +630,7 @@ function renderStatus(
       <div class="order-code">${escapeHtml(order.order_code)}</div>
 
       <p style="text-align:center;color:#64748b;margin:20px 0;">
-        Esta orden ha expirado porque no se recibio el pago a tiempo.
+        Esta orden ha expirado porque no se recibió el pago a tiempo.
       </p>
 
       <a href="/venta/${order.event_id}" class="btn btn-primary" style="text-decoration:none;text-align:center;">

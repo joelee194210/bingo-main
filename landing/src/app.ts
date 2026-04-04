@@ -89,8 +89,8 @@ function renderComingSoon(): string {
       <img src="/assets/logo.png" alt="Mega Bingo TV Mundial" id="siteLogo">
     </div>
     <div class="card">
-      <h1>Proximamente</h1>
-      <p>Pronto podra comprar sus cartones del <strong>Mega Bingo TV Mundial</strong> aqui.</p>
+      <h1>Próximamente</h1>
+      <p>Pronto podrá comprar sus cartones del <strong>Mega Bingo TV Mundial</strong> aquí.</p>
       <div class="badge">Venta digital en camino</div>
     </div>
   </div>

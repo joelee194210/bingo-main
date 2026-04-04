@@ -34,7 +34,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   </div>
 
   <p>Hola <strong>${escapeHtml(data.buyer_name)}</strong>,</p>
-  <p>Tu compra ha sido confirmada exitosamente. Ya eres parte del <strong>Mega Bingo TV Mundial</strong>. Tus cartones digitales estan listos para descargar.</p>
+  <p>Tu compra ha sido confirmada exitosamente. Ya eres parte del <strong>Mega Bingo TV Mundial</strong>. Tus cartones digitales están listos para descargar.</p>
 
   <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 20px; margin: 20px 0;">
     <h3 style="margin-top: 0; color: #0369a1;">Detalle de tu compra</h3>
@@ -52,7 +52,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   </div>
 
   <p style="text-align: center; color: #64748b; font-size: 13px;">
-    Tambien encontraras tus cartones adjuntos en este correo como archivo PDF.
+    También encontrarás tus cartones adjuntos en este correo como archivo PDF.
   </p>
 
   <div style="background: #f8fafc; border-radius: 8px; padding: 15px; margin: 20px 0;">
@@ -96,7 +96,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
       body: JSON.stringify({
         from,
         to: [data.buyer_email],
-        subject: `Mega Bingo TV Mundial - Tus cartones estan listos (${data.order_code})`,
+        subject: `Mega Bingo TV Mundial - Tus cartones están listos (${data.order_code})`,
         html,
         attachments,
       }),
