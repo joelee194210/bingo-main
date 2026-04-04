@@ -456,11 +456,11 @@ function renderLayout(title: string, body: string): string {
 
   <div class="container">
     <div class="logo">
-      <img src="/assets/logo.png" alt="Mega Bingo Mundial TV" id="siteLogo">
+      <img src="/assets/logo.png" alt="Mega Bingo TV Mundial" id="siteLogo">
     </div>
     ${body}
     <div class="footer">
-      <span>Vendedor autorizado del <strong style="color:#dc2626;">Mega Bingo Mundial TV</strong></span>
+      <span>Vendedor autorizado del <strong style="color:#dc2626;">Mega Bingo TV Mundial</strong></span>
       <span style="font-weight:600;color:#64748b;margin-bottom:10px;">Yotumi S.A.</span>
       <img src="/assets/yotumi_logo.png" alt="Yotumi">
     </div>

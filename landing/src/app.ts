@@ -69,7 +69,7 @@ function renderComingSoon(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mega Bingo Mundial TV</title>
+  <title>Mega Bingo TV Mundial</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -87,11 +87,11 @@ function renderComingSoon(): string {
 <body>
   <div class="container">
     <div class="logo">
-      <img src="/assets/logo.png" alt="Mega Bingo Mundial TV" id="siteLogo">
+      <img src="/assets/logo.png" alt="Mega Bingo TV Mundial" id="siteLogo">
     </div>
     <div class="card">
       <h1>Próximamente</h1>
-      <p>Pronto podrá comprar sus cartones del <strong style="color:#dc2626;">Mega Bingo Mundial TV</strong> aquí.</p>
+      <p>Pronto podrá comprar sus cartones del <strong style="color:#dc2626;">Mega Bingo TV Mundial</strong> aquí.</p>
       <div class="badge">Venta digital en camino</div>
     </div>
   </div>
@@ -122,7 +122,7 @@ app.get('/', (_req, res) => {
   if (defaultEvent) {
     res.redirect(`/venta/${defaultEvent}`);
   } else {
-    res.status(200).send('Mega Bingo Mundial TV');
+    res.status(200).send('Mega Bingo TV Mundial');
   }
 });
 
@@ -181,7 +181,7 @@ async function start() {
     app.listen(PORT, () => {
       console.log(`
 ╔═══════════════════════════════════════════╗
-║  🎱 BINGO LANDING — Mega Bingo Mundial TV   ║
+║  🎱 BINGO LANDING — Mega Bingo TV Mundial   ║
 ║  Puerto: ${PORT}                            ║
 ║  Venta:  http://localhost:${PORT}/venta/:id ║
 ╚═══════════════════════════════════════════╝
