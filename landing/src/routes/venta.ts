@@ -397,7 +397,7 @@ function renderLayout(title: string, body: string): string {
     .card { background: white; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.15); padding: 32px; margin-top: 12px; position: relative; overflow: hidden; }
     .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6); }
     .rainbow { display: none; }
-    h1 { font-size: 22px; font-weight: 800; color: #1e293b; text-align: center; letter-spacing: -0.5px; }
+    h1 { font-size: 22px; font-weight: 800; color: #dc2626; text-align: center; letter-spacing: -0.5px; }
     h2 { font-size: 16px; font-weight: 600; color: #334155; margin-bottom: 16px; }
     .subtitle { text-align: center; color: #64748b; margin-top: 8px; font-size: 14px; line-height: 1.5; }
     label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 6px; margin-top: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
