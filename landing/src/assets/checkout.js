@@ -1,4 +1,12 @@
 (function() {
+  // Logo fallback (hide if image fails to load)
+  var logo = document.getElementById('siteLogo');
+  if (logo) logo.addEventListener('error', function() { this.style.display = 'none'; });
+
+  // Retry button (no-stock page)
+  var retryBtn = document.getElementById('retryBtn');
+  if (retryBtn) retryBtn.addEventListener('click', function() { location.reload(); });
+
   var config = document.getElementById('appConfig');
   if (!config) return;
   var PRICE = parseFloat(config.dataset.price);

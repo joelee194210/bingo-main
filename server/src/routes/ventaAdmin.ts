@@ -49,10 +49,24 @@ router.put('/config/:eventId', requirePermission('cards:sell'), async (req: Requ
 // GET /api/venta/orders
 router.get('/orders', requirePermission('cards:sell'), async (req: Request, res: Response) => {
   try {
-    const { event_id, status, limit, offset } = req.query;
+    const { event_id, status, search, date_from, date_to, limit, offset } = req.query;
+    const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+    if (date_from && !ISO_DATE.test(date_from as string)) {
+      return res.status(400).json({ success: false, error: 'date_from debe ser YYYY-MM-DD' });
+    }
+    if (date_to && !ISO_DATE.test(date_to as string)) {
+      return res.status(400).json({ success: false, error: 'date_to debe ser YYYY-MM-DD' });
+    }
+    const VALID_STATUSES = ['pending_payment','payment_confirmed','cards_assigned','completed','expired','failed','cancelled'];
+    if (status && !VALID_STATUSES.includes(status as string)) {
+      return res.status(400).json({ success: false, error: 'status invalido' });
+    }
     const result = await listOrders({
       event_id: event_id ? parseInt(event_id as string, 10) : undefined,
       status: status as string | undefined,
+      search: search as string | undefined,
+      date_from: date_from as string | undefined,
+      date_to: date_to as string | undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
       offset: offset ? parseInt(offset as string, 10) : undefined,
     });

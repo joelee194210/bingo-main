@@ -56,7 +56,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   </p>
 
   <div style="background: #f8fafc; border-radius: 8px; padding: 15px; margin: 20px 0;">
-    <p style="margin: 0 0 10px 0; font-weight: bold; color: #475569;">Codigos de tus cartones:</p>
+    <p style="margin: 0 0 10px 0; font-weight: bold; color: #475569;">Seriales de tus cartones:</p>
     <p style="margin: 0; font-family: monospace; font-size: 14px; word-break: break-all; color: #64748b;">
       ${data.card_codes.join(' &bull; ')}
     </p>

@@ -54,15 +54,18 @@ export default function DescargarCartonDigital() {
     onSuccess: async (data) => {
       if (data.success && data.data.download_url) {
         try {
-          const blob = await api.get(data.data.download_url, { responseType: 'blob' });
-          const url = window.URL.createObjectURL(new Blob([blob.data]));
+          // download_url viene como /api/export/..., quitar /api prefix para axios baseURL
+          const path = data.data.download_url.replace(/^\/api/, '');
+          const resp = await api.get(path, { responseType: 'blob' });
+          const blob = new Blob([resp.data], { type: 'application/pdf' });
+          const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
           link.setAttribute('download', `carton_${data.data.serial}.pdf`);
           document.body.appendChild(link);
           link.click();
           link.remove();
-          window.URL.revokeObjectURL(url);
+          setTimeout(() => window.URL.revokeObjectURL(url), 200);
         } catch {
           setError('Error descargando el PDF');
         }

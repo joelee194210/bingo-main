@@ -337,34 +337,70 @@ export async function expireStaleOrders(): Promise<number> {
 export async function listOrders(filters: {
   event_id?: number;
   status?: string;
+  search?: string;
+  date_from?: string;
+  date_to?: string;
   limit?: number;
   offset?: number;
-}): Promise<{ orders: OnlineOrder[]; total: number }> {
+}): Promise<{ orders: OnlineOrder[]; total: number; summary: { total_orders: number; total_completed: number; total_amount: number; total_cards: number } }> {
   const pool = getPool();
   const conditions: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
 
   if (filters.event_id) {
-    conditions.push(`event_id = $${idx++}`);
+    conditions.push(`o.event_id = $${idx++}`);
     values.push(filters.event_id);
   }
   if (filters.status) {
-    conditions.push(`status = $${idx++}`);
+    conditions.push(`o.status = $${idx++}`);
     values.push(filters.status);
+  }
+  if (filters.search) {
+    conditions.push(`(o.order_code ILIKE $${idx} OR o.buyer_name ILIKE $${idx} OR o.buyer_email ILIKE $${idx} OR o.buyer_phone ILIKE $${idx} OR o.yappy_transaction_id ILIKE $${idx})`);
+    values.push(`%${filters.search}%`);
+    idx++;
+  }
+  if (filters.date_from) {
+    conditions.push(`o.created_at >= $${idx++}::date`);
+    values.push(filters.date_from);
+  }
+  if (filters.date_to) {
+    conditions.push(`o.created_at < ($${idx++}::date + INTERVAL '1 day')`);
+    values.push(filters.date_to);
   }
 
   const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
-  const limit = filters.limit || 50;
-  const offset = filters.offset || 0;
+  const limit = Math.min(filters.limit || 50, 200);
+  const offset = Math.max(0, filters.offset || 0);
 
-  const countResult = await pool.query(`SELECT COUNT(*) FROM online_orders ${where}`, values);
-  const total = parseInt(countResult.rows[0].count, 10);
+  // Summary stats (incluye total count)
+  const summaryResult = await pool.query(
+    `SELECT
+       COUNT(*) as total_orders,
+       COUNT(*) FILTER (WHERE o.status = 'completed') as total_completed,
+       COALESCE(SUM(o.total_amount) FILTER (WHERE o.status = 'completed'), 0) as total_amount,
+       COALESCE(SUM(o.quantity) FILTER (WHERE o.status = 'completed'), 0) as total_cards
+     FROM online_orders o ${where}`,
+    values
+  );
+  const summary = {
+    total_orders: parseInt(summaryResult.rows[0].total_orders, 10),
+    total_completed: parseInt(summaryResult.rows[0].total_completed, 10),
+    total_amount: parseFloat(summaryResult.rows[0].total_amount),
+    total_cards: parseInt(summaryResult.rows[0].total_cards, 10),
+  };
 
-  const { rows } = await pool.query<OnlineOrder>(
-    `SELECT * FROM online_orders ${where} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+  const total = summary.total_orders;
+
+  const { rows } = await pool.query<OnlineOrder & { event_name: string; card_serials: string[] }>(
+    `SELECT o.*, e.name as event_name,
+       COALESCE((SELECT array_agg(c.serial ORDER BY c.card_number) FROM cards c WHERE c.id = ANY(o.card_ids)), '{}') as card_serials
+     FROM online_orders o
+     LEFT JOIN events e ON e.id = o.event_id
+     ${where} ORDER BY o.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
     [...values, limit, offset]
   );
 
-  return { orders: rows, total };
+  return { orders: rows, total, summary };
 }

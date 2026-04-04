@@ -30,6 +30,7 @@ import {
   KeyRound,
   Loader2,
   FileDown,
+  Globe,
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -70,7 +71,13 @@ const navGroups = [
       { to: '/cards/activate', icon: ScanLine, label: 'Activacion', permission: 'cards:sell' },
       { to: '/cards/validate', icon: CheckCircle, label: 'Validar', permission: 'cards:read' },
       { to: '/promo', icon: Gift, label: 'Raspadito', permission: 'cards:create' },
-      { to: '/descargar-digital', icon: FileDown, label: 'Descargar Digital', permission: 'cards:sell' },
+    ],
+  },
+  {
+    label: 'Venta Digital',
+    items: [
+      { to: '/ventas-digitales', icon: Globe, label: 'Ventas Digitales', permission: 'cards:sell' },
+      { to: '/descargar-digital', icon: FileDown, label: 'Descargar Carton', permission: 'cards:sell' },
     ],
   },
   {

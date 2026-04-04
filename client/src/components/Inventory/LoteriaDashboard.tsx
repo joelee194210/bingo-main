@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getEvents, getLoteriaDashboard } from '@/services/api';
-import { CHART_COLORS as COLORS, PIE_SOLD_COLOR, PIE_AVAILABLE_COLOR } from '@/lib/chart-colors';
+import { CHART_COLORS as COLORS, PIE_SOLD_COLOR, PIE_AVAILABLE_COLOR, CHART_GRID_COLOR } from '@/lib/chart-colors';
 
 function formatNumber(n: number): string {
   return n.toLocaleString('es-DO');
@@ -178,7 +178,7 @@ export default function LoteriaDashboard() {
                           <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
                       <XAxis dataKey="fecha" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
                       <Tooltip
@@ -253,7 +253,7 @@ export default function LoteriaDashboard() {
                 <CardContent>
                   <ResponsiveContainer width="100%" height={Math.max(280, agenciasBarData.length * 45)}>
                     <BarChart data={agenciasBarData} layout="vertical" margin={{ left: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} horizontal={false} />
                       <XAxis type="number" tick={{ fontSize: 11 }} />
                       <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
                       <Tooltip
@@ -261,7 +261,7 @@ export default function LoteriaDashboard() {
                         formatter={(value: any, name: any) => [formatNumber(Number(value)), name === 'vendidos' ? 'Vendidos' : 'Disponibles']}
                       />
                       <Bar dataKey="vendidos" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} name="Vendidos" />
-                      <Bar dataKey="disponibles" stackId="a" fill="#e2e8f0" radius={[0, 4, 4, 0]} name="Disponibles" />
+                      <Bar dataKey="disponibles" stackId="a" fill={PIE_AVAILABLE_COLOR} radius={[0, 4, 4, 0]} name="Disponibles" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>

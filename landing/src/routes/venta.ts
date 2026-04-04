@@ -7,7 +7,7 @@ import { sendPurchaseEmail } from '../services/emailService.js';
 import { createReadStream, existsSync } from 'fs';
 
 // Token de confirmación firmado — previene confirmaciones sin pago real
-const CONFIRM_SECRET = process.env.CONFIRM_SECRET || 'megabingo-confirm-2026';
+const CONFIRM_SECRET: string = process.env.CONFIRM_SECRET ?? (() => { console.error('❌ CONFIRM_SECRET env var es requerida'); process.exit(1); })();
 function generateConfirmToken(orderCode: string, transactionId: string): string {
   return createHmac('sha256', CONFIRM_SECRET).update(orderCode + ':' + transactionId).digest('hex');
 }
@@ -180,8 +180,8 @@ router.post('/api/yappy/confirm-success', async (req: Request, res: Response) =>
     // Email en background (solo si fue una confirmación nueva, no duplicada)
     if (confirmed.pdf_path && confirmed.download_token && !(confirmed as any)._alreadyConfirmed) {
       const pool = getPool();
-      const { rows: cards } = await pool.query<{ card_code: string }>(
-        'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
+      const { rows: cards } = await pool.query<{ card_code: string; serial: string }>(
+        'SELECT card_code, serial FROM cards WHERE id = ANY($1) ORDER BY card_number',
         [confirmed.card_ids]
       );
 
@@ -192,7 +192,7 @@ router.post('/api/yappy/confirm-success', async (req: Request, res: Response) =>
         quantity: confirmed.quantity,
         total_amount: Number(confirmed.total_amount),
         download_token: confirmed.download_token,
-        card_codes: cards.map(c => c.card_code),
+        card_codes: cards.map(c => c.serial || c.card_code),
       }, confirmed.pdf_path).then(sent => {
         if (sent) {
           pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
@@ -338,15 +338,15 @@ router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
       const confirmed = await confirmPayment(
         order.id,
         'yappy_ipn',
-        params.orderId || undefined,
+        params.Hash || undefined,
         { source: 'yappy_ipn', status: params.status, hash: params.Hash, domain: params.domain, orderId: params.orderId }
       );
 
-      // Enviar email en background
-      if (confirmed.pdf_path && confirmed.download_token) {
+      // Enviar email en background (solo si no fue ya confirmada por eventSuccess)
+      if (confirmed.pdf_path && confirmed.download_token && !(confirmed as any)._alreadyConfirmed) {
         const pool = getPool();
-        const { rows: cards } = await pool.query<{ card_code: string }>(
-          'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
+        const { rows: cards } = await pool.query<{ card_code: string; serial: string }>(
+          'SELECT card_code, serial FROM cards WHERE id = ANY($1) ORDER BY card_number',
           [confirmed.card_ids]
         );
 
@@ -357,7 +357,7 @@ router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
           quantity: confirmed.quantity,
           total_amount: Number(confirmed.total_amount),
           download_token: confirmed.download_token,
-          card_codes: cards.map(c => c.card_code),
+          card_codes: cards.map(c => c.serial || c.card_code),
         }, confirmed.pdf_path).then(sent => {
           if (sent) {
             pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
@@ -456,7 +456,7 @@ function renderLayout(title: string, body: string): string {
 
   <div class="container">
     <div class="logo">
-      <img src="/assets/logo.png" alt="Mega Bingo Digital" onerror="this.style.display='none'">
+      <img src="/assets/logo.png" alt="Mega Bingo Digital" id="siteLogo">
     </div>
     ${body}
     <div class="footer">
@@ -465,6 +465,7 @@ function renderLayout(title: string, body: string): string {
       <img src="/assets/yotumi_logo.png" alt="Yotumi">
     </div>
   </div>
+  <script src="/assets/checkout.js"></script>
 </body>
 </html>`;
 }
@@ -488,7 +489,7 @@ function renderLanding(
         <h2 style="margin-top:16px;">Estamos actualizando nuestro inventario</h2>
         <p style="color:#64748b;margin-top:12px;line-height:1.6;">En este momento no hay cartones disponibles.<br>Vuelve a intentarlo en unos minutos.</p>
       </div>
-      <button onclick="location.reload()" class="btn btn-primary">Reintentar</button>
+      <button id="retryBtn" class="btn btn-primary">Reintentar</button>
     </div>`;
     return renderLayout(`${title} - No disponible`, body);
   }
@@ -544,9 +545,8 @@ function renderLanding(
       </div>
     </div>
 
-    <div id="appConfig" data-price="${price}" data-event-id="${event.id}"></div>
-    <script type="module" src="${yappyCdnUrl}"></script>
-    <script src="/assets/checkout.js"></script>`;
+    <div id="appConfig" data-price="${escapeHtml(String(price))}" data-event-id="${escapeHtml(String(event.id))}"></div>
+    <script type="module" src="${yappyCdnUrl}"></script>`;
 
   return renderLayout(`Comprar Cartones - ${title}`, body);
 }
@@ -612,7 +612,7 @@ function renderStatus(
       <div class="info-row"><span class="info-label">Total pagado:</span><span class="info-value" style="color:#059669;">$${Number(order.total_amount).toFixed(2)}</span></div>
       <div class="info-row"><span class="info-label">Comprador:</span><span class="info-value">${escapeHtml(order.buyer_name)}</span></div>
 
-      <a href="/venta/descargar/${order.download_token}" class="btn btn-success" style="text-decoration:none;text-align:center;">
+      <a href="/venta/descargar/${escapeHtml(order.download_token || '')}" class="btn btn-success" style="text-decoration:none;text-align:center;">
         Descargar Cartones (PDF)
       </a>
 
