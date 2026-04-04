@@ -7,6 +7,7 @@ import {
 } from '../services/onlineOrderService.js';
 import { sendPurchaseEmail } from '../services/emailService.js';
 import { generateCardsPDF } from '../services/exportService.js';
+import { generateDigitalPDF } from '../services/digitalPdfService.js';
 
 const router = Router();
 
@@ -214,14 +215,15 @@ router.post('/descargar-digital', requirePermission('cards:sell'), async (req: R
     );
     const useFreeCenter = eventRows[0]?.use_free_center ?? true;
 
-    // Generar PDF con el formato estándar del server
-    const pdfPath = await generateCardsPDF([{
+    // Generar PDF con plantilla oficial (mismo formato que venta digital)
+    const pdfPath = await generateDigitalPDF([{
       cardNumber: card.card_number,
       cardCode: card.card_code,
       validationCode: card.validation_code,
+      serial: card.serial,
       numbers: card.numbers,
       useFreeCenter,
-    }], { cardsPerPage: 1 });
+    }]);
 
     const username = (req as unknown as { user?: { username?: string } }).user?.username || 'admin';
     console.log(`📥 Descarga digital por ${username}: serial=${serial}, card_code=${card.card_code}`);

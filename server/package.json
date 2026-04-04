@@ -6,7 +6,7 @@
   "main": "dist/app.js",
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=4096' tsx watch src/app.ts",
-    "build": "tsc && cp src/database/*.sql dist/database/ && cp -f ../client/public/logo.png ../logo.png 2>/dev/null || true",
+    "build": "tsc && cp src/database/*.sql dist/database/ && cp -r src/assets dist/assets 2>/dev/null || true && cp -f ../client/public/logo.png ../logo.png 2>/dev/null || true",
     "start": "node dist/app.js",
     "db:init": "tsx src/database/init.ts"
   },
