@@ -456,11 +456,11 @@ function renderLayout(title: string, body: string): string {
 
   <div class="container">
     <div class="logo">
-      <img src="/assets/logo.png" alt="Mega Bingo Digital" id="siteLogo">
+      <img src="/assets/logo.png" alt="Mega Bingo Mundial TV" id="siteLogo">
     </div>
     ${body}
     <div class="footer">
-      <span>Vendedor autorizado del <strong style="color:#dc2626;">Mega Bingo TV Mundial</strong></span>
+      <span>Vendedor autorizado del <strong style="color:#dc2626;">Mega Bingo Mundial TV</strong></span>
       <span style="font-weight:600;color:#64748b;margin-bottom:10px;">Yotumi S.A.</span>
       <img src="/assets/yotumi_logo.png" alt="Yotumi">
     </div>
@@ -505,13 +505,13 @@ function renderLanding(
         <select id="quantity" name="quantity">
           ${Array.from({ length: maxOrder - config.min_cards_per_order + 1 }, (_, i) => {
             const n = i + config.min_cards_per_order;
-            return `<option value="${n}">${n} carton${n > 1 ? 'es' : ''}</option>`;
+            return `<option value="${n}">${n} cartón${n > 1 ? 'es' : ''}</option>`;
           }).join('')}
         </select>
 
         <div class="price-display">
           <div class="amount" id="totalPrice">$${(config.min_cards_per_order * price).toFixed(2)}</div>
-          <div class="detail" id="priceDetail">${config.min_cards_per_order} ${config.min_cards_per_order > 1 ? 'cartones' : 'carton'} x $${price.toFixed(2)} c/u</div>
+          <div class="detail" id="priceDetail">${config.min_cards_per_order} ${config.min_cards_per_order > 1 ? 'cartones' : 'cartón'} x $${price.toFixed(2)} c/u</div>
         </div>
 
         <h2>Datos del comprador</h2>
@@ -617,7 +617,7 @@ function renderStatus(
       </a>
 
       <a href="/venta/${order.event_id}" class="btn btn-primary" style="text-decoration:none;text-align:center;margin-top:12px;">
-        Comprar mas cartones
+        Comprar más cartones
       </a>
 
       <p style="text-align:center;font-size:14px;color:#64748b;margin-top:16px;">

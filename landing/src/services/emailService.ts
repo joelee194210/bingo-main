@@ -29,12 +29,12 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
   <div style="text-align: center; margin-bottom: 30px;">
-    <h1 style="color: #dc2626; margin-bottom: 5px;">Mega Bingo TV Mundial</h1>
+    <h1 style="color: #dc2626; margin-bottom: 5px;">Mega Bingo Mundial TV</h1>
     <div style="height: 4px; background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6); border-radius: 2px;"></div>
   </div>
 
   <p>Hola <strong>${escapeHtml(data.buyer_name)}</strong>,</p>
-  <p>Tu compra ha sido confirmada exitosamente. Ya eres parte del <strong style="color:#dc2626;">Mega Bingo TV Mundial</strong>. Tus cartones digitales están listos para descargar.</p>
+  <p>Tu compra ha sido confirmada exitosamente. Ya eres parte del <strong style="color:#dc2626;">Mega Bingo Mundial TV</strong>. Tus cartones digitales están listos para descargar.</p>
 
   <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 20px; margin: 20px 0;">
     <h3 style="margin-top: 0; color: #0369a1;">Detalle de tu compra</h3>
@@ -69,7 +69,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   </div>
 
   <p style="color: #94a3b8; font-size: 11px; margin-top: 30px; text-align: center;">
-    Mega Bingo TV Mundial &copy; ${new Date().getFullYear()} | Vendedor autorizado: Yotumi S.A.
+    Mega Bingo Mundial TV &copy; ${new Date().getFullYear()} | Vendedor autorizado: Yotumi S.A.
   </p>
 </body>
 </html>`;
@@ -96,7 +96,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
       body: JSON.stringify({
         from,
         to: [data.buyer_email],
-        subject: `Mega Bingo TV Mundial - Tus cartones están listos (${data.order_code})`,
+        subject: `Mega Bingo Mundial TV - Tus cartones están listos (${data.order_code})`,
         html,
         attachments,
       }),
