@@ -1,3 +1,13 @@
+/**
+ * @deprecated CR-L15: este archivo es dead code — implementación antigua
+ * basada en `better-sqlite3`. Fue reemplazado por `inventarioModule.ts`
+ * (PostgreSQL). Verificado 2026-04-05: cero imports en el proyecto.
+ *
+ * Se mantiene en disco por ahora para preservar historia; puede eliminarse
+ * con `rm server/src/services/inventoryService.ts` sin impacto funcional.
+ * Eliminarlo también permitirá remover `better-sqlite3` de package.json
+ * si no lo usa nada más.
+ */
 import type Database from 'better-sqlite3';
 import { generateCajaCode, generateLoteCode, generateEnvioCode, generateCentroCode, identifyCodeType } from './qrService.js';
 

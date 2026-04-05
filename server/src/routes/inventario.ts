@@ -40,7 +40,7 @@ router.get('/almacenes', requirePermission('inventory:read'), async (req, res) =
     const pool = getPool();
     const eventId = parseInt(req.query.event_id as string, 10);
     if (!eventId) return res.status(400).json({ success: false, error: 'event_id requerido' });
-    const soloAgencias = (req as any).user?.role === 'loteria';
+    const soloAgencias = req.user?.role === 'loteria';
     const data = await inv.getAlmacenes(pool, eventId, soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
@@ -51,7 +51,7 @@ router.get('/almacenes', requirePermission('inventory:read'), async (req, res) =
 router.get('/almacenes/tree/:eventId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const soloAgencias = (req as any).user?.role === 'loteria';
+    const soloAgencias = req.user?.role === 'loteria';
     const data = await inv.getAlmacenTree(pool, parseInt(req.params.eventId as string, 10), soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
@@ -87,7 +87,7 @@ router.get('/almacenes/:id', requirePermission('inventory:read'), async (req, re
     const data = await inv.getAlmacen(pool, parseInt(req.params.id as string, 10));
     if (!data) return res.status(404).json({ success: false, error: 'Almacen no encontrado' });
     // Loteria solo puede ver almacenes que son agencias
-    if ((req as any).user?.role === 'loteria' && !data.es_agencia_loteria) {
+    if (req.user?.role === 'loteria' && !data.es_agencia_loteria) {
       return res.status(403).json({ success: false, error: 'No tienes acceso a este almacen' });
     }
     res.json({ success: true, data });
@@ -127,7 +127,7 @@ router.post('/crear-usuario', requirePermission('inventory:users'), async (req, 
 
     const user = await createUser(pool, { username, password, full_name, email, role: 'inventory' });
 
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     logActivity(pool, auditFromReq(req, 'inventory_user_created', 'users', {
       created_user: username, created_by: reqUser?.username,
     }));
@@ -172,7 +172,7 @@ router.post('/almacenes/:id/usuarios', requirePermission('inventory:users'), asy
 router.get('/usuarios/:eventId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const soloAgencias = (req as any).user?.role === 'loteria';
+    const soloAgencias = req.user?.role === 'loteria';
     const data = await inv.getInventarioUsuarios(pool, parseInt(req.params.eventId as string, 10), soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
@@ -193,7 +193,7 @@ router.put('/almacenes/:id/usuarios/:userId', requirePermission('inventory:users
       if (pwError) return res.status(400).json({ success: false, error: pwError });
       const newHash = await hashPassword(password);
       await pool.query('UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [newHash, userId]);
-      const reqUser = (req as any).user;
+      const reqUser = req.user!;
       logActivity(pool, auditFromReq(req, 'inventory_user_password_reset', 'users', {
         target_user_id: userId, reset_by: reqUser?.username,
       }));
@@ -295,7 +295,7 @@ router.get('/resumen/:eventId', requirePermission('inventory:read'), async (req,
   try {
     const pool = getPool();
     const almacenId = req.query.almacen_id ? parseInt(req.query.almacen_id as string, 10) : undefined;
-    const soloAgencias = (req as any).user?.role === 'loteria';
+    const soloAgencias = req.user?.role === 'loteria';
     const data = await inv.getResumenInventario(pool, parseInt(req.params.eventId as string, 10), almacenId, soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
@@ -307,7 +307,7 @@ router.get('/resumen/:eventId', requirePermission('inventory:read'), async (req,
 router.get('/cajas-disponibles/:eventId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const soloAgencias = (req as any).user?.role === 'loteria';
+    const soloAgencias = req.user?.role === 'loteria';
     const data = await inv.getCajasDisponibles(pool, parseInt(req.params.eventId as string, 10), soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
@@ -319,7 +319,7 @@ router.get('/cajas-disponibles/:eventId', requirePermission('inventory:read'), a
 router.post('/cargar-por-referencia', requirePermission('inventory:move'), async (req, res) => {
   try {
     const pool = getPool();
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     const userId = reqUser.id;
     const { event_id, almacen_id, tipo_entidad, referencia, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body;
     if (!event_id || !almacen_id || !tipo_entidad || !referencia) {
@@ -341,7 +341,7 @@ router.post('/cargar-por-referencia', requirePermission('inventory:move'), async
 router.post('/cargar-inventario', requirePermission('inventory:move'), async (req, res) => {
   try {
     const pool = getPool();
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     const userId = reqUser.id;
     const { event_id, almacen_id, caja_ids } = req.body;
     if (!event_id || !almacen_id || !caja_ids?.length) {
@@ -362,7 +362,7 @@ router.get('/cajas/:eventId', requirePermission('inventory:read'), async (req, r
   try {
     const pool = getPool();
     const almacenId = req.query.almacen_id ? parseInt(req.query.almacen_id as string, 10) : undefined;
-    const soloAgencias = (req as any).user?.role === 'loteria';
+    const soloAgencias = req.user?.role === 'loteria';
     const data = await inv.getCajas(pool, parseInt(req.params.eventId as string, 10), almacenId, soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
@@ -373,7 +373,7 @@ router.get('/cajas/:eventId', requirePermission('inventory:read'), async (req, r
 router.get('/lotes/:eventId', requirePermission('inventory:read'), async (req, res) => {
   try {
     const pool = getPool();
-    const soloAgencias = (req as any).user?.role === 'loteria';
+    const soloAgencias = req.user?.role === 'loteria';
     const data = await inv.getLotes(pool, parseInt(req.params.eventId as string, 10), soloAgencias);
     res.json({ success: true, data });
   } catch (error) {
@@ -386,7 +386,7 @@ router.get('/libretas-sueltas/:eventId/:almacenId', requirePermission('inventory
   try {
     const pool = getPool();
     const almacenId = parseInt(req.params.almacenId as string, 10);
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     if (!await verificarAccesoAlmacen(pool, reqUser.id, reqUser.role, [almacenId])) {
       return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
     }
@@ -402,7 +402,7 @@ router.get('/cartones-sueltos/:eventId/:almacenId', requirePermission('inventory
   try {
     const pool = getPool();
     const almacenId = parseInt(req.params.almacenId as string, 10);
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     if (!await verificarAccesoAlmacen(pool, reqUser.id, reqUser.role, [almacenId])) {
       return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
     }
@@ -445,7 +445,7 @@ router.get('/asignaciones/detalle/:id', requirePermission('inventory:read'), asy
     const data = await inv.getAsignacion(pool, parseInt(req.params.id as string, 10));
     if (!data) return res.status(404).json({ success: false, error: 'Asignacion no encontrada' });
     // Loteria solo ve asignaciones de agencias
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     if (reqUser.role === 'loteria' && !await verificarAccesoAlmacen(pool, reqUser.id, reqUser.role, [data.almacen_id])) {
       return res.status(403).json({ success: false, error: 'No tiene acceso a esta asignacion' });
     }
@@ -459,7 +459,7 @@ router.get('/asignaciones/:eventId', requirePermission('inventory:read'), async 
   try {
     const pool = getPool();
     const { almacen_id, estado, proposito, persona, page, limit } = req.query;
-    const soloAgencias = (req as any).user?.role === 'loteria';
+    const soloAgencias = req.user?.role === 'loteria';
     const result = await inv.getAsignaciones(pool, parseInt(req.params.eventId as string, 10), {
       almacen_id: almacen_id ? parseInt(almacen_id as string, 10) : undefined,
       estado: estado as string | undefined,
@@ -478,7 +478,7 @@ router.get('/asignaciones/:eventId', requirePermission('inventory:read'), async 
 router.post('/asignaciones', requirePermission('inventory:move'), async (req, res) => {
   try {
     const pool = getPool();
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     const userId = reqUser.id;
     const { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe, ...asignacionData } = req.body;
     // Verificar acceso al almacen
@@ -529,7 +529,7 @@ router.post('/asignaciones/:id/cancelar', requirePermission('inventory:move'), a
 router.post('/vender/carton/:cartonId', requirePermission('inventory:sell'), async (req, res) => {
   try {
     const pool = getPool();
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     const userId = reqUser.id;
     // Verificar que el usuario tiene acceso al almacén del cartón
     const cardResult = await pool.query('SELECT almacen_id FROM cards WHERE id = $1', [req.params.cartonId]);
@@ -547,7 +547,7 @@ router.post('/vender/carton/:cartonId', requirePermission('inventory:sell'), asy
 router.post('/vender/todos/:asignacionId', requirePermission('inventory:sell'), async (req, res) => {
   try {
     const pool = getPool();
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     const userId = reqUser.id;
     // Verificar que el usuario tiene acceso al almacén de la asignación
     const asigResult = await pool.query('SELECT almacen_id FROM inv_asignaciones WHERE id = $1', [req.params.asignacionId]);
@@ -570,7 +570,7 @@ router.post('/vender/todos/:asignacionId', requirePermission('inventory:sell'), 
 router.post('/movimiento-bulk', requirePermission('inventory:move'), async (req, res) => {
   try {
     const pool = getPool();
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     const userId = reqUser.id;
     const { event_id, accion, almacen_destino_id, almacen_origen_id, items, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body;
     if (!event_id || !almacen_destino_id || !items?.length) {
@@ -599,7 +599,7 @@ router.post('/movimiento-bulk', requirePermission('inventory:move'), async (req,
 router.post('/venta', requirePermission('inventory:sell'), async (req, res) => {
   try {
     const pool = getPool();
-    const reqUser = (req as any).user;
+    const reqUser = req.user!;
     const userId = reqUser.id;
     const { event_id, almacen_id, items, buyer_name, buyer_cedula, buyer_libreta, buyer_phone, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body;
     if (!event_id || !almacen_id || !items?.length) {
@@ -747,7 +747,7 @@ router.get('/documentos/:eventId', requirePermission('inventory:read'), async (r
   try {
     const pool = getPool();
     const { almacen_id, accion, page, limit } = req.query;
-    const soloAgencias = (req as any).user?.role === 'loteria';
+    const soloAgencias = req.user?.role === 'loteria';
     const result = await inv.getDocumentos(pool, parseInt(req.params.eventId as string, 10), {
       almacen_id: almacen_id ? parseInt(almacen_id as string, 10) : undefined,
       accion: accion as string | undefined,
@@ -812,7 +812,7 @@ router.get('/movimientos/:eventId', requirePermission('inventory:read'), async (
   try {
     const pool = getPool();
     const { almacen_id, tipo_entidad, accion, referencia, page, limit } = req.query;
-    const soloAgencias = (req as any).user?.role === 'loteria';
+    const soloAgencias = req.user?.role === 'loteria';
     const result = await inv.getMovimientos(pool, parseInt(req.params.eventId as string, 10), {
       almacen_id: almacen_id ? parseInt(almacen_id as string, 10) : undefined,
       tipo_entidad: tipo_entidad as string | undefined,

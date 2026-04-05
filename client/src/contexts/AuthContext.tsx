@@ -136,10 +136,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return hasPermissionDefault(state.user.role, permission);
   }, [state.user, dynamicPermissions]);
 
-  const isRole = (...roles: UserRole[]): boolean => {
-    if (!state.user) return false;
-    return roles.includes(state.user.role);
-  };
+  // TS-H10: memoizar para que la referencia sea estable entre renders del
+  // provider. Si no, cada consumidor que use `isRole` en una dependencia de
+  // useMemo/useCallback re-renderiza en cada render del provider.
+  const isRole = useCallback(
+    (...roles: UserRole[]): boolean => {
+      if (!state.user) return false;
+      return roles.includes(state.user.role);
+    },
+    [state.user]
+  );
 
   return (
     <AuthContext.Provider

@@ -12,6 +12,7 @@ import { createCanvas, loadImage } from 'canvas';
 import fs from 'fs';
 import path from 'path';
 import archiver from 'archiver';
+import { CARDS_PER_SERIES } from '../constants.js';
 
 // Genera etiqueta: texto grande arriba + barcode Code128 abajo
 // Tamaño real: 1.9cm x 0.9cm a 300 DPI = 224 x 106 px
@@ -115,7 +116,8 @@ router.post('/pdf', requirePermission('cards:export'), async (req: Request, res:
 });
 
 // GET /api/export/card/:id/image - Obtener imagen de un cartón
-router.get('/card/:id/image', async (req: Request, res: Response) => {
+// CR-H3: requiere 'cards:export' (los demás endpoints de export ya lo hacen).
+router.get('/card/:id/image', requirePermission('cards:export'), async (req: Request, res: Response) => {
   try {
     const pool = getPool();
     const { rows: cardRows } = await pool.query('SELECT * FROM cards WHERE id = $1', [req.params.id]);
@@ -265,8 +267,80 @@ router.get('/csv/:eventId', requirePermission('cards:export'), async (req: Reque
   }
 });
 
-// Total esperado de QRs por evento (para calcular progreso)
-const qrExpected = new Map<number, { total: number; status: 'generating' | 'zipping' | 'completed' | 'error'; folder: string; zipPath?: string }>();
+// CR-H2: Job manager unificado. Antes había 4 Maps duplicados (qrExpected,
+// barcodeExpected, qrCajasExpected, qrLibretasExpected) con la misma shape
+// de tipo. Ahora usamos un único Map con llave compuesta `${kind}:${eventId}`
+// y un helper que cancela timeouts pendientes al sobrescribir una entrada
+// (antes el cleanup previo podía borrar prematuramente una nueva generación).
+type ExportJobKind = 'qr' | 'barcode' | 'qr-cajas' | 'qr-libretas';
+type ExportJobStatus = {
+  total: number;
+  status: 'generating' | 'zipping' | 'completed' | 'error';
+  folder: string;
+  zipPath?: string;
+  cleanupTimer?: NodeJS.Timeout;
+};
+
+const exportJobs = new Map<string, ExportJobStatus>();
+
+function jobKey(kind: ExportJobKind, eventId: number): string {
+  return `${kind}:${eventId}`;
+}
+
+function setExportJob(
+  kind: ExportJobKind,
+  eventId: number,
+  status: Omit<ExportJobStatus, 'cleanupTimer'>
+): void {
+  const key = jobKey(kind, eventId);
+  const prev = exportJobs.get(key);
+  if (prev?.cleanupTimer) clearTimeout(prev.cleanupTimer);
+  exportJobs.set(key, { ...status });
+}
+
+function getExportJob(kind: ExportJobKind, eventId: number): ExportJobStatus | undefined {
+  return exportJobs.get(jobKey(kind, eventId));
+}
+
+function scheduleExportJobCleanup(
+  kind: ExportJobKind,
+  eventId: number,
+  delayMs: number
+): void {
+  const key = jobKey(kind, eventId);
+  const job = exportJobs.get(key);
+  if (!job) return;
+  if (job.cleanupTimer) clearTimeout(job.cleanupTimer);
+  job.cleanupTimer = setTimeout(() => exportJobs.delete(key), delayMs);
+}
+
+// Aliases retrocompatibles que encapsulan el kind. Cada zona de export
+// (qr, barcode, qr-cajas, qr-libretas) sigue teniendo su propia referencia
+// pero todas comparten el mismo Map subyacente.
+const qrExpected = {
+  set: (id: number, s: Omit<ExportJobStatus, 'cleanupTimer'>) => setExportJob('qr', id, s),
+  get: (id: number) => getExportJob('qr', id),
+  delete: (id: number) => exportJobs.delete(jobKey('qr', id)),
+  scheduleCleanup: (id: number, ms: number) => scheduleExportJobCleanup('qr', id, ms),
+};
+const barcodeExpected = {
+  set: (id: number, s: Omit<ExportJobStatus, 'cleanupTimer'>) => setExportJob('barcode', id, s),
+  get: (id: number) => getExportJob('barcode', id),
+  delete: (id: number) => exportJobs.delete(jobKey('barcode', id)),
+  scheduleCleanup: (id: number, ms: number) => scheduleExportJobCleanup('barcode', id, ms),
+};
+const qrCajasExpected = {
+  set: (id: number, s: Omit<ExportJobStatus, 'cleanupTimer'>) => setExportJob('qr-cajas', id, s),
+  get: (id: number) => getExportJob('qr-cajas', id),
+  delete: (id: number) => exportJobs.delete(jobKey('qr-cajas', id)),
+  scheduleCleanup: (id: number, ms: number) => scheduleExportJobCleanup('qr-cajas', id, ms),
+};
+const qrLibretasExpected = {
+  set: (id: number, s: Omit<ExportJobStatus, 'cleanupTimer'>) => setExportJob('qr-libretas', id, s),
+  get: (id: number) => getExportJob('qr-libretas', id),
+  delete: (id: number) => exportJobs.delete(jobKey('qr-libretas', id)),
+  scheduleCleanup: (id: number, ms: number) => scheduleExportJobCleanup('qr-libretas', id, ms),
+};
 
 // POST /api/export/qr - Generar QR codes como PNG para cartones de un evento
 router.post('/qr', requirePermission('cards:export'), async (req: Request, res: Response) => {
@@ -308,8 +382,8 @@ router.post('/qr', requirePermission('cards:export'), async (req: Request, res: 
       params.push(from_card, to_card);
       paramIdx += 2;
     } else if (from_series && to_series) {
-      const fromNum = (parseInt(from_series, 10) - 1) * 50 + 1;
-      const toNum = parseInt(to_series, 10) * 50;
+      const fromNum = (parseInt(from_series, 10) - 1) * CARDS_PER_SERIES + 1;
+      const toNum = parseInt(to_series, 10) * CARDS_PER_SERIES;
       whereClause += ` AND card_number BETWEEN $${paramIdx} AND $${paramIdx + 1}`;
       params.push(fromNum, toNum);
       paramIdx += 2;
@@ -422,7 +496,8 @@ router.post('/qr', requirePermission('cards:export'), async (req: Request, res: 
         qrExpected.set(event_id, { total: cards.length, status: 'completed', folder: outputDir, zipPath });
         console.log(`QR generados: ${cards.length} cartones, ZIP: ${zipSizeMB} MB`);
         // Limpiar después de 30 minutos (más tiempo para archivos grandes)
-        setTimeout(() => qrExpected.delete(event_id), 30 * 60 * 1000);
+        // CR-H2: scheduleCleanup cancela timers pendientes si llega una nueva generación.
+        qrExpected.scheduleCleanup(event_id, 30 * 60 * 1000);
       } catch (err) {
         console.error('Error en generación background de QR:', err);
         qrExpected.set(event_id, { total: cards.length, status: 'error', folder: outputDir });
@@ -538,8 +613,7 @@ router.get('/qr/single/:cardCode', requirePermission('cards:export'), async (req
 // BARCODE (Code 128) - Etiquetas de codigo de barras
 // =====================================================
 
-// Estado de generacion de barcodes por evento
-const barcodeExpected = new Map<number, { total: number; status: 'generating' | 'zipping' | 'completed' | 'error'; folder: string; zipPath?: string }>();
+// CR-H2: barcodeExpected ahora es un alias del job manager unificado (ver tope del archivo).
 
 // POST /api/export/barcode - Generar etiquetas de codigo de barras para cartones
 router.post('/barcode', requirePermission('cards:export'), async (req: Request, res: Response) => {
@@ -574,8 +648,8 @@ router.post('/barcode', requirePermission('cards:export'), async (req: Request, 
       params.push(from_card, to_card);
       paramIdx += 2;
     } else if (from_series && to_series) {
-      const fromNum = (parseInt(from_series, 10) - 1) * 50 + 1;
-      const toNum = parseInt(to_series, 10) * 50;
+      const fromNum = (parseInt(from_series, 10) - 1) * CARDS_PER_SERIES + 1;
+      const toNum = parseInt(to_series, 10) * CARDS_PER_SERIES;
       whereClause += ` AND card_number BETWEEN $${paramIdx} AND $${paramIdx + 1}`;
       params.push(fromNum, toNum);
       paramIdx += 2;
@@ -639,7 +713,8 @@ router.post('/barcode', requirePermission('cards:export'), async (req: Request, 
             const serial = card.serial as string;
             const png = await generateBarcodeLabel(serial);
             const filePath = path.join(outputDir, `${serial}.png`);
-            fs.writeFileSync(filePath, png);
+            // CR-M8: writeFile async (writeFileSync bloquea el event loop en batches grandes).
+            await fs.promises.writeFile(filePath, png);
           }));
           // Liberar memoria cada 5000 cartones
           if (i % 5000 === 0 && global.gc) global.gc();
@@ -662,7 +737,7 @@ router.post('/barcode', requirePermission('cards:export'), async (req: Request, 
         const zipSizeMB = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
         barcodeExpected.set(event_id, { total: cards.length, status: 'completed', folder: outputDir, zipPath });
         console.log(`Barcodes generados: ${cards.length} cartones, ZIP: ${zipSizeMB} MB`);
-        setTimeout(() => barcodeExpected.delete(event_id), 30 * 60 * 1000);
+        barcodeExpected.scheduleCleanup(event_id, 30 * 60 * 1000);
       } catch (err) {
         console.error('Error en generación background de barcodes:', err);
         barcodeExpected.set(event_id, { total: cards.length, status: 'error', folder: outputDir });
@@ -761,7 +836,7 @@ router.get('/barcode/single/:serial', requirePermission('cards:export'), async (
 // QR CAJAS — Etiquetas QR para cajas con info de lotes
 // =====================================================
 
-const qrCajasExpected = new Map<number, { total: number; status: 'generating' | 'zipping' | 'completed' | 'error'; folder: string; zipPath?: string }>();
+// CR-H2: qrCajasExpected ahora es un alias del job manager unificado (ver tope del archivo).
 
 /** Genera etiqueta PNG: QR arriba + código caja + rango lotes */
 async function generateCajaLabel(
@@ -867,7 +942,8 @@ router.post('/qr-cajas', requirePermission('cards:export'), async (req: Request,
         qrSize,
       );
 
-      fs.writeFileSync(path.join(outputDir, `${caja.caja_code}.png`), png);
+      // CR-M8: writeFile async para no bloquear el event loop.
+      await fs.promises.writeFile(path.join(outputDir, `${caja.caja_code}.png`), png);
     }
 
     // Crear ZIP
@@ -886,7 +962,7 @@ router.post('/qr-cajas', requirePermission('cards:export'), async (req: Request,
     const zipSizeMB = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
 
     qrCajasExpected.set(event_id, { total: cajas.length, status: 'completed', folder: outputDir, zipPath });
-    setTimeout(() => qrCajasExpected.delete(event_id), 5 * 60 * 1000);
+    qrCajasExpected.scheduleCleanup(event_id, 5 * 60 * 1000);
 
     logActivity(pool, auditFromReq(req, 'export_qr_cajas', 'export', {
       event_id, event_name: event.name, cajas_count: cajas.length, qr_size: qrSize,
@@ -965,7 +1041,7 @@ router.get('/qr-cajas/download/:eventId', requirePermission('cards:export'), asy
 // QR LIBRETAS — Etiquetas QR para libretas/lotes
 // =====================================================
 
-const qrLibretasExpected = new Map<number, { total: number; status: 'generating' | 'zipping' | 'completed' | 'error'; folder: string; zipPath?: string }>();
+// CR-H2: qrLibretasExpected ahora es un alias del job manager unificado (ver tope del archivo).
 
 /** Genera etiqueta PNG: QR arriba + numero de libreta abajo */
 async function generateLibretaLabel(
@@ -1065,7 +1141,8 @@ router.post('/qr-libretas', requirePermission('cards:export'), async (req: Reque
           await Promise.all(batch.map(async (libreta) => {
             const qrContent = libreta.lote_code;
             const png = await generateLibretaLabel(qrContent, libreta.lote_code, qrSize);
-            fs.writeFileSync(path.join(outputDir, `${libreta.lote_code}.png`), png);
+            // CR-M8: writeFile async para no bloquear el event loop.
+            await fs.promises.writeFile(path.join(outputDir, `${libreta.lote_code}.png`), png);
           }));
         }
 
@@ -1086,7 +1163,7 @@ router.post('/qr-libretas', requirePermission('cards:export'), async (req: Reque
         const zipSizeMB = (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2);
         qrLibretasExpected.set(event_id, { total: libretas.length, status: 'completed', folder: outputDir, zipPath });
         console.log(`QR libretas generados: ${libretas.length} libretas, ZIP: ${zipSizeMB} MB`);
-        setTimeout(() => qrLibretasExpected.delete(event_id), 30 * 60 * 1000);
+        qrLibretasExpected.scheduleCleanup(event_id, 30 * 60 * 1000);
 
         logActivity(pool, auditFromReq(req, 'export_qr_libretas', 'export', {
           event_id, event_name: event.name, libretas_count: libretas.length, qr_size: qrSize,

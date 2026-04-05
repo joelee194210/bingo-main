@@ -58,11 +58,25 @@ export async function createGame(
 }
 
 /**
- * Obtiene el estado actual de un juego
+ * Obtiene el estado actual de un juego.
+ *
+ * DB-H8/CR-M7: antes hacía COUNT(*) + SUM(is_sold) sobre `cards` en cada
+ * llamada — con 1M+ cartones y varias llamadas por operación de juego
+ * (callBall → getGameState 2x dentro+fuera de tx), esto se convertía en
+ * cientos de full scans por minuto durante un juego en vivo. Los triggers
+ * ya mantienen events.total_cards y events.cards_sold desnormalizados, así
+ * que hacemos un JOIN en lugar del COUNT en tiempo real.
  */
 export async function getGameState(pool: Pool, gameId: number): Promise<GameState | null> {
-  const gameResult = await pool.query('SELECT * FROM games WHERE id = $1', [gameId]);
-  const game = gameResult.rows[0] as BingoGame | undefined;
+  const { rows } = await pool.query<BingoGame & { total_cards: number; cards_sold: number }>(`
+    SELECT g.*,
+           e.total_cards AS total_cards,
+           e.cards_sold AS cards_sold
+    FROM games g
+    JOIN events e ON e.id = g.event_id
+    WHERE g.id = $1
+  `, [gameId]);
+  const game = rows[0];
 
   if (!game) {
     return null;
@@ -80,15 +94,8 @@ export async function getGameState(pool: Pool, gameId: number): Promise<GameStat
     }
   }
 
-  // Contar cartones
-  const cardCountsResult = await pool.query(`
-    SELECT
-      COUNT(*) as total,
-      SUM(CASE WHEN is_sold = TRUE THEN 1 ELSE 0 END) as sold
-    FROM cards
-    WHERE event_id = $1
-  `, [game.event_id]);
-  const cardCounts = cardCountsResult.rows[0] as { total: number; sold: number };
+  const totalCards = Number(game.total_cards) || 0;
+  const cardsSold = Number(game.cards_sold) || 0;
 
   return {
     id: game.id,
@@ -100,8 +107,8 @@ export async function getGameState(pool: Pool, gameId: number): Promise<GameStat
     calledBalls,
     winnerCards,
     availableBalls,
-    totalCards: Number(cardCounts.total),
-    activeCards: game.is_practice_mode ? Number(cardCounts.total) : Number(cardCounts.sold),
+    totalCards,
+    activeCards: game.is_practice_mode ? totalCards : cardsSold,
     startedAt: game.started_at,
   };
 }
