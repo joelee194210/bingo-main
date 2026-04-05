@@ -7,6 +7,7 @@ import { requirePermission } from '../middleware/auth.js';
 import type { BingoCard, BingoEvent, CardNumbers } from '../types/index.js';
 import { logActivity, auditFromReq } from '../services/auditService.js';
 import { normalizeSerial } from '../services/inventarioModule.js';
+import { CARDS_PER_SERIES } from '../constants.js';
 const router = Router();
 
 // Almacenar progreso de generación en memoria
@@ -136,19 +137,29 @@ router.post('/generate', requirePermission('cards:create'), async (req: Request,
     // Obtener configuración de FREE center
     const useFreeCenter = event.use_free_center !== false;
 
-    // Obtener hashes existentes del evento (para unicidad de números)
+    // Obtener hashes existentes del evento (para unicidad de números del cartón).
+    // Acotado por evento: el hash solo compite con los cartones del mismo evento.
     const existingHashes = new Set<string>();
-    const { rows: eventCards } = await pool.query('SELECT numbers_hash FROM cards WHERE event_id = $1', [event_id]);
+    const { rows: eventCards } = await pool.query(
+      'SELECT numbers_hash FROM cards WHERE event_id = $1',
+      [event_id]
+    );
     for (const card of eventCards) {
       existingHashes.add(card.numbers_hash);
     }
 
-    // Obtener códigos existentes de TODOS los eventos (constraints son globales)
+    // DB-C2: NO precargar los codes de toda la BD (OOM con 1M+ cartones globales).
+    // Antes hacíamos `SELECT card_code, validation_code FROM cards` sin WHERE,
+    // lo que cargaba 2M+ strings al heap. Los UNIQUE constraints de BD protegen
+    // contra colisiones cross-evento; solo dedupeamos contra el evento actual.
     const existingCodes = new Set<string>();
-    const { rows: allCodes } = await pool.query('SELECT card_code, validation_code FROM cards');
-    for (const card of allCodes) {
-      existingCodes.add(card.card_code);
-      existingCodes.add(card.validation_code);
+    const { rows: eventCodes } = await pool.query(
+      'SELECT card_code, validation_code FROM cards WHERE event_id = $1',
+      [event_id]
+    );
+    for (const row of eventCodes) {
+      existingCodes.add(row.card_code);
+      existingCodes.add(row.validation_code);
     }
 
     // Obtener el último número de cartón
@@ -183,97 +194,118 @@ router.post('/generate', requirePermission('cards:create'), async (req: Request,
     // Insertar cartones
     generationProgress.set(event_id, { total: qty, generated: qty, inserted: 0, status: 'inserting' });
 
-    const batchSize = 1000;
-    let totalInserted = 0;
-    for (let i = 0; i < result.cards.length; i += batchSize) {
-      const batch = result.cards.slice(i, i + batchSize);
+    // Valores que se calculan dentro de la transacción pero se usan en la response.
+    let totalLotes = 0;
+    let totalCajas = 0;
 
-      const valuesParts: string[] = [];
-      const batchParams: unknown[] = [];
-      let pIdx = 1;
-      for (const card of batch) {
-        const cn = cardNumber++;
-        const series = Math.ceil(cn / 50).toString().padStart(5, '0');
-        const seq = (((cn - 1) % 50) + 1).toString().padStart(2, '0');
-        valuesParts.push(`($${pIdx}, $${pIdx + 1}, $${pIdx + 2}, $${pIdx + 3}, $${pIdx + 4}, $${pIdx + 5}, $${pIdx + 6})`);
-        batchParams.push(
-          event_id,
-          cn,
-          `${series}-${seq}`,
-          card.card_code,
-          card.validation_code,
-          JSON.stringify(card.numbers),
-          card.numbers_hash
-        );
-        pIdx += 7;
+    // DB-C1: envolver TODO el flujo de persistencia en una única transacción.
+    // Antes: INSERT cards (múltiples batches) + INSERT cajas + INSERT lotes
+    // + UPDATE cards.lote_id iban como queries independientes. Si una fallaba
+    // quedaban cartones huérfanos con lote_id NULL y contadores desfasados.
+    // Ahora todo comparte client + BEGIN/COMMIT; cualquier fallo → ROLLBACK total.
+    const txClient = await pool.connect();
+    try {
+      await txClient.query('BEGIN');
+
+      const batchSize = 1000;
+      let totalInserted = 0;
+      for (let i = 0; i < result.cards.length; i += batchSize) {
+        const batch = result.cards.slice(i, i + batchSize);
+
+        const valuesParts: string[] = [];
+        const batchParams: unknown[] = [];
+        let pIdx = 1;
+        for (const card of batch) {
+          const cn = cardNumber++;
+          const series = Math.ceil(cn / CARDS_PER_SERIES).toString().padStart(5, '0');
+          const seq = (((cn - 1) % CARDS_PER_SERIES) + 1).toString().padStart(2, '0');
+          valuesParts.push(`($${pIdx}, $${pIdx + 1}, $${pIdx + 2}, $${pIdx + 3}, $${pIdx + 4}, $${pIdx + 5}, $${pIdx + 6})`);
+          batchParams.push(
+            event_id,
+            cn,
+            `${series}-${seq}`,
+            card.card_code,
+            card.validation_code,
+            JSON.stringify(card.numbers),
+            card.numbers_hash
+          );
+          pIdx += 7;
+        }
+
+        await txClient.query(`
+          INSERT INTO cards (event_id, card_number, serial, card_code, validation_code, numbers, numbers_hash)
+          VALUES ${valuesParts.join(', ')}
+        `, batchParams);
+
+        totalInserted += batch.length;
+        generationProgress.set(event_id, { total: qty, generated: qty, inserted: totalInserted, status: 'inserting' });
       }
 
-      await pool.query(`
-        INSERT INTO cards (event_id, card_number, serial, card_code, validation_code, numbers, numbers_hash)
-        VALUES ${valuesParts.join(', ')}
-      `, batchParams);
+      // =====================================================
+      // CREAR LOTES Y CAJAS (dentro de la misma transacción)
+      // =====================================================
+      const totalCards = result.cards.length;
+      const firstSeries = Math.ceil(firstCardNumber / CARDS_PER_SERIES);
+      const lastSeries = Math.ceil((firstCardNumber + totalCards - 1) / CARDS_PER_SERIES);
+      totalLotes = lastSeries - firstSeries + 1;
+      totalCajas = Math.ceil(totalLotes / lotesPerCaja);
 
-      totalInserted += batch.length;
-      generationProgress.set(event_id, { total: qty, generated: qty, inserted: totalInserted, status: 'inserting' });
-    }
-
-    // =====================================================
-    // CREAR LOTES Y CAJAS
-    // =====================================================
-    const totalCards = result.cards.length;
-    const firstSeries = Math.ceil(firstCardNumber / 50);
-    const lastSeries = Math.ceil((firstCardNumber + totalCards - 1) / 50);
-    const totalLotes = lastSeries - firstSeries + 1;
-    const totalCajas = Math.ceil(totalLotes / lotesPerCaja);
-
-    // Buscar almacen raiz del evento (primer almacen sin parent)
-    const almacenRaiz = await pool.query(
-      `SELECT id FROM almacenes WHERE event_id = $1 AND parent_id IS NULL ORDER BY id LIMIT 1`,
-      [event_id]
-    );
-    const almacenRaizId = almacenRaiz.rows[0]?.id || null;
-
-    // Crear cajas (asignadas al almacen raiz si existe)
-    const cajaIds: number[] = [];
-    for (let c = 0; c < totalCajas; c++) {
-      cajaSeq++;
-      const cajaCode = `C${cajaSeq.toString().padStart(3, '0')}`;
-      const lotesEnEstaCaja = Math.min(lotesPerCaja, totalLotes - c * lotesPerCaja);
-      const { rows } = await pool.query(
-        `INSERT INTO cajas (event_id, caja_code, total_lotes, status, almacen_id) VALUES ($1, $2, $3, 'sellada', $4) RETURNING id`,
-        [event_id, cajaCode, lotesEnEstaCaja, almacenRaizId]
+      // Buscar almacen raiz del evento (primer almacen sin parent)
+      const almacenRaiz = await txClient.query(
+        `SELECT id FROM almacenes WHERE event_id = $1 AND parent_id IS NULL ORDER BY id LIMIT 1`,
+        [event_id]
       );
-      cajaIds.push(rows[0].id);
-    }
+      const almacenRaizId = almacenRaiz.rows[0]?.id || null;
 
-    // Crear lotes y asignar a cajas
-    let loteIndex = 0;
-    for (let s = firstSeries; s <= lastSeries; s++) {
-      const seriesStr = s.toString().padStart(5, '0');
-      const loteCode = `L${seriesStr}`;
-      const cajaIndex = Math.floor(loteIndex / lotesPerCaja);
-      const cajaId = cajaIds[cajaIndex];
+      // Crear cajas (asignadas al almacen raiz si existe)
+      const cajaIds: number[] = [];
+      for (let c = 0; c < totalCajas; c++) {
+        cajaSeq++;
+        const cajaCode = `C${cajaSeq.toString().padStart(3, '0')}`;
+        const lotesEnEstaCaja = Math.min(lotesPerCaja, totalLotes - c * lotesPerCaja);
+        const { rows } = await txClient.query(
+          `INSERT INTO cajas (event_id, caja_code, total_lotes, status, almacen_id) VALUES ($1, $2, $3, 'sellada', $4) RETURNING id`,
+          [event_id, cajaCode, lotesEnEstaCaja, almacenRaizId]
+        );
+        cajaIds.push(rows[0].id);
+      }
 
-      // Contar cartones reales en esta serie
-      const seriesFirstCard = (s - 1) * 50 + 1;
-      const seriesLastCard = s * 50;
-      const actualCards = Math.min(seriesLastCard, firstCardNumber + totalCards - 1) - Math.max(seriesFirstCard, firstCardNumber) + 1;
+      // Crear lotes y asignar a cajas
+      let loteIndex = 0;
+      for (let s = firstSeries; s <= lastSeries; s++) {
+        const seriesStr = s.toString().padStart(5, '0');
+        const loteCode = `L${seriesStr}`;
+        const cajaIndex = Math.floor(loteIndex / lotesPerCaja);
+        const cajaId = cajaIds[cajaIndex];
 
-      const { rows: loteRows } = await pool.query(
-        `INSERT INTO lotes (event_id, caja_id, lote_code, series_number, status, total_cards, almacen_id)
-         VALUES ($1, $2, $3, $4, 'en_caja', $5, $6) RETURNING id`,
-        [event_id, cajaId, loteCode, seriesStr, actualCards, almacenRaizId]
-      );
-      const loteId = loteRows[0].id;
+        // Contar cartones reales en esta serie
+        const seriesFirstCard = (s - 1) * CARDS_PER_SERIES + 1;
+        const seriesLastCard = s * CARDS_PER_SERIES;
+        const actualCards = Math.min(seriesLastCard, firstCardNumber + totalCards - 1) - Math.max(seriesFirstCard, firstCardNumber) + 1;
 
-      // Actualizar los cartones de esta serie con su lote_id y almacen_id
-      await pool.query(
-        `UPDATE cards SET lote_id = $1, almacen_id = $2
-         WHERE event_id = $3 AND card_number >= $4 AND card_number <= $5`,
-        [loteId, almacenRaizId, event_id, Math.max(seriesFirstCard, firstCardNumber), Math.min(seriesLastCard, firstCardNumber + totalCards - 1)]
-      );
+        const { rows: loteRows } = await txClient.query(
+          `INSERT INTO lotes (event_id, caja_id, lote_code, series_number, status, total_cards, almacen_id)
+           VALUES ($1, $2, $3, $4, 'en_caja', $5, $6) RETURNING id`,
+          [event_id, cajaId, loteCode, seriesStr, actualCards, almacenRaizId]
+        );
+        const loteId = loteRows[0].id;
 
-      loteIndex++;
+        // Actualizar los cartones de esta serie con su lote_id y almacen_id
+        await txClient.query(
+          `UPDATE cards SET lote_id = $1, almacen_id = $2
+           WHERE event_id = $3 AND card_number >= $4 AND card_number <= $5`,
+          [loteId, almacenRaizId, event_id, Math.max(seriesFirstCard, firstCardNumber), Math.min(seriesLastCard, firstCardNumber + totalCards - 1)]
+        );
+
+        loteIndex++;
+      }
+
+      await txClient.query('COMMIT');
+    } catch (txErr) {
+      await txClient.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    } finally {
+      txClient.release();
     }
 
     generationProgress.set(event_id, { total: qty, generated: qty, inserted: qty, status: 'completed' });
@@ -292,7 +324,7 @@ router.post('/generate', requirePermission('cards:create'), async (req: Request,
         lotes_creados: totalLotes,
         cajas_creadas: totalCajas,
         lotes_por_caja: lotesPerCaja,
-        cartones_por_caja: lotesPerCaja * 50,
+        cartones_por_caja: lotesPerCaja * CARDS_PER_SERIES,
       },
     });
   } catch (error) {
@@ -362,34 +394,59 @@ router.post('/verify/:eventId', async (req: Request, res: Response) => {
 
 // PUT /api/cards/:id/sell - Marcar cartón como vendido (admin, moderador, vendedor)
 router.put('/:id/sell', requirePermission('cards:sell'), async (req: Request, res: Response) => {
+  const pool = getPool();
+  const client = await pool.connect();
   try {
     const { buyer_name, buyer_phone } = req.body;
-    const pool = getPool();
+    const cardId = parseInt(String(req.params.id), 10);
+    if (!Number.isInteger(cardId) || cardId <= 0) {
+      return res.status(400).json({ success: false, error: 'ID de cartón inválido' });
+    }
 
-    const { rows: cardRows } = await pool.query('SELECT * FROM cards WHERE id = $1', [req.params.id]);
+    // DB-C4: SELECT ... FOR UPDATE bloquea la fila hasta el COMMIT.
+    // Sin esto, dos vendedores pueden leer is_sold = false simultáneamente
+    // y ambos ejecutar el UPDATE, vendiendo el mismo cartón dos veces
+    // (con el trigger de contadores quedando desfasado).
+    await client.query('BEGIN');
+
+    const { rows: cardRows } = await client.query(
+      'SELECT * FROM cards WHERE id = $1 FOR UPDATE',
+      [cardId]
+    );
     const card = cardRows[0] as BingoCard | undefined;
     if (!card) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ success: false, error: 'Cartón no encontrado' });
     }
 
     if (card.is_sold) {
+      await client.query('ROLLBACK');
       return res.status(409).json({ success: false, error: 'El cartón ya fue vendido' });
     }
 
-    await pool.query(`
-      UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2
-      WHERE id = $3
-    `, [buyer_name || null, buyer_phone || null, req.params.id]);
+    await client.query(
+      `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP, buyer_name = $1, buyer_phone = $2
+       WHERE id = $3`,
+      [buyer_name || null, buyer_phone || null, cardId]
+    );
 
-    const { rows: updatedRows } = await pool.query('SELECT * FROM cards WHERE id = $1', [req.params.id]);
+    const { rows: updatedRows } = await client.query(
+      'SELECT * FROM cards WHERE id = $1',
+      [cardId]
+    );
     const updated = updatedRows[0] as BingoCard;
+
+    await client.query('COMMIT');
 
     logActivity(pool, auditFromReq(req, 'card_sold', 'cards', { card_id: card.id, card_code: card.card_code, buyer_name }));
 
     res.json({ success: true, data: updated });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error vendiendo cartón:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  } finally {
+    client.release();
   }
 });
 
@@ -461,10 +518,18 @@ router.get('/search/:code', async (req: Request, res: Response) => {
 });
 
 // GET /api/cards/:id - Obtener cartón con números (DEBE ir después de rutas estáticas)
+// SEC-H4: devuelve PII del comprador solo a roles con permiso;
+// otros roles reciben los datos de juego sin buyer_name/phone/cedula.
 router.get('/:id', async (req: Request, res: Response) => {
   try {
+    // TS-H5 (parcial): validar que el id sea un entero positivo antes de usarlo.
+    const cardId = parseInt(String(req.params.id), 10);
+    if (!Number.isInteger(cardId) || cardId <= 0) {
+      return res.status(400).json({ success: false, error: 'ID de cartón inválido' });
+    }
+
     const pool = getPool();
-    const { rows: cardRows } = await pool.query('SELECT * FROM cards WHERE id = $1', [req.params.id]);
+    const { rows: cardRows } = await pool.query('SELECT * FROM cards WHERE id = $1', [cardId]);
     const card = cardRows[0] as BingoCard | undefined;
 
     if (!card) {
@@ -479,10 +544,24 @@ router.get('/:id', async (req: Request, res: Response) => {
     const numbers: CardNumbers = parseNumbers(card.numbers);
     const matrix = cardNumbersToMatrix(numbers, useFreeCenter);
 
+    // SEC-H4: solo admin y moderator pueden ver PII del comprador.
+    // Para seller/viewer/loteria devolvemos el cartón sin datos personales.
+    const role = req.user?.role;
+    const canSeeBuyerPii = role === 'admin' || role === 'moderator';
+
+    const sanitizedCard = canSeeBuyerPii
+      ? card
+      : ({
+          ...card,
+          buyer_name: null,
+          buyer_phone: null,
+          buyer_cedula: null,
+        } as BingoCard);
+
     res.json({
       success: true,
       data: {
-        ...card,
+        ...sanitizedCard,
         numbers,
         matrix,
       },
