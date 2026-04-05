@@ -27,7 +27,26 @@ app.use(helmet({
     },
   },
 }));
-app.use(cors());
+// SEC-C3: CORS con whitelist explícita. ALLOWED_ORIGINS es CSV en env
+// (ej. "https://megabingodigital.com,https://www.megabingodigital.com").
+// Si no se setea, se deshabilita CORS cross-origin (same-origin sigue funcionando).
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Requests same-origin / curl / health checks no envían Origin.
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`Origen no permitido por CORS: ${origin}`));
+    },
+    methods: ['GET', 'POST'],
+    credentials: false,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -43,7 +62,21 @@ const orderLimiter = rateLimit({
   max: 20,
   message: { success: false, error: 'Demasiados intentos. Intente en 15 minutos.' },
 });
-app.use('/venta/api/orders', orderLimiter);
+
+// SEC-H7: rate limit específico para polling de status (GET), separado del
+// POST de creación (estricto). Sin esto, el limiter estricto rompía el
+// polling legítimo y, si se quitaba, permitía enumerar order codes.
+const statusPollLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120, // 2 req/s por IP
+  message: { success: false, error: 'Demasiados intentos.' },
+});
+
+app.use('/venta/api/orders', (req, res, next) => {
+  if (req.method === 'POST') return orderLimiter(req, res, next);
+  if (req.method === 'GET') return statusPollLimiter(req, res, next);
+  return next();
+});
 
 const confirmLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

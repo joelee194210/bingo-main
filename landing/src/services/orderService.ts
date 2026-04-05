@@ -94,14 +94,16 @@ export async function createOrder(
     const queryParams: unknown[] = [eventId, quantity];
     if (config.almacen_id) queryParams.push(config.almacen_id);
 
+    // DB-C3: operador @> para permitir uso de índice GIN sobre card_ids.
     const { rows: cardRows } = await client.query<{ id: number }>(
       `SELECT c.id FROM cards c
        WHERE c.event_id = $1 AND c.is_sold = FALSE
          ${almacenFilter}
-         AND c.id NOT IN (
-           SELECT unnest(card_ids) FROM online_orders
-           WHERE status IN ('pending_payment','payment_confirmed','cards_assigned')
-             AND event_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM online_orders o
+           WHERE o.event_id = $1
+             AND o.status IN ('pending_payment','payment_confirmed','cards_assigned')
+             AND o.card_ids @> ARRAY[c.id]
          )
        ORDER BY c.card_number
        LIMIT $2
@@ -200,6 +202,25 @@ export async function confirmPayment(
     if (order.status !== 'pending_payment') {
       await client.query('ROLLBACK');
       return order;
+    }
+
+    // SEC-C2: replay protection. Un yappyTxnId solo puede confirmar una orden.
+    // Sin esto, un confirmationNumber/hash legítimo podría reutilizarse en
+    // otra orden pendiente con el mismo monto. El UNIQUE INDEX de BD es la
+    // segunda capa (ver migration_security_hardening.sql).
+    if (yappyTxnId) {
+      const { rows: dupRows } = await client.query<{ id: number; order_code: string }>(
+        `SELECT id, order_code FROM online_orders
+         WHERE yappy_transaction_id = $1 AND id != $2
+         LIMIT 1`,
+        [yappyTxnId, orderId]
+      );
+      if (dupRows.length > 0) {
+        await client.query('ROLLBACK');
+        throw new Error(
+          `Transaccion Yappy ${yappyTxnId} ya fue utilizada en la orden ${dupRows[0].order_code}`
+        );
+      }
     }
 
     // Obtener almacen y evento info

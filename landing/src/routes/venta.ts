@@ -5,6 +5,15 @@ import { createOrder, getOrderByCode, getOrderByDownloadToken, getSalesConfig, c
 import { getYappyButtonClient } from '../services/yappyButtonService.js';
 import { sendPurchaseEmail } from '../services/emailService.js';
 import { createReadStream, existsSync } from 'fs';
+import { resolve as resolvePath, sep as pathSep } from 'path';
+
+// SEC-H5: whitelist de directorios desde donde es seguro servir PDFs generados.
+// Todo pdf_path debe resolver a un archivo dentro de una de estas raíces.
+const PDF_SAFE_ROOTS = [
+  resolvePath(process.cwd(), 'exports'),
+  resolvePath(process.cwd(), 'landing', 'exports'),
+  resolvePath(process.cwd(), 'server', 'exports'),
+].map((p) => (p.endsWith(pathSep) ? p : p + pathSep));
 
 // Token de confirmación firmado — previene confirmaciones sin pago real
 const CONFIRM_SECRET: string = process.env.CONFIRM_SECRET ?? (() => { console.error('❌ CONFIRM_SECRET env var es requerida'); process.exit(1); })();
@@ -48,14 +57,16 @@ router.get('/:eventId', async (req: Request, res: Response) => {
     const availParams: unknown[] = [eventId];
     if (config.almacen_id) availParams.push(config.almacen_id);
 
+    // DB-C3: operador @> para permitir uso de índice GIN sobre card_ids.
     const { rows: availRows } = await pool.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM cards
-       WHERE event_id = $1 AND is_sold = FALSE
+      `SELECT COUNT(*) as count FROM cards c
+       WHERE c.event_id = $1 AND c.is_sold = FALSE
          ${almacenFilter}
-         AND id NOT IN (
-           SELECT unnest(card_ids) FROM online_orders
-           WHERE status IN ('pending_payment','payment_confirmed','cards_assigned')
-             AND event_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM online_orders o
+           WHERE o.event_id = $1
+             AND o.status IN ('pending_payment','payment_confirmed','cards_assigned')
+             AND o.card_ids @> ARRAY[c.id]
          )`,
       availParams
     );
@@ -222,12 +233,14 @@ router.get('/api/orders/:orderCode/status', async (req: Request, res: Response) 
     const order = await getOrderByCode((req.params.orderCode as string).toUpperCase());
     if (!order) return res.status(404).json({ success: false, error: 'Orden no encontrada' });
 
+    // SEC-H7: NO devolver download_url en el JSON público. El cliente
+    // legítimo recarga la página al ver status completed y el render HTML
+    // muestra el botón de descarga en contexto.
     res.json({
       success: true,
       data: {
         status: order.status,
         payment_confirmed_at: order.payment_confirmed_at,
-        download_url: order.download_token ? `/venta/descargar/${order.download_token}` : null,
       },
     });
   } catch (err) {
@@ -307,13 +320,23 @@ router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
       return res.status(404).send(renderError('Descarga no encontrada o aún no disponible'));
     }
 
-    if (!existsSync(order.pdf_path)) {
+    // SEC-H5: validar que pdf_path resuelva dentro de un directorio whitelistado.
+    // Sin esto, cualquier bug que permita modificar pdf_path en BD podría servir
+    // archivos arbitrarios del filesystem (/etc/passwd, secrets, etc.).
+    const resolvedPath = resolvePath(order.pdf_path);
+    const isSafe = PDF_SAFE_ROOTS.some((root) => resolvedPath.startsWith(root));
+    if (!isSafe) {
+      console.error(`[SEC-H5] pdf_path fuera de whitelist rechazado order=${order.order_code}`);
+      return res.status(403).send(renderError('Archivo no disponible'));
+    }
+
+    if (!existsSync(resolvedPath)) {
       return res.status(404).send(renderError('Archivo PDF no encontrado'));
     }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="cartones_${order.order_code}.pdf"`);
-    createReadStream(order.pdf_path).pipe(res);
+    createReadStream(resolvedPath).pipe(res);
   } catch (err) {
     console.error('Error en descarga:', err);
     res.status(500).send(renderError('Error del servidor'));
@@ -325,7 +348,8 @@ router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
 router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
   try {
     const params = req.query as Record<string, string>;
-    console.log('📩 Yappy IPN recibido:', JSON.stringify(params));
+    // SEC-H8: no loguear params (incluyen Hash del IPN que no debe persistirse en logs).
+    console.log(`[Yappy IPN] recibido orderId=${params.orderId} status=${params.status}`);
 
     const yappy = getYappyButtonClient();
     const result = yappy.validateIPN(params);

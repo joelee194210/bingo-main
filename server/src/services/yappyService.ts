@@ -183,7 +183,10 @@ export class YappyClient {
             description.toUpperCase().includes(order.order_code) &&
             txn.charge?.amount === Number(order.total_amount)
           ) {
-            console.log(`✅ Yappy match: ${order.order_code} → txn ${txn.id}`);
+            // SEC-H8: no loguear txn.id completo (es el token de replay attack);
+            // enmascarar dejando solo prefijo para correlación.
+            const maskedTxn = txn.id ? `${String(txn.id).slice(0, 6)}…` : '?';
+            console.log(`[Yappy] match: ${order.order_code} → txn ${maskedTxn}`);
             await confirmPayment(order.id, 'auto', txn.id, txn as unknown as Record<string, unknown>);
             matched++;
             break;

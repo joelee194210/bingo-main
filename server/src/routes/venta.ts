@@ -1,9 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { getPool } from '../database/init.js';
-import { createOrder, getOrderByCode, getOrderByDownloadToken, getSalesConfig, confirmPayment } from '../services/onlineOrderService.js';
+import { createOrder, getOrderByCode, getOrderByDownloadToken, getSalesConfig } from '../services/onlineOrderService.js';
 import { getYappyButtonClient } from '../services/yappyButtonService.js';
-import { sendPurchaseEmail } from '../services/emailService.js';
 import { createReadStream, existsSync } from 'fs';
+import { resolve as resolvePath, sep as pathSep } from 'path';
+
+// SEC-H5: whitelist de directorios desde donde es seguro servir PDFs generados.
+// Todo pdf_path debe resolver a un archivo dentro de una de estas raíces.
+const PDF_SAFE_ROOTS = [
+  resolvePath(process.cwd(), 'exports'),
+  resolvePath(process.cwd(), 'server', 'exports'),
+].map((p) => (p.endsWith(pathSep) ? p : p + pathSep));
 
 const router = Router();
 
@@ -12,24 +19,30 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// SEC-H3: extrae el nonce CSP inyectado por middleware en app.ts para pasarlo
+// a los renderers HTML. Si el middleware no está activo (tests), retorna ''.
+function nonceOf(res: Response): string {
+  return String((res.locals as { cspNonce?: string }).cspNonce ?? '');
+}
+
 // GET /venta/:eventId - Landing page
 router.get('/:eventId', async (req: Request, res: Response) => {
   try {
     const eventId = parseInt(req.params.eventId as string, 10);
-    if (isNaN(eventId)) return res.status(400).send(renderError('Evento no válido'));
+    if (isNaN(eventId)) return res.status(400).send(renderError('Evento no válido', nonceOf(res)));
 
     const pool = getPool();
     const { rows: eventRows } = await pool.query(
       'SELECT id, name, total_cards, cards_sold FROM events WHERE id = $1',
       [eventId]
     );
-    if (eventRows.length === 0) return res.status(404).send(renderError('Evento no encontrado'));
+    if (eventRows.length === 0) return res.status(404).send(renderError('Evento no encontrado', nonceOf(res)));
 
     const event = eventRows[0] as { id: number; name: string; total_cards: number; cards_sold: number };
 
     const config = await getSalesConfig(eventId);
     if (!config || !config.is_enabled) {
-      return res.status(403).send(renderError('La venta online no está disponible para este evento'));
+      return res.status(403).send(renderError('La venta online no está disponible para este evento', nonceOf(res)));
     }
 
     // Contar cartones realmente disponibles (no vendidos, no reservados, del almacen configurado)
@@ -37,23 +50,28 @@ router.get('/:eventId', async (req: Request, res: Response) => {
     const availParams: unknown[] = [eventId];
     if (config.almacen_id) availParams.push(config.almacen_id);
 
+    // DB-C3: usar operador @> (array contains) en lugar de unnest() — permite
+    // al planner usar un índice GIN sobre card_ids. El unnest() fuerza Seq Scan.
+    // El índice se crea con: CREATE INDEX ... USING GIN (card_ids)
+    // (ver migration_security_hardening.sql).
     const { rows: availRows } = await pool.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM cards
-       WHERE event_id = $1 AND is_sold = FALSE
+      `SELECT COUNT(*) as count FROM cards c
+       WHERE c.event_id = $1 AND c.is_sold = FALSE
          ${almacenFilter}
-         AND id NOT IN (
-           SELECT unnest(card_ids) FROM online_orders
-           WHERE status IN ('pending_payment','payment_confirmed','cards_assigned')
-             AND event_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM online_orders o
+           WHERE o.event_id = $1
+             AND o.status IN ('pending_payment','payment_confirmed','cards_assigned')
+             AND o.card_ids @> ARRAY[c.id]
          )`,
       availParams
     );
     const available = parseInt(availRows[0].count, 10);
 
-    res.send(renderLanding(event, config, available));
+    res.send(renderLanding(event, config, available, nonceOf(res)));
   } catch (err) {
     console.error('Error en landing:', err);
-    res.status(500).send(renderError('Error del servidor'));
+    res.status(500).send(renderError('Error del servidor', nonceOf(res)));
   }
 });
 
@@ -125,12 +143,16 @@ router.get('/api/orders/:orderCode/status', async (req: Request, res: Response) 
     const order = await getOrderByCode((req.params.orderCode as string).toUpperCase());
     if (!order) return res.status(404).json({ success: false, error: 'Orden no encontrada' });
 
+    // SEC-H7: NO devolver download_url en el JSON público. Un atacante que
+    // enumere order codes podría obtener el link directo al PDF sin pasar
+    // por verificación. El cliente legítimo, al detectar status cambiado,
+    // recarga la página y el render HTML de /venta/estado/:code muestra el
+    // botón de descarga en contexto.
     res.json({
       success: true,
       data: {
         status: order.status,
         payment_confirmed_at: order.payment_confirmed_at,
-        download_url: order.download_token ? `/venta/descargar/${order.download_token}` : null,
       },
     });
   } catch (err) {
@@ -142,13 +164,13 @@ router.get('/api/orders/:orderCode/status', async (req: Request, res: Response) 
 router.get('/estado/:orderCode', async (req: Request, res: Response) => {
   try {
     const order = await getOrderByCode((req.params.orderCode as string).toUpperCase());
-    if (!order) return res.status(404).send(renderError('Orden no encontrada'));
+    if (!order) return res.status(404).send(renderError('Orden no encontrada', nonceOf(res)));
 
     const config = await getSalesConfig(order.event_id);
-    res.send(renderStatus(order, config));
+    res.send(renderStatus(order, config, nonceOf(res)));
   } catch (err) {
     console.error('Error en estado:', err);
-    res.status(500).send(renderError('Error del servidor'));
+    res.status(500).send(renderError('Error del servidor', nonceOf(res)));
   }
 });
 
@@ -157,19 +179,29 @@ router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
   try {
     const order = await getOrderByDownloadToken((req.params.downloadToken as string));
     if (!order || !order.pdf_path) {
-      return res.status(404).send(renderError('Descarga no encontrada o aún no disponible'));
+      return res.status(404).send(renderError('Descarga no encontrada o aún no disponible', nonceOf(res)));
     }
 
-    if (!existsSync(order.pdf_path)) {
-      return res.status(404).send(renderError('Archivo PDF no encontrado'));
+    // SEC-H5: validar que pdf_path resuelva dentro de un directorio whitelistado.
+    // Sin esto, cualquier bug que permita modificar pdf_path en BD podría servir
+    // archivos arbitrarios del filesystem (/etc/passwd, secrets, etc.).
+    const resolvedPath = resolvePath(order.pdf_path);
+    const isSafe = PDF_SAFE_ROOTS.some((root) => resolvedPath.startsWith(root));
+    if (!isSafe) {
+      console.error(`[SEC-H5] pdf_path fuera de whitelist rechazado order=${order.order_code}`);
+      return res.status(403).send(renderError('Archivo no disponible', nonceOf(res)));
+    }
+
+    if (!existsSync(resolvedPath)) {
+      return res.status(404).send(renderError('Archivo PDF no encontrado', nonceOf(res)));
     }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="cartones_${order.order_code}.pdf"`);
-    createReadStream(order.pdf_path).pipe(res);
+    createReadStream(resolvedPath).pipe(res);
   } catch (err) {
     console.error('Error en descarga:', err);
-    res.status(500).send(renderError('Error del servidor'));
+    res.status(500).send(renderError('Error del servidor', nonceOf(res)));
   }
 });
 
@@ -215,7 +247,7 @@ router.get('/yappy/callback', (req: Request, res: Response) => {
           }
         }
       })();
-    </script>`));
+    </script>`, nonceOf(res)));
 });
 
 // GET /venta/yappy/confirm - Procesa la confirmación real con params
@@ -225,62 +257,52 @@ router.post('/yappy/callback', handleYappyConfirm as never);
 async function handleYappyConfirm(req: Request, res: Response) {
   try {
     const params = { ...req.query, ...req.body } as Record<string, string>;
-    console.log('Yappy confirm params:', JSON.stringify(params));
+    // SEC-H8: no loguear params completos (incluyen confirmationNumber, PII potencial).
+    console.log(`[Yappy] callback recibido orderId=${params.orderId} status=${params.status}`);
 
     const yappyBtn = getYappyButtonClient();
     const result = yappyBtn.validateCallback(params);
 
     if (!result.valid || !result.orderId) {
-      return res.status(400).send(renderError('Respuesta de pago no válida'));
+      return res.status(400).send(renderError('Respuesta de pago no válida', nonceOf(res)));
     }
 
     const order = await getOrderByCode(result.orderId.toUpperCase());
     if (!order) {
-      return res.status(404).send(renderError('Orden no encontrada'));
+      return res.status(404).send(renderError('Orden no encontrada', nonceOf(res)));
     }
 
+    // SEC-C1: NO confirmar el pago con datos del query string del navegador
+    // (son falsificables — un atacante puede golpear este endpoint directo).
+    // En su lugar disparamos el polling server-to-server contra la API de
+    // movimientos de Yappy: ese flujo verifica la transacción real y, si
+    // matchea, llama confirmPayment internamente. Si no encuentra la txn,
+    // la orden queda pending_payment y el polling de 60s la toma después.
     if (result.status === 'completed' && order.status === 'pending_payment') {
-      const confirmed = await confirmPayment(
-        order.id,
-        'yappy_button',
-        result.confirmationNumber,
-        { status: result.status, confirmationNumber: result.confirmationNumber, source: 'yappy_button' }
-      );
-
-      // Enviar email en background
-      if (confirmed.pdf_path && confirmed.download_token) {
-        const pool = getPool();
-        const { rows: cards } = await pool.query<{ card_code: string }>(
-          'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
-          [confirmed.card_ids]
-        );
-
-        sendPurchaseEmail({
-          order_code: confirmed.order_code,
-          buyer_name: confirmed.buyer_name,
-          buyer_email: confirmed.buyer_email,
-          quantity: confirmed.quantity,
-          total_amount: Number(confirmed.total_amount),
-          download_token: confirmed.download_token,
-          card_codes: cards.map(c => c.card_code),
-        }, confirmed.pdf_path).then(sent => {
-          if (sent) {
-            pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
-          }
-        }).catch(err => console.error('Error enviando email post-Yappy:', err));
+      try {
+        const { getYappyClient } = await import('../services/yappyService.js');
+        await getYappyClient().matchPendingOrders();
+      } catch (err) {
+        console.error('[Yappy] Error disparando match en callback:', err);
       }
     }
 
     res.redirect(`/venta/estado/${order.order_code}`);
   } catch (err) {
     console.error('Error en Yappy confirm:', err);
-    res.status(500).send(renderError('Error procesando pago'));
+    res.status(500).send(renderError('Error procesando pago', nonceOf(res)));
   }
 }
 
 // ─── HTML Renderers ──────────────────────────────────────────
 
-function renderLayout(title: string, body: string): string {
+// SEC-H3: acepta nonce CSP opcional. Si se provee, inyecta nonce="..." en
+// todos los <script> del body que no lo tengan ya. Así el renderer no requiere
+// que cada string literal del body incluya el nonce manualmente.
+function renderLayout(title: string, body: string, nonce: string = ''): string {
+  const bodyWithNonce = nonce
+    ? body.replace(/<script(?![^>]*\snonce=)(\s|>)/gi, `<script nonce="${nonce}"$1`)
+    : body;
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -330,7 +352,7 @@ function renderLayout(title: string, body: string): string {
 </head>
 <body>
   <div class="container">
-    ${body}
+    ${bodyWithNonce}
     <div class="footer">Powered by Bingo Platform</div>
   </div>
 </body>
@@ -340,7 +362,8 @@ function renderLayout(title: string, body: string): string {
 function renderLanding(
   event: { id: number; name: string },
   config: { price_per_card: number; min_cards_per_order: number; max_cards_per_order: number; landing_title: string | null; landing_description: string | null },
-  available: number
+  available: number,
+  nonce: string = ''
 ): string {
   const title = config.landing_title || event.name;
   const price = Number(config.price_per_card);
@@ -356,9 +379,12 @@ function renderLanding(
         <h2 style="margin-top:16px;">Estamos actualizando nuestro inventario</h2>
         <p style="color:#64748b;margin-top:12px;">En este momento no hay cartones disponibles. Vuelve a intentarlo en unos minutos.</p>
       </div>
-      <button onclick="location.reload()" class="btn btn-primary">Reintentar</button>
-    </div>`;
-    return renderLayout(`${title} - No disponible`, body);
+      <button id="btn-reload" class="btn btn-primary">Reintentar</button>
+    </div>
+    <script>
+      document.getElementById('btn-reload').addEventListener('click', function(){ location.reload(); });
+    </script>`;
+    return renderLayout(`${title} - No disponible`, body, nonce);
   }
 
   const body = `
@@ -465,7 +491,7 @@ function renderLanding(
       });
     </script>`;
 
-  return renderLayout(`Comprar Cartones - ${title}`, body);
+  return renderLayout(`Comprar Cartones - ${title}`, body, nonce);
 }
 
 function renderStatus(
@@ -479,7 +505,8 @@ function renderStatus(
     expires_at: string;
     event_id: number;
   },
-  config: { yappy_qr_image: string | null; payment_instructions: string | null } | null
+  config: { yappy_qr_image: string | null; payment_instructions: string | null } | null,
+  nonce: string = ''
 ): string {
   let statusHtml = '';
 
@@ -572,17 +599,17 @@ function renderStatus(
       ${statusHtml}
     </div>`;
 
-  return renderLayout(`Orden ${order.order_code}`, body);
+  return renderLayout(`Orden ${order.order_code}`, body, nonce);
 }
 
-function renderError(message: string): string {
+function renderError(message: string, nonce: string = ''): string {
   const body = `
     <div class="card">
       <h1>Error</h1>
       <div class="rainbow"></div>
       <p style="text-align:center;color:#dc2626;margin:20px 0;font-size:16px;">${escapeHtml(message)}</p>
     </div>`;
-  return renderLayout('Error', body);
+  return renderLayout('Error', body, nonce);
 }
 
 export default router;

@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 /**
  * Yappy Botón de Pago V2
@@ -171,8 +171,16 @@ export class YappyButtonClient {
       .update(orderId + status + domain)
       .digest('hex');
 
-    if (Hash !== expected) {
-      console.error(`IPN hash mismatch: expected=${expected}, got=${Hash}`);
+    // SEC-C1: comparación timing-safe para evitar filtrar el hash byte a byte.
+    const receivedBuf = Buffer.from(Hash, 'hex');
+    const expectedBuf = Buffer.from(expected, 'hex');
+    const matches =
+      receivedBuf.length === expectedBuf.length &&
+      timingSafeEqual(receivedBuf, expectedBuf);
+
+    if (!matches) {
+      // SEC-H8: no loguear los hashes (filtraría el signingKey si se comparan).
+      console.error(`[Yappy IPN] hash mismatch para orderId=${orderId}`);
       return { valid: false, orderId, status: 'rejected' };
     }
 
