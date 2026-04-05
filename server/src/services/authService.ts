@@ -224,6 +224,8 @@ export async function updateUser(
     const passwordHash = await hashPassword(data.password);
     updates.push(`password_hash = $${paramIndex++}`);
     values.push(passwordHash);
+    // SEC-H6: admin cambiando password de otro user también invalida sus JWTs.
+    updates.push('password_changed_at = CURRENT_TIMESTAMP');
   }
 
   if (updates.length > 0) {
@@ -264,8 +266,15 @@ export async function changePassword(
   }
 
   const newHash = await hashPassword(newPassword);
+  // SEC-H6: setear password_changed_at a NOW() invalida todos los JWTs
+  // emitidos antes de este momento (el middleware authenticate rechaza
+  // cualquier token con iat < password_changed_at).
   await pool.query(
-    'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+    `UPDATE users
+     SET password_hash = $1,
+         password_changed_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2`,
     [newHash, userId]
   );
 

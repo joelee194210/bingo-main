@@ -6,6 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
+import { randomBytes } from 'crypto';
 import { createServer as createHttpServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import { readFileSync, existsSync } from 'fs';
@@ -87,18 +88,35 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
+
+// SEC-H3: generar nonce criptográfico por request para CSP.
+// Cada render HTML que emita <script> inline debe usar <script nonce="...">.
+app.use((_req, res, next) => {
+  res.locals.cspNonce = randomBytes(16).toString('base64');
+  next();
+});
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
+      // SEC-H3: reemplazar 'unsafe-inline' por nonce per-request. Los scripts
+      // legítimos emitidos por renderers de venta.ts deben incluir nonce="...".
+      scriptSrc: [
+        "'self'",
+        (_req: unknown, res: unknown) =>
+          `'nonce-${(res as { locals: { cspNonce: string } }).locals.cspNonce}'`,
+        "https://challenges.cloudflare.com",
+      ],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:"],
       connectSrc: ["'self'"],
       fontSrc: ["'self'"],
       frameSrc: ["https://challenges.cloudflare.com"],
       objectSrc: ["'none'"],
-      scriptSrcAttr: ["'unsafe-inline'"],
+      // Mantenemos scriptSrcAttr limitado: ningún event handler inline nuevo
+      // debe ser necesario (los que existen se migraron a addEventListener).
+      scriptSrcAttr: ["'none'"],
       frameAncestors: ["'none'"],
     },
   },
@@ -125,7 +143,7 @@ const authSensitiveLimiter = rateLimit({
 });
 app.use('/api/auth/change-password', authSensitiveLimiter);
 
-// Rate limiting en creación de órdenes de venta
+// Rate limiting en creación de órdenes de venta (POST estricto)
 const ventaOrderLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -133,7 +151,25 @@ const ventaOrderLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use('/venta/api/orders', ventaOrderLimiter);
+
+// SEC-H7: rate limit específico para polling de status. Antes el
+// ventaOrderLimiter cubría ambos paths (POST create + GET status) y 10/15min
+// bloqueaba el polling legítimo; sin ventaOrderLimiter el polling no tenía
+// rate limit y permitía enumerar order codes para obtener download_url.
+// Separamos por verbo: POST estricto, GET generoso.
+const ventaStatusLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 min
+  max: 120, // 2 req/s por IP — suficiente para polling de 10s con holgura
+  message: { success: false, error: 'Demasiados intentos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/venta/api/orders', (req, res, next) => {
+  if (req.method === 'POST') return ventaOrderLimiter(req, res, next);
+  if (req.method === 'GET') return ventaStatusLimiter(req, res, next);
+  return next();
+});
 
 // Rate limiting general
 const generalLimiter = rateLimit({
@@ -154,7 +190,6 @@ app.use((req, _res, next) => {
 app.use('/verificar', verificarRouter); // verificación de cartón vía QR (sin auth)
 app.use('/venta', ventaRouter); // landing de venta online (sin auth)
 app.use('/api/auth', authRouter);
-app.use('/api/backup', backupProgressRouter); // progreso sin auth (jobId es secreto)
 
 // Rutas API protegidas
 app.use('/api/events', authenticate, eventsRouter);
@@ -165,6 +200,8 @@ app.use('/api/export', authenticate, exportRouter);
 app.use('/api/reports', authenticate, reportsRouter);
 app.use('/api/promo', authenticate, promoRouter);
 app.use('/api/inventario', authenticate, inventarioRouter);
+// SEC-H1: progreso de backup también detrás de authenticate (antes era público "porque el jobId es secreto" pero el jobId puede filtrarse por logs/proxies).
+app.use('/api/backup', authenticate, backupProgressRouter);
 app.use('/api/backup', authenticate, backupRouter);
 app.use('/api/permissions', authenticate, permissionsRouter);
 app.use('/api/activity-log', authenticate, activityLogRouter);
@@ -405,16 +442,30 @@ async function start() {
 ╚══════════════════════════════════════════════════════════╝
       `);
 
+      // TS-H11: cada setInterval debe capturar errores async para evitar
+      // unhandled rejection (que termina el proceso en Node 15+).
       // Background jobs: expirar órdenes de venta cada 5 minutos
       import('./services/onlineOrderService.js').then(({ expireStaleOrders }) => {
-        setInterval(() => expireStaleOrders(), 5 * 60 * 1000);
+        setInterval(async () => {
+          try {
+            await expireStaleOrders();
+          } catch (err) {
+            console.error('[background] Error en expireStaleOrders:', err);
+          }
+        }, 5 * 60 * 1000);
       });
 
       // Yappy polling cada 60s (solo si está configurado)
       if (process.env.YAPPY_ENABLED === 'true') {
         import('./services/yappyService.js').then(({ getYappyClient }) => {
           const yappy = getYappyClient();
-          setInterval(() => yappy.matchPendingOrders(), 60 * 1000);
+          setInterval(async () => {
+            try {
+              await yappy.matchPendingOrders();
+            } catch (err) {
+              console.error('[background] Error en Yappy polling:', err);
+            }
+          }, 60 * 1000);
           console.log('✅ Yappy polling activado');
         });
       }

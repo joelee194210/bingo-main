@@ -1,7 +1,23 @@
 import pg from 'pg';
 const { Pool } = pg;
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://slacker@localhost:5432/bingo';
+// SEC-H2: en prod exige DATABASE_URL explícito; en dev permite fallback local.
+function requireDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL;
+  if (url) return url;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'DATABASE_URL env var es requerida en producción. ' +
+      'Configurala en Railway antes de arrancar el servicio.'
+    );
+  }
+  console.warn(
+    '⚠️  DATABASE_URL no está seteada. Usando fallback local (solo dev): ' +
+    'postgresql://slacker@localhost:5432/bingo'
+  );
+  return 'postgresql://slacker@localhost:5432/bingo';
+}
+const DATABASE_URL = requireDatabaseUrl();
 
 let pool: pg.Pool | undefined;
 

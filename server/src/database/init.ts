@@ -2,11 +2,14 @@ import { Pool } from 'pg';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { requireDatabaseUrl } from '../utils/dbEnv.js';
+import { CARDS_PER_SERIES } from '../constants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://slacker@localhost:5432/bingo';
+// SEC-H2: en prod exige DATABASE_URL explícito; en dev permite fallback local.
+const DATABASE_URL = requireDatabaseUrl();
 
 let pool: Pool | null = null;
 
@@ -70,8 +73,8 @@ async function runMigrations(p: Pool): Promise<void> {
     await p.query("ALTER TABLE cards ADD COLUMN serial TEXT NOT NULL DEFAULT ''");
     const allCards = (await p.query('SELECT id, card_number FROM cards ORDER BY event_id, card_number')).rows;
     for (const card of allCards) {
-      const series = Math.ceil(card.card_number / 50).toString().padStart(5, '0');
-      const seq = (((card.card_number - 1) % 50) + 1).toString().padStart(2, '0');
+      const series = Math.ceil(card.card_number / CARDS_PER_SERIES).toString().padStart(5, '0');
+      const seq = (((card.card_number - 1) % CARDS_PER_SERIES) + 1).toString().padStart(2, '0');
       await p.query('UPDATE cards SET serial = $1 WHERE id = $2', [`${series}-${seq}`, card.id]);
     }
     await p.query('CREATE INDEX IF NOT EXISTS idx_cards_serial ON cards(serial)');
@@ -270,6 +273,14 @@ async function runMigrations(p: Pool): Promise<void> {
     await p.query('ALTER TABLE users ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
     await p.query('CREATE INDEX IF NOT EXISTS idx_users_created_by ON users(created_by)');
     console.log('✅ Migración aplicada: created_by agregado a users');
+  }
+
+  // SEC-H6: password_changed_at on users. Al cambiar password, se setea a NOW().
+  // El middleware authenticate rechaza JWTs cuyo iat sea anterior, efectivamente
+  // invalidando tokens emitidos antes del cambio de contraseña.
+  if (!(await checkColumn('users', 'password_changed_at'))) {
+    await p.query('ALTER TABLE users ADD COLUMN password_changed_at TIMESTAMP');
+    console.log('✅ Migración aplicada: password_changed_at agregado a users');
   }
 
   // Migration: numbers TEXT → JSONB + función SQL para verificar ganadores en la DB

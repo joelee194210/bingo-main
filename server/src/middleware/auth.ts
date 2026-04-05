@@ -4,6 +4,30 @@ import { getPool } from '../database/init.js';
 import type { JWTPayload, UserRole, UserPublic } from '../types/auth.js';
 import { hasPermission as checkPerm } from '../services/permissionService.js';
 
+// SEC-H6: cache del resultado de existencia de la columna password_changed_at.
+// Se resuelve al primer uso para tolerar que la migración aún no esté aplicada
+// (graceful degradation: si la columna no existe, se skippea el check).
+let passwordChangedAtAvailable: boolean | null = null;
+
+async function getPasswordChangedAt(userId: number): Promise<Date | null> {
+  if (passwordChangedAtAvailable === false) return null;
+  try {
+    const { rows } = await getPool().query<{ password_changed_at: Date | null }>(
+      'SELECT password_changed_at FROM users WHERE id = $1',
+      [userId]
+    );
+    passwordChangedAtAvailable = true;
+    return rows[0]?.password_changed_at ?? null;
+  } catch (err) {
+    // Columna no existe todavía (migración pendiente). No romper auth.
+    if ((err as { code?: string })?.code === '42703') {
+      passwordChangedAtAvailable = false;
+      return null;
+    }
+    throw err;
+  }
+}
+
 // Extender Request para incluir usuario autenticado
 declare global {
   namespace Express {
@@ -52,6 +76,19 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       success: false,
       error: 'Usuario no encontrado o desactivado',
     });
+  }
+
+  // SEC-H6: rechazar tokens emitidos antes del último cambio de contraseña.
+  // Tolerante a la migración pendiente (si la columna no existe, skip).
+  const passwordChangedAt = await getPasswordChangedAt(user.id);
+  if (passwordChangedAt && payload.iat) {
+    const iatMs = payload.iat * 1000;
+    if (iatMs < passwordChangedAt.getTime()) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token inválido — la contraseña fue cambiada',
+      });
+    }
   }
 
   req.user = user;

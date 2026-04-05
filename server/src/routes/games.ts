@@ -29,6 +29,19 @@ function isKnownError(msg: string): boolean {
   return ['no encontrado', 'no se puede', 'no está', 'ya fue', 'ya ha', 'no quedan', 'no hay'].some(k => msg.toLowerCase().includes(k));
 }
 
+/**
+ * TS-H5: validar que un param de ruta sea un entero positivo.
+ * Antes se usaba `parseInt(req.params.id, 10)` directo, y si llegaba
+ * algo no numérico (por ejemplo, a través de un path malformado) pg
+ * recibía `NaN` → envía NULL implícitamente → 0 filas silenciosas → `!`
+ * asertivo arriba crasheaba la ruta entera.
+ * Devuelve null si inválido; el caller debe retornar 400 en ese caso.
+ */
+function parseIdParam(value: unknown): number | null {
+  const n = parseInt(String(value ?? ''), 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 // GET /api/games - Listar juegos (opcionalmente por evento)
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -66,8 +79,12 @@ router.get('/', async (req: Request, res: Response) => {
 // GET /api/games/event/:eventId - Todos los juegos de un evento (DEBE ir antes de /:id)
 router.get('/event/:eventId', async (req: Request, res: Response) => {
   try {
+    const eventId = parseIdParam(req.params.eventId);
+    if (eventId === null) {
+      return res.status(400).json({ success: false, error: 'ID de evento inválido' });
+    }
     const pool = getPool();
-    const games = await getEventGames(pool, parseInt(req.params.eventId as string, 10));
+    const games = await getEventGames(pool, eventId);
 
     res.json({ success: true, data: games });
   } catch (error) {
@@ -79,8 +96,12 @@ router.get('/event/:eventId', async (req: Request, res: Response) => {
 // GET /api/games/:id - Obtener estado del juego
 router.get('/:id', async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const state = await getGameState(pool, parseInt(req.params.id as string, 10));
+    const state = await getGameState(pool, gameId);
 
     if (!state) {
       return res.status(404).json({ success: false, error: 'Juego no encontrado' });
@@ -135,8 +156,11 @@ router.post('/', requirePermission('games:create'), async (req: Request, res: Re
 // POST /api/games/:id/start - Iniciar juego (admin y moderador)
 router.post('/:id/start', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const gameId = parseInt(req.params.id as string, 10);
     const state = await startGame(pool, gameId);
     emitGameUpdate(gameId, state);
 
@@ -153,8 +177,11 @@ router.post('/:id/start', requirePermission('games:play'), async (req: Request, 
 // POST /api/games/:id/pause - Pausar juego (admin y moderador)
 router.post('/:id/pause', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const gameId = parseInt(req.params.id as string, 10);
     const state = await pauseGame(pool, gameId);
     emitGameUpdate(gameId, state);
 
@@ -169,8 +196,11 @@ router.post('/:id/pause', requirePermission('games:play'), async (req: Request, 
 // POST /api/games/:id/resume - Reanudar juego (admin y moderador)
 router.post('/:id/resume', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const gameId = parseInt(req.params.id as string, 10);
     const state = await resumeGame(pool, gameId);
     emitGameUpdate(gameId, state);
 
@@ -185,6 +215,10 @@ router.post('/:id/resume', requirePermission('games:play'), async (req: Request,
 // POST /api/games/:id/call - Llamar balota específica (admin y moderador)
 router.post('/:id/call', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
     const { ball } = req.body;
 
@@ -192,7 +226,6 @@ router.post('/:id/call', requirePermission('games:play'), async (req: Request, r
       return res.status(400).json({ success: false, error: 'Balota inválida (1-75, entero)' });
     }
 
-    const gameId = parseInt(req.params.id as string, 10);
     const result = await callBall(pool, gameId, ball);
     emitBallCalled(gameId, result);
     if (result.winners?.length > 0) {
@@ -210,8 +243,11 @@ router.post('/:id/call', requirePermission('games:play'), async (req: Request, r
 // POST /api/games/:id/call-random - Llamar balota aleatoria (admin y moderador)
 router.post('/:id/call-random', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const gameId = parseInt(req.params.id as string, 10);
     const result = await callRandomBall(pool, gameId);
     emitBallCalled(gameId, result);
     if (result.winners?.length > 0) {
@@ -229,8 +265,11 @@ router.post('/:id/call-random', requirePermission('games:play'), async (req: Req
 // POST /api/games/:id/finish - Finalizar juego y generar reporte (admin y moderador)
 router.post('/:id/finish', requirePermission('games:finish'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const gameId = parseInt(req.params.id as string, 10);
     const { gameState, report } = await finishGame(pool, gameId);
     emitGameUpdate(gameId, gameState);
 
@@ -253,8 +292,11 @@ router.post('/:id/finish', requirePermission('games:finish'), async (req: Reques
 // POST /api/games/:id/cancel - Cancelar juego (admin y moderador)
 router.post('/:id/cancel', requirePermission('games:finish'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const gameId = parseInt(req.params.id as string, 10);
     const state = await cancelGame(pool, gameId);
     emitGameUpdate(gameId, state);
 
@@ -269,8 +311,11 @@ router.post('/:id/cancel', requirePermission('games:finish'), async (req: Reques
 // POST /api/games/:id/reset - Reiniciar juego (admin y moderador)
 router.post('/:id/reset', requirePermission('games:play'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const gameId = parseInt(req.params.id as string, 10);
     const state = await resetGame(pool, gameId);
     emitGameUpdate(gameId, state);
 
@@ -285,8 +330,12 @@ router.post('/:id/reset', requirePermission('games:play'), async (req: Request, 
 // POST /api/games/:id/replay - Crear nuevo juego con misma configuración (admin y moderador)
 router.post('/:id/replay', requirePermission('games:create'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const newGame = await replayGame(pool, parseInt(req.params.id as string, 10));
+    const newGame = await replayGame(pool, gameId);
     const state = await getGameState(pool, newGame.id);
 
     res.status(201).json({ success: true, data: state });
@@ -300,8 +349,12 @@ router.post('/:id/replay', requirePermission('games:create'), async (req: Reques
 // GET /api/games/:id/stats - Estadísticas del juego
 router.get('/:id/stats', async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const stats = await getGameStats(pool, parseInt(req.params.id as string, 10));
+    const stats = await getGameStats(pool, gameId);
 
     if (!stats) {
       return res.status(404).json({ success: false, error: 'Juego no encontrado' });
@@ -317,14 +370,18 @@ router.get('/:id/stats', async (req: Request, res: Response) => {
 // GET /api/games/:id/winners - Obtener ganadores actuales
 router.get('/:id/winners', requirePermission('games:read'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const state = await getGameState(pool, parseInt(req.params.id as string, 10));
+    const state = await getGameState(pool, gameId);
 
     if (!state) {
       return res.status(404).json({ success: false, error: 'Juego no encontrado' });
     }
 
-    const { rows: gameRows } = await pool.query('SELECT * FROM games WHERE id = $1', [req.params.id]);
+    const { rows: gameRows } = await pool.query('SELECT * FROM games WHERE id = $1', [gameId]);
     const game = gameRows[0] as { custom_pattern: string | null };
     const customPattern = game.custom_pattern ? JSON.parse(game.custom_pattern) : undefined;
 
@@ -353,8 +410,11 @@ router.get('/:id/winners', requirePermission('games:read'), async (req: Request,
 // DELETE /api/games/:id - Eliminar juego (solo admin)
 router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) => {
   try {
+    const gameId = parseIdParam(req.params.id);
+    if (gameId === null) {
+      return res.status(400).json({ success: false, error: 'ID de juego inválido' });
+    }
     const pool = getPool();
-    const gameId = parseInt(req.params.id as string, 10);
 
     // Verificar que el juego existe
     const { rows } = await pool.query('SELECT id, status, event_id FROM games WHERE id = $1', [gameId]);

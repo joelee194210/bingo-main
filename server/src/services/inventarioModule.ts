@@ -1486,11 +1486,26 @@ export async function getCajas(pool: Pool, eventId: number, almacenId?: number, 
   almacen_name: string | null;
   lotes: { id: number; lote_code: string; series_number: string; total_cards: number; cards_sold: number; status: string }[];
 }[]> {
-  const agenciaFilter = soloAgencias && !almacenId ? ' AND a.es_agencia_loteria = true' : '';
-  const where = almacenId ? 'c.event_id = $1 AND c.almacen_id = $2' : `c.event_id = $1${agenciaFilter}`;
-  const params = almacenId ? [eventId, almacenId] : [eventId];
+  // TS-C1: validar que eventId y almacenId sean enteros válidos antes de
+  // interpolarlos en SQL. Aunque Number() los convierte, un NaN interpolado
+  // genera SQL frágil (ca.almacen_id = NaN nunca matchea) y el patrón
+  // invita a inyección si el tipo cambia en el futuro.
+  if (!Number.isInteger(eventId) || eventId <= 0) {
+    throw new Error('eventId inválido');
+  }
+  let almId: number | null = null;
+  if (almacenId !== null && almacenId !== undefined) {
+    const n = Number(almacenId);
+    if (!Number.isInteger(n) || n <= 0) {
+      throw new Error('almacenId inválido');
+    }
+    almId = n;
+  }
+
+  const agenciaFilter = soloAgencias && !almId ? ' AND a.es_agencia_loteria = true' : '';
+  const where = almId ? 'c.event_id = $1 AND c.almacen_id = $2' : `c.event_id = $1${agenciaFilter}`;
+  const params = almId ? [eventId, almId] : [eventId];
   // Cuando se filtra por almacén, contar cards REALES en ese almacén (no total_cards del lote)
-  const almId = almacenId ? Number(almacenId) : null;
   const totalCartonesExpr = almId
     ? `COALESCE((SELECT COUNT(*) FROM cards ca JOIN lotes l ON l.id = ca.lote_id WHERE l.caja_id = c.id AND ca.almacen_id = ${almId}), 0)`
     : `COALESCE((SELECT SUM(l.total_cards) FROM lotes l WHERE l.caja_id = c.id), 0)`;

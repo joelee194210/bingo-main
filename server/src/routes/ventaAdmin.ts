@@ -26,6 +26,9 @@ router.get('/config/:eventId', requirePermission('cards:sell'), async (req: Requ
 router.put('/config/:eventId', requirePermission('cards:sell'), async (req: Request, res: Response) => {
   try {
     const eventId = parseInt((req.params.eventId as string), 10);
+    if (!Number.isInteger(eventId) || eventId <= 0) {
+      return res.status(400).json({ success: false, error: 'event_id inválido' });
+    }
 
     // Si se pasa almacen_name en vez de almacen_id, resolver
     if (req.body.almacen_name && !req.body.almacen_id) {
@@ -39,13 +42,133 @@ router.put('/config/:eventId', requirePermission('cards:sell'), async (req: Requ
       }
     }
 
-    const config = await upsertSalesConfig(eventId, req.body);
+    // SEC-H9/TS-H12: validar campos antes de pasar a upsertSalesConfig.
+    // Antes pasábamos req.body completo; el allowlist del service filtraba
+    // campos pero no validaba tipos/rangos (price_per_card negativo,
+    // min_cards > max_cards, strings vacíos, etc.).
+    const validation = validateSalesConfigInput(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, error: validation.error });
+    }
+
+    const config = await upsertSalesConfig(eventId, validation.data);
     res.json({ success: true, data: config });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error actualizando configuracion';
     res.status(500).json({ success: false, error: msg });
   }
 });
+
+// SEC-H9/TS-H12: validador tipado y con reglas de negocio para el body de
+// PUT /config/:eventId. Solo deja pasar campos editables con tipos correctos.
+type SalesConfigInput = {
+  is_enabled?: boolean;
+  price_per_card?: number;
+  max_cards_per_order?: number;
+  min_cards_per_order?: number;
+  almacen_id?: number | null;
+  yappy_qr_image?: string | null;
+  yappy_collection_alias?: string | null;
+  payment_instructions?: string | null;
+  order_expiry_minutes?: number;
+  landing_title?: string | null;
+  landing_description?: string | null;
+};
+
+function validateSalesConfigInput(body: unknown):
+  | { valid: true; data: SalesConfigInput }
+  | { valid: false; error: string } {
+  if (!body || typeof body !== 'object') {
+    return { valid: false, error: 'Body inválido' };
+  }
+  const input = body as Record<string, unknown>;
+  const out: SalesConfigInput = {};
+
+  if ('is_enabled' in input) {
+    if (typeof input.is_enabled !== 'boolean') {
+      return { valid: false, error: 'is_enabled debe ser boolean' };
+    }
+    out.is_enabled = input.is_enabled;
+  }
+
+  if ('price_per_card' in input && input.price_per_card !== null && input.price_per_card !== undefined) {
+    const n = Number(input.price_per_card);
+    if (!Number.isFinite(n) || n <= 0 || n > 10000) {
+      return { valid: false, error: 'price_per_card debe ser > 0 y <= 10000' };
+    }
+    out.price_per_card = n;
+  }
+
+  if ('max_cards_per_order' in input && input.max_cards_per_order !== null) {
+    const n = Number(input.max_cards_per_order);
+    if (!Number.isInteger(n) || n < 1 || n > 10000) {
+      return { valid: false, error: 'max_cards_per_order debe ser entero entre 1 y 10000' };
+    }
+    out.max_cards_per_order = n;
+  }
+
+  if ('min_cards_per_order' in input && input.min_cards_per_order !== null) {
+    const n = Number(input.min_cards_per_order);
+    if (!Number.isInteger(n) || n < 1 || n > 10000) {
+      return { valid: false, error: 'min_cards_per_order debe ser entero entre 1 y 10000' };
+    }
+    out.min_cards_per_order = n;
+  }
+
+  if (
+    out.min_cards_per_order !== undefined &&
+    out.max_cards_per_order !== undefined &&
+    out.min_cards_per_order > out.max_cards_per_order
+  ) {
+    return { valid: false, error: 'min_cards_per_order no puede ser mayor que max_cards_per_order' };
+  }
+
+  if ('almacen_id' in input) {
+    if (input.almacen_id === null || input.almacen_id === undefined) {
+      out.almacen_id = null;
+    } else {
+      const n = Number(input.almacen_id);
+      if (!Number.isInteger(n) || n <= 0) {
+        return { valid: false, error: 'almacen_id inválido' };
+      }
+      out.almacen_id = n;
+    }
+  }
+
+  if ('order_expiry_minutes' in input && input.order_expiry_minutes !== null) {
+    const n = Number(input.order_expiry_minutes);
+    if (!Number.isInteger(n) || n < 1 || n > 1440) {
+      return { valid: false, error: 'order_expiry_minutes debe ser entero entre 1 y 1440' };
+    }
+    out.order_expiry_minutes = n;
+  }
+
+  // Strings opcionales — solo verificar tipo y longitud.
+  const stringFields: Array<keyof SalesConfigInput> = [
+    'yappy_qr_image',
+    'yappy_collection_alias',
+    'payment_instructions',
+    'landing_title',
+    'landing_description',
+  ];
+  for (const key of stringFields) {
+    if (key in input) {
+      const v = input[key];
+      if (v === null) {
+        (out as Record<string, unknown>)[key] = null;
+      } else if (typeof v === 'string') {
+        if (v.length > 2000) {
+          return { valid: false, error: `${String(key)} demasiado largo` };
+        }
+        (out as Record<string, unknown>)[key] = v;
+      } else {
+        return { valid: false, error: `${String(key)} debe ser string o null` };
+      }
+    }
+  }
+
+  return { valid: true, data: out };
+}
 
 // GET /api/venta/orders
 router.get('/orders', requirePermission('cards:sell'), async (req: Request, res: Response) => {

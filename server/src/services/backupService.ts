@@ -671,19 +671,24 @@ export async function getEventsForBackup(pool: Pool) {
 // DUMP POSTGRESQL - BACKUP/RESTORE COMPLETO
 // =====================================================
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://slacker@localhost:5432/bingo';
+// SEC-H2: URL validada (fail-fast en prod) + env vars para spawn pg_dump/psql.
+// Antes pasábamos la URL completa como arg posicional → password visible en ps aux.
+// Ahora libpq lee PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE del env del spawn.
+import { requireDatabaseUrl, pgSpawnEnv } from '../utils/dbEnv.js';
+const DATABASE_URL = requireDatabaseUrl();
+const PG_SPAWN_ENV = pgSpawnEnv(DATABASE_URL);
 
 export function exportFullDump(job?: BackupProgress): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     if (job) updateJob(job, { step: 'Ejecutando pg_dump...', current: 0, total: 1, details: 'Generando dump PostgreSQL...' });
 
+    // SEC-H2: credenciales via env (PGPASSWORD etc) — NO en argv.
     const proc = spawn('pg_dump', [
-      DATABASE_URL,
       '--no-owner',
       '--no-privileges',
       '--clean',
       '--if-exists',
-    ]);
+    ], { env: PG_SPAWN_ENV });
 
     const chunks: Buffer[] = [];
     proc.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -715,7 +720,8 @@ export function restoreFullDump(sqlBuffer: Buffer, job?: BackupProgress): Promis
   return new Promise((resolve, reject) => {
     if (job) updateJob(job, { step: 'Restaurando dump PostgreSQL...', current: 0, total: 1, details: `Procesando ${(sqlBuffer.length / 1024 / 1024).toFixed(2)} MB...` });
 
-    const proc = spawn('psql', [DATABASE_URL, '-v', 'ON_ERROR_STOP=1']);
+    // SEC-H2: credenciales via env (PGPASSWORD etc) — NO en argv.
+    const proc = spawn('psql', ['-v', 'ON_ERROR_STOP=1'], { env: PG_SPAWN_ENV });
 
     let stderr = '';
     proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
@@ -753,6 +759,12 @@ export function restoreFullDump(sqlBuffer: Buffer, job?: BackupProgress): Promis
  * Usa UN solo proceso psql con COPY TO STDOUT, pipeado directo al cliente.
  */
 export async function streamEventDump(pool: Pool, eventId: number, eventName: string, res: import('express').Response): Promise<void> {
+  // TS-C1: eventId se interpola directo en SQL templates (WHERE event_id = ${eventId})
+  // que luego se pasan como argumentos CLI a psql. Un NaN o un valor no entero
+  // genera SQL frágil; validamos estrictamente antes de construir los templates.
+  if (!Number.isInteger(eventId) || eventId <= 0) {
+    throw new Error('eventId inválido');
+  }
   const tables = [
     { table: 'events', where: `id = ${eventId}` },
     { table: 'centros', where: `event_id = ${eventId}` },
@@ -823,8 +835,9 @@ export async function streamEventDump(pool: Pool, eventId: number, eventName: st
 
     // Ejecutar COPY TO STDOUT y pipear directo al response
     await new Promise<void>((resolve, reject) => {
-      const proc = spawn('psql', [DATABASE_URL, '-X', '-q', '-c',
-        `COPY (SELECT ${columns} FROM ${table} WHERE ${where}) TO STDOUT`]);
+      // SEC-H2: credenciales via env — NO en argv.
+      const proc = spawn('psql', ['-X', '-q', '-c',
+        `COPY (SELECT ${columns} FROM ${table} WHERE ${where}) TO STDOUT`], { env: PG_SPAWN_ENV });
 
       proc.stdout.on('data', (chunk: Buffer) => res.write(chunk));
 
@@ -882,7 +895,8 @@ export function restoreEventDumpFromFile(pool: Pool, filePath: string, job?: Bac
 
   return new Promise((resolve, reject) => {
     // psql -f lee directo del disco — cero buffering en Node.js
-    const proc = spawn('psql', [DATABASE_URL, '-f', filePath]);
+    // SEC-H2: credenciales via env — NO en argv.
+    const proc = spawn('psql', ['-f', filePath], { env: PG_SPAWN_ENV });
 
     let stderr = '';
     proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });

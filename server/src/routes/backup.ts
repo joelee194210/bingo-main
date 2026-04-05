@@ -14,6 +14,7 @@ import {
 } from '../services/backupService.js';
 import { logActivity, auditFromReq } from '../services/auditService.js';
 import { readdirSync, unlinkSync, mkdirSync } from 'fs';
+import { requireDatabaseUrl, pgSpawnEnv } from '../utils/dbEnv.js';
 
 // Limpiar archivos temporales de uploads anteriores al iniciar
 try {
@@ -27,7 +28,9 @@ const router = Router();
 // Todos los uploads van a disco para no cargar RAM
 const uploadDisk = multer({ dest: '/tmp/bingo-uploads/', limits: { fileSize: 500 * 1024 * 1024 } });
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://slacker@localhost:5432/bingo';
+// SEC-H2: URL validada + env vars para spawn (no pasar password en argv).
+const DATABASE_URL = requireDatabaseUrl();
+const PG_SPAWN_ENV = pgSpawnEnv(DATABASE_URL);
 function backupTimestamp() {
   return new Date().toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
 }
@@ -64,7 +67,8 @@ router.get('/full', async (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Content-Type', 'application/sql');
 
-  const proc = spawn('pg_dump', [DATABASE_URL, '--no-owner', '--no-privileges', '--clean', '--if-exists']);
+  // SEC-H2: credenciales via env (PGPASSWORD etc) — NO en argv.
+  const proc = spawn('pg_dump', ['--no-owner', '--no-privileges', '--clean', '--if-exists'], { env: PG_SPAWN_ENV });
 
   // Kill si tarda demasiado
   const timer = setTimeout(() => { proc.kill('SIGTERM'); }, PG_PROCESS_TIMEOUT);
@@ -208,7 +212,8 @@ router.post('/restore-full', uploadDisk.single('file'), async (req, res) => {
       job.details = `Procesando ${(req.file!.size / 1024 / 1024).toFixed(2)} MB...`;
       job.updatedAt = Date.now();
 
-      const proc = spawn('psql', [DATABASE_URL, '-f', filePath]);
+      // SEC-H2: credenciales via env — NO en argv.
+      const proc = spawn('psql', ['-f', filePath], { env: PG_SPAWN_ENV });
       const timer = setTimeout(() => { proc.kill('SIGTERM'); }, PG_PROCESS_TIMEOUT);
 
       let stderr = '';
