@@ -27,26 +27,30 @@ app.use(helmet({
     },
   },
 }));
-// SEC-C3: CORS con whitelist explícita. ALLOWED_ORIGINS es CSV en env
-// (ej. "https://megabingodigital.com,https://www.megabingodigital.com").
-// Si no se setea, se deshabilita CORS cross-origin (same-origin sigue funcionando).
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+// SEC-C3: CORS con whitelist explícita cuando ALLOWED_ORIGINS está seteada.
+// Si no está seteada, permite todo (comportamiento por defecto) para no romper
+// el landing en producción si el admin no ha configurado la env var aún.
+const allowedOriginsRaw = process.env.ALLOWED_ORIGINS || '';
+const allowedOrigins = allowedOriginsRaw
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Requests same-origin / curl / health checks no envían Origin.
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error(`Origen no permitido por CORS: ${origin}`));
-    },
-    methods: ['GET', 'POST'],
-    credentials: false,
-  })
-);
+if (allowedOrigins.length > 0) {
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        return callback(new Error(`Origen no permitido por CORS: ${origin}`));
+      },
+      methods: ['GET', 'POST'],
+      credentials: false,
+    })
+  );
+} else {
+  app.use(cors());
+}
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
