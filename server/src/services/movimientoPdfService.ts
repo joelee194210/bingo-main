@@ -378,7 +378,7 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333')
           .text('Rango: ', margin + 12, doc.y, { continued: true });
         doc.font('Helvetica')
-          .text(`Serie ${fmtSerial(item.serial_desde)}  →  Serie ${fmtSerial(item.serial_hasta)}`);
+          .text(`Serie ${fmtSerial(item.serial_desde)}  a  Serie ${fmtSerial(item.serial_hasta)}`);
         doc.moveDown(0.2);
       }
 

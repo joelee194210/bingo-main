@@ -1231,19 +1231,30 @@ export async function ejecutarVenta(
           }
         }
 
-        // Obtener rango de seriales de la libreta
-        const loteRange = await client.query(
-          `SELECT l.total_cards, l.cards_sold, MIN(c.serial) as serial_desde, MAX(c.serial) as serial_hasta
-           FROM lotes l LEFT JOIN cards c ON c.lote_id = l.id
-           WHERE l.id = $1 GROUP BY l.id, l.total_cards, l.cards_sold`,
-          [lote.id]
-        );
-        const lr = loteRange.rows[0];
-        detalle.serial_desde = lr?.serial_desde;
-        detalle.serial_hasta = lr?.serial_hasta;
+        // Obtener rango de seriales de los cartones vendidos en ESTA transacción
+        // (los que acaban de pasar de is_sold=false a is_sold=true).
+        // Usamos sold_at >= NOW() - 5s como proxy de "fueron los de este UPDATE",
+        // o mejor aún: usamos los IDs retornados por el RETURNING de arriba.
+        const soldIds = updateResult.rows.map((r: { id: number }) => r.id);
+        let serialDesde = '';
+        let serialHasta = '';
+        if (soldIds.length > 0) {
+          const rangeResult = await client.query(
+            `SELECT MIN(serial) as serial_desde, MAX(serial) as serial_hasta
+             FROM cards WHERE id = ANY($1)`,
+            [soldIds]
+          );
+          serialDesde = rangeResult.rows[0]?.serial_desde || '';
+          serialHasta = rangeResult.rows[0]?.serial_hasta || '';
+        }
+        detalle.serial_desde = serialDesde;
+        detalle.serial_hasta = serialHasta;
+        // Para el PDF: total_cards y cards_sold son los de ESTA venta, no del lote completo.
+        // Así el comprobante dice "45 cartones total — 45 vendidos" (lo que se vendió ahora),
+        // no "50 total — 50 vendidos" (el lote entero incluyendo ventas previas sueltas).
         detalle.cartonesDetalle = [{
           card_code: '', serial: item.referencia, is_sold: true,
-          total_cards: lr?.total_cards || 0, cards_sold: lr?.cards_sold || 0,
+          total_cards: vendidos, cards_sold: vendidos,
         }];
 
       } else if (item.tipo === 'carton') {
