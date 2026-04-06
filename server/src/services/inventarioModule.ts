@@ -9,6 +9,62 @@ import type {
 } from '../types/index.js';
 import { generateMovimientoPdf, generateDocumentoPdf, type DocumentoItemDetalle, type LoteDetalle } from './movimientoPdfService.js';
 
+/**
+ * Dado un array ORDENADO de serials (ej: ["00042-01","00042-02","00042-04","00042-06","00042-07"]),
+ * agrupa en sub-rangos contiguos y devuelve texto legible:
+ *   "Serie 42-01 a 42-02, 42-04, 42-06 a 42-07"
+ *
+ * Si el set es contíguo (sin huecos), devuelve el rango simple:
+ *   "Serie 42-01 a 42-50"
+ */
+function buildSerialRangesText(sortedSerials: string[]): string {
+  if (sortedSerials.length === 0) return '';
+
+  // Formatear serial legible: "00042-01" → "42-01"
+  const fmt = (s: string) => {
+    const parts = s.split('-');
+    if (parts.length === 2) return `${parseInt(parts[0], 10)}-${parseInt(parts[1], 10).toString().padStart(2, '0')}`;
+    return s;
+  };
+
+  // Parsear a número secuencial para detectar contigüidad
+  // serial "SSSSS-NN" → series * 100 + seq
+  const toNum = (s: string): number => {
+    const parts = s.split('-');
+    if (parts.length === 2) return parseInt(parts[0], 10) * 100 + parseInt(parts[1], 10);
+    return 0;
+  };
+
+  // Agrupar en rangos contiguos
+  const ranges: Array<{ from: string; to: string }> = [];
+  let rangeStart = sortedSerials[0];
+  let prev = toNum(sortedSerials[0]);
+
+  for (let i = 1; i < sortedSerials.length; i++) {
+    const cur = toNum(sortedSerials[i]);
+    if (cur !== prev + 1) {
+      // Hueco: cerrar rango anterior, abrir nuevo
+      ranges.push({ from: rangeStart, to: sortedSerials[i - 1] });
+      rangeStart = sortedSerials[i];
+    }
+    prev = cur;
+  }
+  // Cerrar último rango
+  ranges.push({ from: rangeStart, to: sortedSerials[sortedSerials.length - 1] });
+
+  // Formatear
+  const parts = ranges.map(r => {
+    if (r.from === r.to) return fmt(r.from);
+    return `${fmt(r.from)} a ${fmt(r.to)}`;
+  });
+
+  // Si es un solo rango, formato "Serie X a Y". Si son varios, "Series: X a Y, Z, ..."
+  if (parts.length === 1) {
+    return `Serie ${parts[0]}`;
+  }
+  return `Series: ${parts.join(', ')}`;
+}
+
 /** Normaliza serial: "81-1" → "00081-01" */
 export function normalizeSerial(ref: string): string {
   const match = ref.match(/^(\d+)-(\d+)$/);
@@ -1231,27 +1287,21 @@ export async function ejecutarVenta(
           }
         }
 
-        // Obtener rango de seriales de los cartones vendidos en ESTA transacción
-        // (los que acaban de pasar de is_sold=false a is_sold=true).
-        // Usamos sold_at >= NOW() - 5s como proxy de "fueron los de este UPDATE",
-        // o mejor aún: usamos los IDs retornados por el RETURNING de arriba.
+        // Obtener seriales de los cartones vendidos en ESTA transacción
+        // para construir sub-rangos exactos (ej: "42-01 a 42-04, 42-09 a 42-50"
+        // cuando los cartones 42-05 a 42-08 ya se vendieron sueltos antes).
         const soldIds = updateResult.rows.map((r: { id: number }) => r.id);
-        let serialDesde = '';
-        let serialHasta = '';
         if (soldIds.length > 0) {
-          const rangeResult = await client.query(
-            `SELECT MIN(serial) as serial_desde, MAX(serial) as serial_hasta
-             FROM cards WHERE id = ANY($1)`,
+          const serialsResult = await client.query<{ serial: string }>(
+            `SELECT serial FROM cards WHERE id = ANY($1) ORDER BY serial`,
             [soldIds]
           );
-          serialDesde = rangeResult.rows[0]?.serial_desde || '';
-          serialHasta = rangeResult.rows[0]?.serial_hasta || '';
+          const serials = serialsResult.rows.map(r => r.serial);
+          detalle.serial_desde = serials[0] || '';
+          detalle.serial_hasta = serials[serials.length - 1] || '';
+          detalle.serial_ranges_text = buildSerialRangesText(serials);
         }
-        detalle.serial_desde = serialDesde;
-        detalle.serial_hasta = serialHasta;
         // Para el PDF: total_cards y cards_sold son los de ESTA venta, no del lote completo.
-        // Así el comprobante dice "45 cartones total — 45 vendidos" (lo que se vendió ahora),
-        // no "50 total — 50 vendidos" (el lote entero incluyendo ventas previas sueltas).
         detalle.cartonesDetalle = [{
           card_code: '', serial: item.referencia, is_sold: true,
           total_cards: vendidos, cards_sold: vendidos,

@@ -263,6 +263,10 @@ export interface DocumentoItemDetalle {
   // Rangos generales del item
   serial_desde?: string; // primer serial del conjunto
   serial_hasta?: string; // último serial del conjunto
+  // Texto de sub-rangos para ventas parciales con huecos.
+  // Ej: "42-01 a 42-04, 42-06 a 42-07, 42-09 a 42-50"
+  // Si existe, se usa en el PDF en lugar del simple serial_desde a serial_hasta.
+  serial_ranges_text?: string;
   lotes?: LoteDetalle[];
   cartonesDetalle?: { card_code: string; serial: string; is_sold: boolean; total_cards?: number; cards_sold?: number }[];
 }
@@ -373,8 +377,14 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
       doc.font('Helvetica').text(`  —  ${item.cartones.toLocaleString()} cartones`);
       doc.y = itemHeaderY + headerHeight + 4;
 
-      // Rango general del item (desde - hasta)
-      if (item.serial_desde && item.serial_hasta) {
+      // Rango general del item (desde - hasta, o sub-rangos si hay huecos)
+      if (item.serial_ranges_text) {
+        // Sub-rangos para ventas parciales con cartones vendidos en el medio
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333')
+          .text('Rango: ', margin + 12, doc.y, { continued: true });
+        doc.font('Helvetica').text(item.serial_ranges_text);
+        doc.moveDown(0.2);
+      } else if (item.serial_desde && item.serial_hasta) {
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333')
           .text('Rango: ', margin + 12, doc.y, { continued: true });
         doc.font('Helvetica')
