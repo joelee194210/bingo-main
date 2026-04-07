@@ -61,7 +61,7 @@
       document.getElementById('orderCodeDisplay').textContent = orderCode;
     })
     .catch(function() {
-      errEl.textContent = 'Error de conexion. Intenta de nuevo.';
+      errEl.textContent = 'Error de conexión. Intenta de nuevo.';
       errEl.style.display = 'block';
       btn.disabled = false;
       btn.textContent = 'Continuar';
@@ -103,7 +103,7 @@
           btnyappy.isButtonLoading = false;
         }
       } catch (err) {
-        document.getElementById('payStatus').textContent = 'Error de conexion';
+        document.getElementById('payStatus').textContent = 'Error de conexión';
         btnyappy.isButtonLoading = false;
       }
     });

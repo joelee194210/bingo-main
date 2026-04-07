@@ -169,13 +169,13 @@ router.post('/api/yappy/confirm-success', async (req: Request, res: Response) =>
     const { order_code, confirmToken, transactionId } = req.body;
     if (!order_code) return res.status(400).json({ success: false, error: 'Falta order_code' });
     if (!confirmToken || !transactionId) {
-      return res.status(400).json({ success: false, error: 'Token de confirmacion invalido' });
+      return res.status(400).json({ success: false, error: 'Token de confirmación inválido' });
     }
 
     // Validar token firmado
     if (!validateConfirmToken(order_code.toUpperCase(), transactionId, confirmToken)) {
       console.error(`⚠️ confirm-success token inválido para ${order_code}`);
-      return res.status(403).json({ success: false, error: 'Token de confirmacion invalido' });
+      return res.status(403).json({ success: false, error: 'Token de confirmación inválido' });
     }
 
     const order = await getOrderByCode(order_code.toUpperCase());
@@ -555,7 +555,7 @@ function renderLanding(
         <label for="buyer_email">Email *</label>
         <input type="email" id="buyer_email" name="buyer_email" required placeholder="tu@email.com">
 
-        <label for="buyer_phone">Telefono asociado a tu cuenta Yappy *</label>
+        <label for="buyer_phone">Teléfono asociado a tu cuenta Yappy *</label>
         <input type="tel" id="buyer_phone" name="buyer_phone" required placeholder="6123-4567">
 
         <div id="errorMsg" class="error-msg"></div>
