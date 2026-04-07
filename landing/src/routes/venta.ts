@@ -530,7 +530,7 @@ function renderLanding(
     <div class="card">
       <h1>${escapeHtml(title)}</h1>
       ${config.landing_description ? `<p class="subtitle">${escapeHtml(config.landing_description)}</p>` : ''}
-      <div class="avail-wrap"><span class="avail-tag">${available} cartones disponibles</span></div>
+      <!-- Cartones disponibles oculto — no mostrar al público -->
 
       <form id="orderForm">
         <label for="quantity">Selecciona la cantidad de cartones que quieres comprar</label>
