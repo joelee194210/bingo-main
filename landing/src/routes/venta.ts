@@ -435,8 +435,8 @@ function renderLayout(title: string, body: string): string {
     input, select { width: 100%; padding: 12px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 15px; font-family: 'Inter', sans-serif; transition: all 0.2s; background: #f8fafc; }
     input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,0.12); background: white; }
     .btn { display: block; width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-top: 24px; letter-spacing: 0.3px; }
-    .btn-primary { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; box-shadow: 0 4px 14px rgba(30,64,175,0.4); }
-    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(30,64,175,0.5); }
+    .btn-primary { background: linear-gradient(135deg, #b91c1c, #dc2626); color: white; box-shadow: 0 4px 14px rgba(185,28,28,0.4); }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(185,28,28,0.5); }
     .btn-primary:active { transform: translateY(0); }
     .btn-primary:disabled { background: #94a3b8; box-shadow: none; cursor: not-allowed; transform: none; }
     .btn-success { background: linear-gradient(135deg, #059669, #10b981); color: white; box-shadow: 0 4px 14px rgba(5,150,105,0.4); }
