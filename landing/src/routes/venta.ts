@@ -508,7 +508,7 @@ function renderLanding(
   yappyCdnUrl: string,
   ref: string | null
 ): string {
-  const title = config.landing_title || event.name;
+  const title = 'Mega Bingo TV Mundial';
   const price = Number(config.price_per_card);
   const maxOrder = Math.min(config.max_cards_per_order, available);
 
