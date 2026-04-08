@@ -30,7 +30,6 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
   <div style="text-align: center; margin-bottom: 30px;">
     <img src="${BASE_URL}/assets/logo.png" alt="Mega Bingo TV Mundial" style="max-width: 220px; height: auto;" />
-    <div style="height: 4px; background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6); border-radius: 2px; margin-top: 10px;"></div>
   </div>
 
   <p>Hola <strong>${escapeHtml(data.buyer_name)}</strong>,</p>
@@ -46,7 +45,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   </div>
 
   <div style="text-align: center; margin: 30px 0;">
-    <a href="${downloadUrl}" style="display: inline-block; background: linear-gradient(135deg, #b91c1c, #dc2626); color: white; text-decoration: none; padding: 16px 36px; border-radius: 10px; font-size: 16px; font-weight: bold;">
+    <a href="${downloadUrl}" style="display: inline-block; background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; text-decoration: none; padding: 16px 36px; border-radius: 10px; font-size: 16px; font-weight: bold;">
       Descargar mis cartones
     </a>
   </div>
