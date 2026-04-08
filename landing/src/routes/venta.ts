@@ -520,7 +520,6 @@ function renderLanding(
   const body = `
     <div class="card">
       <h1 style="color:#475569;font-size:20px;font-weight:700;">¡Compra tus cartones digitales<br>por Yappy!</h1>
-      ${config.landing_description ? `<p class="subtitle">${escapeHtml(config.landing_description)}</p>` : ''}
       <!-- Cartones disponibles oculto — no mostrar al público -->
 
       <form id="orderForm">
