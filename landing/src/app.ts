@@ -110,6 +110,25 @@ app.use('/venta/estado', statusPageLimiter);
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'bingo-landing' }));
 
+// Test email temporal (quitar después)
+app.get('/test-email', async (_req, res) => {
+  const { sendPurchaseEmail } = await import('./services/emailService.js');
+  try {
+    const sent = await sendPurchaseEmail({
+      order_code: 'ORD-TEST1',
+      buyer_name: 'Jose Test',
+      buyer_email: 'jlee@507sc.com',
+      quantity: 2,
+      total_amount: 10.00,
+      download_token: 'test-token-123',
+      card_codes: ['00001-01', '00001-02'],
+    }, '/dev/null');
+    res.json({ success: sent, message: sent ? 'Email enviado a jlee@507sc.com' : 'RESEND_API_KEY no configurado o error' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
 // Página "Próximamente" cuando LANDING_ENABLED != true
 function renderComingSoon(): string {
   return `<!DOCTYPE html>
