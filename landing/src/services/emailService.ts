@@ -29,8 +29,8 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
   <div style="text-align: center; margin-bottom: 30px;">
-    <h1 style="color: #dc2626; margin-bottom: 5px;">Mega Bingo TV Mundial</h1>
-    <div style="height: 4px; background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6); border-radius: 2px;"></div>
+    <img src="${BASE_URL}/assets/logo.png" alt="Mega Bingo TV Mundial" style="max-width: 220px; height: auto;" />
+    <div style="height: 4px; background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6); border-radius: 2px; margin-top: 10px;"></div>
   </div>
 
   <p>Hola <strong>${escapeHtml(data.buyer_name)}</strong>,</p>
