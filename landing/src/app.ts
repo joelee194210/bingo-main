@@ -149,7 +149,7 @@ app.get('/test-email', async (_req, res) => {
       headers: { 'Authorization': 'Bearer ' + API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: 'ventas@megabingodigital.com',
-        to: ['jlee@507sc.com'],
+        to: ['joelee@507sc.com'],
         subject: 'Mega Bingo TV Mundial - Tus cartones están listos (ORD-TEST1)',
         html,
       }),
