@@ -137,6 +137,9 @@ app.get('/test-email', async (_req, res) => {
     <p style="margin:0 0 10px 0;font-weight:bold;color:#475569;">Seriales de tus cartones:</p>
     <p style="margin:0;font-family:monospace;font-size:14px;color:#64748b;">00001-01 &bull; 00001-02</p>
   </div>
+  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:15px;margin:20px 0;">
+    <p style="margin:0;font-size:13px;color:#92400e;"><strong>Importante:</strong> Guarda este correo como comprobante de tu compra. El enlace de descarga es personal y seguro.</p>
+  </div>
   <div style="text-align:center;margin:30px 0;">
     <a href="${BASE}" style="display:inline-block;background:linear-gradient(135deg,#b91c1c,#dc2626);color:white;text-decoration:none;padding:16px 36px;border-radius:10px;font-size:16px;font-weight:bold;">Comprar cartones digitales</a>
   </div>
