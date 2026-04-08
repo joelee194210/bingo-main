@@ -426,7 +426,7 @@ function renderLayout(title: string, body: string): string {
     .logo { text-align: center; padding: 24px 0 8px; }
     .logo img { max-width: 240px; height: auto; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
     .card { background: white; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.15); padding: 32px; margin-top: 12px; position: relative; overflow: hidden; }
-    .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6); }
+    .card::before { display: none; }
     .rainbow { display: none; }
     h1 { font-size: 22px; font-weight: 800; color: #dc2626; text-align: center; letter-spacing: -0.5px; }
     h2 { font-size: 16px; font-weight: 600; color: #334155; margin-bottom: 16px; }
@@ -476,15 +476,6 @@ function renderLayout(title: string, body: string): string {
   </style>
 </head>
 <body>
-  <div class="bingo-ball" style="left:5%;top:15%;width:55px;height:55px;background:radial-gradient(circle at 35% 30%,hsl(217 91% 60%/.5),hsl(217 91% 60%/.2) 60%,hsl(217 91% 60%/.08));animation:ball-float 18s ease-in-out infinite alternate"><div class="inner" style="inset:8px"><span class="letter" style="font-size:8px">B</span><span class="number" style="font-size:15px">7</span></div></div>
-  <div class="bingo-ball" style="left:85%;top:10%;width:45px;height:45px;background:radial-gradient(circle at 35% 30%,hsl(142 71% 45%/.5),hsl(142 71% 45%/.2) 60%,hsl(142 71% 45%/.08));animation:ball-float 22s ease-in-out 2s infinite alternate"><div class="inner" style="inset:7px"><span class="letter" style="font-size:7px">G</span><span class="number" style="font-size:13px">46</span></div></div>
-  <div class="bingo-ball" style="left:8%;top:55%;width:40px;height:40px;background:radial-gradient(circle at 35% 30%,hsl(0 72% 51%/.5),hsl(0 72% 51%/.2) 60%,hsl(0 72% 51%/.08));animation:ball-float 20s ease-in-out 1s infinite alternate"><div class="inner" style="inset:6px"><span class="letter" style="font-size:6px">B</span><span class="number" style="font-size:12px">14</span></div></div>
-  <div class="bingo-ball" style="left:88%;top:45%;width:50px;height:50px;background:radial-gradient(circle at 35% 30%,hsl(280 70% 55%/.5),hsl(280 70% 55%/.2) 60%,hsl(280 70% 55%/.08));animation:ball-float 25s ease-in-out 3s infinite alternate"><div class="inner" style="inset:8px"><span class="letter" style="font-size:7px">I</span><span class="number" style="font-size:14px">28</span></div></div>
-  <div class="bingo-ball" style="left:12%;top:82%;width:35px;height:35px;background:radial-gradient(circle at 35% 30%,hsl(45 93% 47%/.5),hsl(45 93% 47%/.2) 60%,hsl(45 93% 47%/.08));animation:ball-float 21s ease-in-out 4s infinite alternate"><div class="inner" style="inset:5px"><span class="letter" style="font-size:5px">N</span><span class="number" style="font-size:10px">38</span></div></div>
-  <div class="bingo-ball" style="left:82%;top:78%;width:42px;height:42px;background:radial-gradient(circle at 35% 30%,hsl(210 90% 55%/.5),hsl(210 90% 55%/.2) 60%,hsl(210 90% 55%/.08));animation:ball-float 19s ease-in-out 5s infinite alternate"><div class="inner" style="inset:6px"><span class="letter" style="font-size:6px">O</span><span class="number" style="font-size:12px">67</span></div></div>
-  <div class="bingo-ball" style="left:50%;top:5%;width:30px;height:30px;background:radial-gradient(circle at 35% 30%,hsl(142 71% 45%/.4),hsl(142 71% 45%/.15) 60%,hsl(142 71% 45%/.05));animation:ball-float 23s ease-in-out 6s infinite alternate"><div class="inner" style="inset:5px"><span class="letter" style="font-size:5px">G</span><span class="number" style="font-size:9px">59</span></div></div>
-  <div class="bingo-ball" style="left:45%;top:92%;width:32px;height:32px;background:radial-gradient(circle at 35% 30%,hsl(0 72% 51%/.4),hsl(0 72% 51%/.15) 60%,hsl(0 72% 51%/.05));animation:ball-float 17s ease-in-out 7s infinite alternate"><div class="inner" style="inset:5px"><span class="letter" style="font-size:5px">O</span><span class="number" style="font-size:9px">71</span></div></div>
-
   <div class="container">
     <div class="logo">
       <img src="/assets/logo.png" alt="Mega Bingo TV Mundial" id="siteLogo">
@@ -515,8 +506,7 @@ function renderLanding(
   if (available <= 0) {
     const body = `
     <div class="card" style="text-align:center;">
-      <h1>${escapeHtml(title)}</h1>
-      <p style="color:#dc2626;font-weight:700;font-size:18px;margin:8px 0 0;">¡Compra tus cartones digitales con Yappy!</p>
+      <h1 style="color:#475569;font-size:20px;font-weight:700;">¡Compra tus cartones digitales<br>por Yappy!</h1>
       <div style="margin:30px 0;">
         <div style="font-size:48px;">🔄</div>
         <h2 style="margin-top:16px;">Estamos actualizando nuestro inventario</h2>
@@ -529,8 +519,7 @@ function renderLanding(
 
   const body = `
     <div class="card">
-      <h1>${escapeHtml(title)}</h1>
-      <p style="color:#dc2626;font-weight:700;font-size:18px;margin:8px 0 0;">¡Compra tus cartones digitales con Yappy!</p>
+      <h1 style="color:#475569;font-size:20px;font-weight:700;">¡Compra tus cartones digitales<br>por Yappy!</h1>
       ${config.landing_description ? `<p class="subtitle">${escapeHtml(config.landing_description)}</p>` : ''}
       <!-- Cartones disponibles oculto — no mostrar al público -->
 
