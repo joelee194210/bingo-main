@@ -422,7 +422,8 @@ function renderLayout(title: string, body: string): string {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { height: 100%; }
-    body { font-family: 'Inter', -apple-system, sans-serif; background: url('/assets/fondo.jpg') no-repeat center center / 100% 100%; background-color: #c0272d; color: #1e293b; min-height: 100%; overflow-x: hidden; position: relative; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background-color: #c0272d; color: #1e293b; min-height: 100%; overflow-x: hidden; position: relative; }
+    body::before { content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: url('/assets/fondo.jpg') no-repeat center center / cover; z-index: -1; }
     .container { max-width: 520px; margin: 0 auto; padding: 20px; }
     .logo { text-align: center; padding: 24px 0 8px; }
     .logo img { max-width: 240px; height: auto; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
