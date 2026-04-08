@@ -202,10 +202,20 @@ export class YappyButtonClient {
     return !!(this.config.merchantId && this.config.secretToken && this.config.domainUrl);
   }
 
+  // SEC: CDN URLs hardcoded — allowlist defense-in-depth
+  private static readonly ALLOWED_CDN_URLS = [
+    'https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js',
+    'https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js',
+  ];
+
   get cdnUrl(): string {
-    return this.config.sandbox
+    const url = this.config.sandbox
       ? 'https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js'
       : 'https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js';
+    if (!YappyButtonClient.ALLOWED_CDN_URLS.includes(url)) {
+      throw new Error(`Yappy CDN URL no permitida: ${url}`);
+    }
+    return url;
   }
 
   get domain(): string {

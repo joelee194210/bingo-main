@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { getPool } from '../database.js';
 import { createOrder, getOrderByCode, getOrderByDownloadToken, getSalesConfig, confirmPayment } from '../services/orderService.js';
 import { getYappyButtonClient } from '../services/yappyButtonService.js';
@@ -22,7 +22,11 @@ function generateConfirmToken(orderCode: string, transactionId: string): string 
 }
 function validateConfirmToken(orderCode: string, transactionId: string, token: string): boolean {
   const expected = generateConfirmToken(orderCode, transactionId);
-  return token === expected;
+  try {
+    return timingSafeEqual(Buffer.from(token, 'hex'), Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
 }
 
 const router = Router();
@@ -97,17 +101,29 @@ router.post('/api/orders', async (req: Request, res: Response) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyer_email)) {
       return res.status(400).json({ success: false, error: 'Email no válido' });
     }
+    // SEC: límites de longitud en campos de texto
+    const nameTrimmed = String(buyer_name).trim().slice(0, 120);
+    const phoneTrimmed = String(buyer_phone).trim().replace(/[^\d\-+() ]/g, '').slice(0, 20);
+    const cedulaTrimmed = buyer_cedula ? String(buyer_cedula).trim().slice(0, 30) : undefined;
+    const refTrimmed = typeof ref_source === 'string' ? ref_source.slice(0, 120) : null;
+
+    if (!nameTrimmed) {
+      return res.status(400).json({ success: false, error: 'Nombre no válido' });
+    }
+    if (!phoneTrimmed) {
+      return res.status(400).json({ success: false, error: 'Teléfono no válido' });
+    }
 
     const order = await createOrder(
       parseInt(event_id, 10),
       qty,
       {
-        buyer_name: buyer_name.trim(),
+        buyer_name: nameTrimmed,
         buyer_email: buyer_email.trim().toLowerCase(),
-        buyer_phone: buyer_phone.trim(),
-        buyer_cedula: buyer_cedula?.trim() || undefined,
+        buyer_phone: phoneTrimmed,
+        buyer_cedula: cedulaTrimmed,
       },
-      typeof ref_source === 'string' ? ref_source : null
+      refTrimmed
     );
 
     res.json({
@@ -120,9 +136,12 @@ router.post('/api/orders', async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Error creando orden';
-    console.error('Error creando orden:', msg);
-    res.status(400).json({ success: false, error: msg });
+    const raw = err instanceof Error ? err.message : 'Error creando orden';
+    console.error('Error creando orden:', raw);
+    // SEC: solo exponer mensajes conocidos, ocultar internals de DB
+    const SAFE_PATTERNS = ['no hay cartones', 'cartones disponibles', 'Solicitaste', 'no encontrado', 'no válid'];
+    const isSafe = SAFE_PATTERNS.some(p => raw.toLowerCase().includes(p.toLowerCase()));
+    res.status(400).json({ success: false, error: isSafe ? raw : 'Error procesando solicitud' });
   }
 });
 
@@ -156,9 +175,9 @@ router.post('/api/yappy/initiate', async (req: Request, res: Response) => {
     console.log(`✅ Yappy orden iniciada: ${order.order_code} → txn ${params.transactionId}`);
     res.json({ success: true, body: params, confirmToken });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Error iniciando pago';
-    console.error('Error Yappy initiate:', msg);
-    res.status(500).json({ success: false, error: msg });
+    const raw = err instanceof Error ? err.message : 'Error iniciando pago';
+    console.error('Error Yappy initiate:', raw);
+    res.status(500).json({ success: false, error: 'Error procesando pago' });
   }
 });
 
@@ -265,7 +284,7 @@ router.get('/estado/:orderCode', async (req: Request, res: Response) => {
 // GET /venta/preview-pdf/:eventId - Preview PDF (solo dev/test)
 // ?card_code=XXXXX para un cartón específico, sin param = random
 router.get('/preview-pdf/:eventId', async (req: Request, res: Response) => {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' || process.env.PREVIEW_ENABLED !== 'true') {
     return res.status(404).send('Not found');
   }
   try {
@@ -347,12 +366,20 @@ router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
 // Yappy llama este endpoint con orderId, Hash, status, domain
 router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
   try {
-    const params = req.query as Record<string, string>;
-    // SEC-H8: no loguear params (incluyen Hash del IPN que no debe persistirse en logs).
-    console.log(`[Yappy IPN] recibido orderId=${params.orderId} status=${params.status}`);
+    // SEC: extraer strings seguros de req.query (puede ser array/object)
+    const qStr = (key: string): string => {
+      const v = req.query[key];
+      return typeof v === 'string' ? v : '';
+    };
+    const ipnOrderId = qStr('orderId');
+    const ipnStatus = qStr('status');
+    const ipnHash = qStr('Hash');
+    const ipnDomain = qStr('domain');
+
+    console.log(`[Yappy IPN] recibido orderId=${ipnOrderId} status=${ipnStatus}`);
 
     const yappy = getYappyButtonClient();
-    const result = yappy.validateIPN(params);
+    const result = yappy.validateIPN({ orderId: ipnOrderId, status: ipnStatus, Hash: ipnHash, domain: ipnDomain });
 
     if (!result.valid) {
       console.error('IPN inválido — hash no coincide o faltan params');
@@ -369,8 +396,8 @@ router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
       const confirmed = await confirmPayment(
         order.id,
         'yappy_ipn',
-        params.Hash || undefined,
-        { source: 'yappy_ipn', status: params.status, hash: params.Hash, domain: params.domain, orderId: params.orderId }
+        ipnHash || undefined,
+        { source: 'yappy_ipn', status: ipnStatus, hash: ipnHash, domain: ipnDomain, orderId: ipnOrderId }
       );
 
       // Enviar email en background (solo si no fue ya confirmada por eventSuccess)
@@ -418,6 +445,7 @@ function renderLayout(title: string, body: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#c0272d">
   <title>${escapeHtml(title)}</title>
+  <link rel="preload" as="image" href="/assets/fondo.jpg" fetchpriority="high">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -429,8 +457,6 @@ function renderLayout(title: string, body: string): string {
     .logo { text-align: center; padding: 24px 0 8px; }
     .logo img { max-width: 240px; height: auto; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
     .card { background: white; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.15); padding: 32px; margin-top: 12px; position: relative; overflow: hidden; }
-    .card::before { display: none; }
-    .rainbow { display: none; }
     h1 { font-size: 22px; font-weight: 800; color: #dc2626; text-align: center; letter-spacing: -0.5px; }
     h2 { font-size: 16px; font-weight: 600; color: #334155; margin-bottom: 16px; }
     .subtitle { text-align: center; color: #64748b; margin-top: 8px; font-size: 14px; line-height: 1.5; }
@@ -465,12 +491,7 @@ function renderLayout(title: string, body: string): string {
     .footer { text-align: center; margin-top: 20px; padding: 16px; font-size: 11px; color: #94a3b8; }
     .footer span { display: block; margin-bottom: 8px; }
     .footer img { max-width: 80px; height: auto; opacity: 0.6; }
-    .bingo-ball { position: fixed; pointer-events: none; z-index: 0; border-radius: 50%; }
-    .bingo-ball .inner { position: absolute; border-radius: 50%; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-    .bingo-ball .letter { font-weight: 800; color: #94a3b8; line-height: 1; }
-    .bingo-ball .number { font-weight: 800; color: #334155; line-height: 1; }
     .container { position: relative; z-index: 1; }
-    @keyframes ball-float { 0% { transform: translateY(0px) rotate(0deg); } 100% { transform: translateY(-20px) rotate(5deg); } }
     btn-yappy { display: block; }
     btn-yappy::part(modal), btn-yappy div[class*="modal"], btn-yappy div[class*="overlay"] { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; display: flex !important; align-items: center !important; justify-content: center !important; z-index: 9999 !important; }
     .avail-tag { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 8px; background: #f1f5f9; display: inline-block; padding: 4px 14px; border-radius: 20px; }
@@ -571,7 +592,7 @@ function renderLanding(
     </div>
 
     <div id="appConfig" data-price="${escapeHtml(String(price))}" data-event-id="${escapeHtml(String(event.id))}" data-ref="${ref ? escapeHtml(ref) : ''}"></div>
-    <script type="module" src="${yappyCdnUrl}"></script>`;
+    <script type="module" src="${escapeHtml(yappyCdnUrl)}"></script>`;
 
   return renderLayout(`Comprar Cartones - ${title}`, body);
 }

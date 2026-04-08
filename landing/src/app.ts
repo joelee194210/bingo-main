@@ -24,6 +24,8 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https://*.yappy.cloud", "https://*.yappycloud.com"],
       connectSrc: ["'self'", "https://apipagosbg.bgeneral.cloud", "https://api-comecom-uat.yappycloud.com", "https://*.yappy.cloud", "https://*.googleapis.com", "https://*.firebaseio.com", "wss://*.firebaseio.com"],
       frameSrc: ["'self'", "https://*.yappy.cloud", "https://*.yappycloud.com", "https://*.bgeneral.cloud"],
+      formAction: ["'self'"],
+      baseUri: ["'self'"],
     },
   },
 }));
@@ -49,7 +51,8 @@ if (allowedOrigins.length > 0) {
     })
   );
 } else {
-  app.use(cors());
+  // SEC: si no hay ALLOWED_ORIGINS, default a same-origin (no abrir CORS a todos)
+  app.use(cors({ origin: false }));
 }
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -96,6 +99,14 @@ const ipnLimiter = rateLimit({
 });
 app.use('/venta/api/yappy/ipn', ipnLimiter);
 
+// SEC: rate limit en páginas de estado para evitar enumeración de order codes
+const statusPageLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: 'Demasiados intentos.',
+});
+app.use('/venta/estado', statusPageLimiter);
+
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'bingo-landing' }));
 
@@ -132,7 +143,6 @@ function renderComingSoon(): string {
       <div class="badge">Venta digital en camino</div>
     </div>
   </div>
-  <script src="/assets/checkout.js"></script>
 </body>
 </html>`;
 }
