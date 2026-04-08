@@ -8,6 +8,7 @@ interface OrderEmailData {
   total_amount: number;
   download_token: string;
   card_codes: string[];
+  yappy_transaction_id?: string | null;
 }
 
 const BASE_URL = process.env.PUBLIC_URL || 'http://localhost:3001';
@@ -41,6 +42,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
       <tr><td style="padding: 5px 0; color: #666;">Orden:</td><td style="padding: 5px 0; font-weight: bold;">${escapeHtml(data.order_code)}</td></tr>
       <tr><td style="padding: 5px 0; color: #666;">Cantidad:</td><td style="padding: 5px 0;">${qtyText}</td></tr>
       <tr><td style="padding: 5px 0; color: #666;">Total pagado:</td><td style="padding: 5px 0; font-weight: bold; font-size: 1.2em; color: #059669;">$${data.total_amount.toFixed(2)}</td></tr>
+      ${data.yappy_transaction_id ? `<tr><td style="padding: 5px 0; color: #666;">Confirmación Yappy:</td><td style="padding: 5px 0; font-weight: bold;">${escapeHtml(data.yappy_transaction_id)}</td></tr>` : ''}
     </table>
   </div>
 

@@ -127,6 +127,7 @@ app.get('/test-email', async (_req, res) => {
       <tr><td style="padding:5px 0;color:#666;">Orden:</td><td style="padding:5px 0;font-weight:bold;">ORD-TEST1</td></tr>
       <tr><td style="padding:5px 0;color:#666;">Cantidad:</td><td style="padding:5px 0;">2 cartones</td></tr>
       <tr><td style="padding:5px 0;color:#666;">Total pagado:</td><td style="padding:5px 0;font-weight:bold;font-size:1.2em;color:#059669;">$10.00</td></tr>
+      <tr><td style="padding:5px 0;color:#666;">Confirmación Yappy:</td><td style="padding:5px 0;font-weight:bold;">TXN-2026040812345</td></tr>
     </table>
   </div>
   <div style="text-align:center;margin:30px 0;">

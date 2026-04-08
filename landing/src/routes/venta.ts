@@ -230,6 +230,7 @@ router.post('/api/yappy/confirm-success', async (req: Request, res: Response) =>
         total_amount: Number(confirmed.total_amount),
         download_token: confirmed.download_token,
         card_codes: cards.map(c => c.serial || c.card_code),
+        yappy_transaction_id: confirmed.yappy_transaction_id,
       }, confirmed.pdf_path).then(sent => {
         if (sent) {
           pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
@@ -434,6 +435,7 @@ router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
           total_amount: Number(confirmed.total_amount),
           download_token: confirmed.download_token,
           card_codes: cards.map(c => c.serial || c.card_code),
+          yappy_transaction_id: confirmed.yappy_transaction_id,
         }, confirmed.pdf_path).then(sent => {
           if (sent) {
             pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
