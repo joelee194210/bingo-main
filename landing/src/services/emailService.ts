@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { readFile } from 'fs/promises';
 
 interface OrderEmailData {
   order_code: string;
@@ -65,7 +65,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   <div style="background: #f8fafc; border-radius: 8px; padding: 15px; margin: 20px 0;">
     <p style="margin: 0 0 10px 0; font-weight: bold; color: #475569;">Seriales de tus cartones:</p>
     <p style="margin: 0; font-family: monospace; font-size: 14px; word-break: break-all; color: #64748b;">
-      ${data.card_codes.join(' &bull; ')}
+      ${data.card_codes.map(c => escapeHtml(c)).join(' &bull; ')}
     </p>
   </div>
 
@@ -84,7 +84,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
   // Leer PDF como attachment
   let attachments: Array<{ filename: string; content: string }> | undefined;
   try {
-    const pdfBuffer = readFileSync(pdfPath);
+    const pdfBuffer = await readFile(pdfPath);
     attachments = [{
       filename: `Mega_Bingo_TV_Mundial_${data.order_code}.pdf`,
       content: pdfBuffer.toString('base64'),

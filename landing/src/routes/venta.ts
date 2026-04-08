@@ -233,7 +233,7 @@ router.post('/api/yappy/confirm-success', async (req: Request, res: Response) =>
         yappy_transaction_id: confirmed.yappy_transaction_id,
       }, confirmed.pdf_path).then(sent => {
         if (sent) {
-          pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
+          pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]).catch(e => console.error('Error marcando email_sent_at:', e));
         }
       }).catch(err => console.error('Error enviando email:', err));
     }
@@ -241,9 +241,9 @@ router.post('/api/yappy/confirm-success', async (req: Request, res: Response) =>
     console.log(`✅ Orden ${confirmed.order_code} confirmada via eventSuccess`);
     res.json({ success: true, order_code: confirmed.order_code });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Error confirmando';
-    console.error('Error confirm-success:', msg);
-    res.status(500).json({ success: false, error: msg });
+    const raw = err instanceof Error ? err.message : 'Error confirmando';
+    console.error('Error confirm-success:', raw);
+    res.status(500).json({ success: false, error: 'Error confirmando pago' });
   }
 });
 
@@ -265,24 +265,6 @@ router.get('/api/orders/:orderCode/status', async (req: Request, res: Response) 
     });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Error del servidor' });
-  }
-});
-
-// GET /venta/test-email - Enviar email de prueba (temporal, quitar después)
-router.get('/test-email', async (_req: Request, res: Response) => {
-  try {
-    const sent = await sendPurchaseEmail({
-      order_code: 'ORD-TEST1',
-      buyer_name: 'Jose Test',
-      buyer_email: 'jlee@507sc.com',
-      quantity: 2,
-      total_amount: 10.00,
-      download_token: 'test-token-123',
-      card_codes: ['00001-01', '00001-02'],
-    }, '/dev/null');
-    res.json({ success: sent, message: sent ? 'Email enviado a jlee@507sc.com' : 'No se pudo enviar (ver logs)' });
-  } catch (err) {
-    res.status(500).json({ success: false, error: 'Error enviando email de prueba' });
   }
 });
 
@@ -438,7 +420,7 @@ router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
           yappy_transaction_id: confirmed.yappy_transaction_id,
         }, confirmed.pdf_path).then(sent => {
           if (sent) {
-            pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]);
+            pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [confirmed.id]).catch(e => console.error('Error marcando email_sent_at:', e));
           }
         }).catch(err => console.error('Error enviando email post-IPN:', err));
       }
