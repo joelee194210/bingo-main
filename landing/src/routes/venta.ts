@@ -421,7 +421,7 @@ function renderLayout(title: string, body: string): string {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', -apple-system, sans-serif; background: #ffffff; color: #1e293b; min-height: 100vh; overflow-x: hidden; position: relative; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: url('/assets/fondo.jpg') no-repeat center top / cover fixed; color: #1e293b; min-height: 100vh; overflow-x: hidden; position: relative; }
     .container { max-width: 520px; margin: 0 auto; padding: 20px; }
     .logo { text-align: center; padding: 24px 0 8px; }
     .logo img { max-width: 240px; height: auto; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
@@ -516,6 +516,7 @@ function renderLanding(
     const body = `
     <div class="card" style="text-align:center;">
       <h1>${escapeHtml(title)}</h1>
+      <p style="color:#dc2626;font-weight:700;font-size:18px;margin:8px 0 0;">¡Compra tus cartones digitales con Yappy!</p>
       <div style="margin:30px 0;">
         <div style="font-size:48px;">🔄</div>
         <h2 style="margin-top:16px;">Estamos actualizando nuestro inventario</h2>
@@ -529,6 +530,7 @@ function renderLanding(
   const body = `
     <div class="card">
       <h1>${escapeHtml(title)}</h1>
+      <p style="color:#dc2626;font-weight:700;font-size:18px;margin:8px 0 0;">¡Compra tus cartones digitales con Yappy!</p>
       ${config.landing_description ? `<p class="subtitle">${escapeHtml(config.landing_description)}</p>` : ''}
       <!-- Cartones disponibles oculto — no mostrar al público -->
 
