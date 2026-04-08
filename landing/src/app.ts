@@ -131,17 +131,18 @@ app.get('/test-email', async (_req, res) => {
     </table>
   </div>
   <div style="text-align:center;margin:30px 0;">
-    <a href="${BASE}" style="display:inline-block;background:linear-gradient(135deg,#1e40af,#3b82f6);color:white;text-decoration:none;padding:16px 36px;border-radius:10px;font-size:16px;font-weight:bold;">Descargar mis cartones</a>
+    <a href="${BASE}" style="display:inline-block;background:linear-gradient(135deg,#b91c1c,#dc2626);color:white;text-decoration:none;padding:16px 36px;border-radius:10px;font-size:16px;font-weight:bold;width:80%;max-width:300px;">Descargar mis cartones</a>
   </div>
+  <div style="text-align:center;margin:0 0 30px;">
+    <a href="${BASE}" style="display:inline-block;background:linear-gradient(135deg,#1e40af,#3b82f6);color:white;text-decoration:none;padding:16px 36px;border-radius:10px;font-size:16px;font-weight:bold;width:80%;max-width:300px;">Comprar cartones digitales</a>
+  </div>
+  <p style="text-align:center;color:#64748b;font-size:13px;">También encontrarás tus cartones adjuntos en este correo como archivo PDF.</p>
   <div style="background:#f8fafc;border-radius:8px;padding:15px;margin:20px 0;">
     <p style="margin:0 0 10px 0;font-weight:bold;color:#475569;">Seriales de tus cartones:</p>
     <p style="margin:0;font-family:monospace;font-size:14px;color:#64748b;">00001-01 &bull; 00001-02</p>
   </div>
   <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:15px;margin:20px 0;">
     <p style="margin:0;font-size:13px;color:#92400e;"><strong>Importante:</strong> Guarda este correo como comprobante de tu compra. El enlace de descarga es personal y seguro.</p>
-  </div>
-  <div style="text-align:center;margin:30px 0;">
-    <a href="${BASE}" style="display:inline-block;background:linear-gradient(135deg,#b91c1c,#dc2626);color:white;text-decoration:none;padding:16px 36px;border-radius:10px;font-size:16px;font-weight:bold;">Comprar cartones digitales</a>
   </div>
   <p style="color:#94a3b8;font-size:11px;margin-top:30px;text-align:center;">Mega Bingo TV Mundial &copy; 2026 | Vendedor autorizado: Yotumi S.A.</p>
 </body></html>`;
