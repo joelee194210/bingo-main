@@ -267,6 +267,24 @@ router.get('/api/orders/:orderCode/status', async (req: Request, res: Response) 
   }
 });
 
+// GET /venta/test-email - Enviar email de prueba (temporal, quitar después)
+router.get('/test-email', async (_req: Request, res: Response) => {
+  try {
+    const sent = await sendPurchaseEmail({
+      order_code: 'ORD-TEST1',
+      buyer_name: 'Jose Test',
+      buyer_email: 'jlee@507sc.com',
+      quantity: 2,
+      total_amount: 10.00,
+      download_token: 'test-token-123',
+      card_codes: ['00001-01', '00001-02'],
+    }, '/dev/null');
+    res.json({ success: sent, message: sent ? 'Email enviado a jlee@507sc.com' : 'No se pudo enviar (ver logs)' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Error enviando email de prueba' });
+  }
+});
+
 // GET /venta/estado/:orderCode - Página de estado
 router.get('/estado/:orderCode', async (req: Request, res: Response) => {
   try {

@@ -68,6 +68,12 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
     </p>
   </div>
 
+  <div style="text-align: center; margin: 30px 0;">
+    <a href="${BASE_URL}" style="display: inline-block; background: linear-gradient(135deg, #b91c1c, #dc2626); color: white; text-decoration: none; padding: 16px 36px; border-radius: 10px; font-size: 16px; font-weight: bold;">
+      Comprar cartones digitales
+    </a>
+  </div>
+
   <p style="color: #94a3b8; font-size: 11px; margin-top: 30px; text-align: center;">
     Mega Bingo TV Mundial &copy; ${new Date().getFullYear()} | Vendedor autorizado: Yotumi S.A.
   </p>
