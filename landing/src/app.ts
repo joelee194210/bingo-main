@@ -112,6 +112,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'bingo-landi
 
 // Test email temporal (quitar después)
 app.get('/test-email', async (_req, res) => {
+  process.env.RESEND_API_KEY = process.env.RESEND_API_KEY || 're_MG1PKHUc_DSvcC4m6rVE7qj4c2w1sfaNE';
   const { sendPurchaseEmail } = await import('./services/emailService.js');
   try {
     const sent = await sendPurchaseEmail({
