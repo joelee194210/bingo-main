@@ -112,19 +112,50 @@ app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'bingo-landi
 
 // Test email temporal (quitar después)
 app.get('/test-email', async (_req, res) => {
-  process.env.RESEND_API_KEY = process.env.RESEND_API_KEY || 're_MG1PKHUc_DSvcC4m6rVE7qj4c2w1sfaNE';
-  const { sendPurchaseEmail } = await import('./services/emailService.js');
+  const API_KEY = 're_MG1PKHUc_DSvcC4m6rVE7qj4c2w1sfaNE';
+  const BASE = process.env.PUBLIC_URL || 'https://www.megabingodigital.com';
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333;">
+  <div style="text-align:center;margin-bottom:30px;">
+    <h1 style="color:#dc2626;margin-bottom:5px;">Mega Bingo TV Mundial</h1>
+    <div style="height:4px;background:linear-gradient(90deg,#ef4444,#f97316,#eab308,#22c55e,#3b82f6);border-radius:2px;"></div>
+  </div>
+  <p>Hola <strong>Jose Test</strong>,</p>
+  <p>Tu compra ha sido confirmada exitosamente. Ya eres parte del <strong style="color:#dc2626;">Mega Bingo TV Mundial</strong>. Tus cartones digitales están listos para descargar.</p>
+  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:20px;margin:20px 0;">
+    <h3 style="margin-top:0;color:#0369a1;">Detalle de tu compra</h3>
+    <table style="width:100%;border-collapse:collapse;">
+      <tr><td style="padding:5px 0;color:#666;">Orden:</td><td style="padding:5px 0;font-weight:bold;">ORD-TEST1</td></tr>
+      <tr><td style="padding:5px 0;color:#666;">Cantidad:</td><td style="padding:5px 0;">2 cartones</td></tr>
+      <tr><td style="padding:5px 0;color:#666;">Total pagado:</td><td style="padding:5px 0;font-weight:bold;font-size:1.2em;color:#059669;">$10.00</td></tr>
+    </table>
+  </div>
+  <div style="text-align:center;margin:30px 0;">
+    <a href="${BASE}" style="display:inline-block;background:linear-gradient(135deg,#b91c1c,#dc2626);color:white;text-decoration:none;padding:16px 36px;border-radius:10px;font-size:16px;font-weight:bold;">Descargar mis cartones</a>
+  </div>
+  <div style="background:#f8fafc;border-radius:8px;padding:15px;margin:20px 0;">
+    <p style="margin:0 0 10px 0;font-weight:bold;color:#475569;">Seriales de tus cartones:</p>
+    <p style="margin:0;font-family:monospace;font-size:14px;color:#64748b;">00001-01 &bull; 00001-02</p>
+  </div>
+  <div style="text-align:center;margin:30px 0;">
+    <a href="${BASE}" style="display:inline-block;background:linear-gradient(135deg,#b91c1c,#dc2626);color:white;text-decoration:none;padding:16px 36px;border-radius:10px;font-size:16px;font-weight:bold;">Comprar cartones digitales</a>
+  </div>
+  <p style="color:#94a3b8;font-size:11px;margin-top:30px;text-align:center;">Mega Bingo TV Mundial &copy; 2026 | Vendedor autorizado: Yotumi S.A.</p>
+</body></html>`;
+
   try {
-    const sent = await sendPurchaseEmail({
-      order_code: 'ORD-TEST1',
-      buyer_name: 'Jose Test',
-      buyer_email: 'jlee@507sc.com',
-      quantity: 2,
-      total_amount: 10.00,
-      download_token: 'test-token-123',
-      card_codes: ['00001-01', '00001-02'],
-    }, '/dev/null');
-    res.json({ success: sent, message: sent ? 'Email enviado a jlee@507sc.com' : 'RESEND_API_KEY no configurado o error' });
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'ventas@megabingodigital.com',
+        to: ['jlee@507sc.com'],
+        subject: 'Mega Bingo TV Mundial - Tus cartones están listos (ORD-TEST1)',
+        html,
+      }),
+    });
+    const data = await r.json();
+    res.json({ success: r.ok, status: r.status, data });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
