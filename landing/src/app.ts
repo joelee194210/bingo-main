@@ -117,12 +117,12 @@ app.get('/test-email', async (_req, res) => {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333;">
   <div style="text-align:center;margin-bottom:30px;">
-    <img src="${BASE}/assets/logo.png" alt="Mega Bingo TV Mundial" style="max-width:220px;height:auto;" />
+    <img src="${BASE}/assets/logo.png" alt="Mega Bingo TV Mundial" style="max-width:300px;height:auto;" />
   </div>
   <p>Hola <strong>Jose Test</strong>,</p>
   <p>Tu compra ha sido confirmada exitosamente. Ya eres parte del <strong style="color:#dc2626;">Mega Bingo TV Mundial</strong>. Tus cartones digitales están listos para descargar.</p>
-  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:20px;margin:20px 0;">
-    <h3 style="margin-top:0;color:#0369a1;">Detalle de tu compra</h3>
+  <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:20px;margin:20px 0;">
+    <h3 style="margin-top:0;color:#991b1b;">Detalle de tu compra</h3>
     <table style="width:100%;border-collapse:collapse;">
       <tr><td style="padding:5px 0;color:#666;">Orden:</td><td style="padding:5px 0;font-weight:bold;">ORD-TEST1</td></tr>
       <tr><td style="padding:5px 0;color:#666;">Cantidad:</td><td style="padding:5px 0;">2 cartones</td></tr>
