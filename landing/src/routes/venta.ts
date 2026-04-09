@@ -523,7 +523,7 @@ function renderLayout(title: string, body: string): string {
         </div>
         <div class="sponsors-center">
           <img src="/assets/primera_dama.png" alt="Despacho de la Primera Dama">
-          <p class="sponsors-text">A beneficio de APROB del Despacho de la Primera Dama de la República de Panamá.</p>
+          <p class="sponsors-text">A beneficio de APROB del Despacho de la Primera Dama<br>de la República de Panamá.</p>
         </div>
         <div class="sponsors-side">
           <img src="/assets/lnb.png" alt="Lotería Nacional de Beneficencia">
