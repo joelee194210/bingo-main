@@ -134,12 +134,13 @@ function renderComingSoon(): string {
     p { font-size: 16px; color: #64748b; line-height: 1.6; }
     .badge { display: inline-block; margin-top: 24px; padding: 10px 24px; background: linear-gradient(135deg, #eff6ff, #dbeafe); border: 2px solid #bfdbfe; border-radius: 24px; font-size: 14px; font-weight: 700; color: #1e40af; letter-spacing: 0.3px; }
     .sponsors { background: #991b1b; border-radius: 16px; padding: 24px 16px; margin-top: 20px; text-align: center; }
-    .sponsors-row { display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
-    .sponsors-row img { height: 70px; width: auto; object-fit: contain; }
-    .sponsors-row .primera-dama { height: 80px; }
-    .sponsors-text { color: #ffffff; font-size: 11px; margin-top: 12px; line-height: 1.4; opacity: 0.9; }
-    .sponsors-labels { display: flex; justify-content: space-between; padding: 0 10px; margin-top: 8px; }
-    .sponsors-labels span { color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    .sponsors-row { display: flex; align-items: center; justify-content: space-between; }
+    .sponsors-side { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .sponsors-side img { height: 65px; width: auto; object-fit: contain; }
+    .sponsors-side span { color: #ffffff; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    .sponsors-center { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; padding: 0 12px; }
+    .sponsors-center img { height: 75px; width: auto; object-fit: contain; }
+    .sponsors-text { color: #ffffff; font-size: 10px; line-height: 1.4; opacity: 0.9; text-align: center; }
     .footer { text-align: center; margin-top: 20px; padding: 16px; font-size: 11px; color: #94a3b8; }
     .footer span { display: block; margin-bottom: 8px; }
     .footer img { max-width: 80px; height: auto; opacity: 0.6; }
@@ -158,14 +159,18 @@ function renderComingSoon(): string {
     </div>
     <div class="sponsors">
       <div class="sponsors-row">
-        <img src="/assets/bingos_nacionales.png" alt="Bingos Nacionales">
-        <img src="/assets/primera_dama.png" alt="Despacho de la Primera Dama" class="primera-dama">
-        <img src="/assets/lnb.png" alt="Lotería Nacional de Beneficencia">
-      </div>
-      <p class="sponsors-text">A beneficio de APROB del Despacho de la Primera Dama de la República de Panamá.</p>
-      <div class="sponsors-labels">
-        <span>Organiza</span>
-        <span>Alianza</span>
+        <div class="sponsors-side">
+          <img src="/assets/bingos_nacionales.png" alt="Bingos Nacionales">
+          <span>Organiza</span>
+        </div>
+        <div class="sponsors-center">
+          <img src="/assets/primera_dama.png" alt="Despacho de la Primera Dama">
+          <p class="sponsors-text">A beneficio de APROB del Despacho de la Primera Dama de la República de Panamá.</p>
+        </div>
+        <div class="sponsors-side">
+          <img src="/assets/lnb.png" alt="Lotería Nacional de Beneficencia">
+          <span>Alianza</span>
+        </div>
       </div>
     </div>
     <div class="footer">
