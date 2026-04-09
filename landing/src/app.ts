@@ -174,10 +174,9 @@ function renderComingSoon(): string {
       </div>
     </div>
     <div class="footer">
-      <span>Mega Bingo TV Mundial</span>
-      <span style="font-weight:600;color:#64748b;margin-bottom:10px;">Vendedor autorizado</span>
-      <div style="background:#fff;border-radius:10px;display:inline-block;padding:8px 16px;">
-        <img src="/assets/yotumi_logo.png" alt="Yotumi" style="max-width:120px;height:auto;opacity:1;">
+      <span style="font-size:13px;">Vendedor autorizado del Mega Bingo TV Mundial</span>
+      <div style="background:#fff;border-radius:12px;display:inline-block;padding:12px 24px;margin-top:8px;">
+        <img src="/assets/yotumi_logo.png" alt="Yotumi" style="max-width:160px;height:auto;opacity:1;">
       </div>
       <a href="https://www.megabingotv.com" target="_blank" rel="noopener" style="display:block;margin-top:14px;color:#fff;font-size:13px;text-decoration:underline;opacity:0.85;">Para más información haz clic aquí</a>
     </div>
