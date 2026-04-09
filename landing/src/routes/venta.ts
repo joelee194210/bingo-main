@@ -607,6 +607,13 @@ function renderLanding(
         </button>
       </form>
 
+      <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9;">
+        <p style="font-size:11px;color:#94a3b8;margin-bottom:6px;">Vendedor autorizado del Mega Bingo TV Mundial</p>
+        <div style="background:#fff;border-radius:8px;display:inline-block;padding:4px 12px;">
+          <img src="/assets/yotumi_logo.png" alt="Yotumi" style="max-width:80px;height:auto;">
+        </div>
+      </div>
+
       <!-- Sección de pago Yappy (oculta hasta que se cree la orden) -->
       <div id="paymentSection" style="display:none;margin-top:24px;text-align:center;">
         <p style="color:#64748b;font-size:14px;margin-bottom:8px;">Tu orden ha sido creada:</p>
