@@ -498,7 +498,14 @@ function renderLayout(title: string, body: string): string {
     btn-yappy::part(modal), btn-yappy div[class*="modal"], btn-yappy div[class*="overlay"] { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; display: flex !important; align-items: center !important; justify-content: center !important; z-index: 9999 !important; }
     .avail-tag { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 8px; background: #f1f5f9; display: inline-block; padding: 4px 14px; border-radius: 20px; }
     .avail-wrap { text-align: center; margin-bottom: 4px; }
-    @media (max-width: 480px) { .card { padding: 24px 20px; } h1 { font-size: 20px; } .price-display .amount { font-size: 30px; } }
+    .sponsors { background: #991b1b; border-radius: 16px; padding: 24px 16px; margin-top: 20px; text-align: center; }
+    .sponsors-row { display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
+    .sponsors-row img { height: 70px; width: auto; object-fit: contain; }
+    .sponsors-row .primera-dama { height: 80px; }
+    .sponsors-text { color: #ffffff; font-size: 11px; margin-top: 12px; line-height: 1.4; opacity: 0.9; }
+    .sponsors-labels { display: flex; justify-content: space-between; padding: 0 10px; margin-top: 8px; }
+    .sponsors-labels span { color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    @media (max-width: 480px) { .card { padding: 24px 20px; } h1 { font-size: 20px; } .price-display .amount { font-size: 30px; } .sponsors-row img { height: 50px; } .sponsors-row .primera-dama { height: 60px; } }
   </style>
 </head>
 <body>
@@ -507,6 +514,18 @@ function renderLayout(title: string, body: string): string {
       <img src="/assets/logo.png" alt="Mega Bingo TV Mundial" id="siteLogo">
     </div>
     ${body}
+    <div class="sponsors">
+      <div class="sponsors-row">
+        <img src="/assets/bingos_nacionales.png" alt="Bingos Nacionales">
+        <img src="/assets/primera_dama.png" alt="Despacho de la Primera Dama" class="primera-dama">
+        <img src="/assets/lnb.png" alt="Lotería Nacional de Beneficencia">
+      </div>
+      <p class="sponsors-text">A beneficio de APROB del Despacho de la Primera Dama de la República de Panamá.</p>
+      <div class="sponsors-labels">
+        <span>Organiza</span>
+        <span>Alianza</span>
+      </div>
+    </div>
     <div class="footer">
       <span>Mega Bingo TV Mundial</span>
       <span style="font-weight:600;color:#64748b;margin-bottom:10px;">Yotumi S.A.</span>
