@@ -533,8 +533,10 @@ function renderLayout(title: string, body: string): string {
     </div>
     <div class="footer">
       <span>Mega Bingo TV Mundial</span>
-      <span style="font-weight:600;color:#64748b;margin-bottom:10px;">Yotumi S.A.</span>
-      <img src="/assets/yotumi_logo.png" alt="Yotumi">
+      <span style="font-weight:600;color:#64748b;margin-bottom:10px;">Vendedor autorizado</span>
+      <div style="background:#fff;border-radius:10px;display:inline-block;padding:8px 16px;">
+        <img src="/assets/yotumi_logo.png" alt="Yotumi" style="max-width:120px;height:auto;opacity:1;">
+      </div>
     </div>
   </div>
   <script src="/assets/checkout.js"></script>
