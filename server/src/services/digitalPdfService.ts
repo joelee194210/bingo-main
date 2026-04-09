@@ -76,10 +76,13 @@ export async function generateDigitalPDF(cards: DigitalCardData[]): Promise<stri
   const templateBuf = readFileSync(findAsset('carton_template.png'));
   const instruccionesBuf = readFileSync(findAsset('carton_instrucciones.png'));
 
-  const pageW = 960;
-  const pageH = 816;
-  const imgW = 480;
-  const imgH = 816;
+  // Carta apaisado: 792x612 pts (8.5"x11" landscape)
+  const pageW = 792;
+  const pageH = 612;
+  const scale = pageH / 816; // 0.75
+  const imgW = Math.round(480 * scale); // 360
+  const imgH = pageH; // 612
+  const marginLeft = Math.round((pageW - imgW * 2) / 2);
 
   return new Promise((resolvePromise, reject) => {
     const doc = new PDFDocument({ size: [pageW, pageH], margin: 0 });
@@ -93,19 +96,24 @@ export async function generateDigitalPDF(cards: DigitalCardData[]): Promise<stri
         if (!isFirst) doc.addPage({ size: [pageW, pageH], margin: 0 });
         isFirst = false;
 
+        // Helper: escalar coordenada + offset del margen izquierdo
+        const sx = (v: number) => marginLeft + Math.round(v * scale);
+        const sy = (v: number) => Math.round(v * scale);
+        const ss = (v: number) => Math.round(v * scale);
+
         // === LADO IZQUIERDO: Cartón ===
-        doc.image(templateBuf, 0, 0, { width: imgW, height: imgH });
+        doc.image(templateBuf, marginLeft, 0, { width: imgW, height: imgH });
 
         // Serial + barcode arriba izquierda
-        doc.fontSize(14).fillColor('#1a1a1a').font('Helvetica-Bold')
-          .text(card.serial, 19, 8, { width: 83, align: 'center' });
+        doc.fontSize(ss(14)).fillColor('#1a1a1a').font('Helvetica-Bold')
+          .text(card.serial, sx(19), sy(8), { width: ss(83), align: 'center' });
 
         try {
           const bc = await generateBarcode(card.serial);
-          doc.image(bc, 26, 24, { width: 70, height: 14 });
+          doc.image(bc, sx(26), sy(24), { width: ss(70), height: ss(14) });
         } catch { /* barcode optional */ }
 
-        // Números del grid
+        // Números del grid (coordenadas escaladas)
         for (let col = 0; col < 5; col++) {
           const column = COLUMNS[col];
           const nums = card.numbers[column];
@@ -118,19 +126,19 @@ export async function generateDigitalPDF(cards: DigitalCardData[]): Promise<stri
             const num = nums[numIndex];
             if (num === undefined) continue;
 
-            const cx = COL_X[col] + COL_W[col] / 2;
-            const cy = ROW_Y[row] + ROW_H[row] / 2 - 9;
+            const cx = sx(COL_X[col] + COL_W[col] / 2);
+            const cy = sy(ROW_Y[row] + ROW_H[row] / 2 - 9);
 
-            doc.fontSize(26).fillColor('#1a1a1a').font('Helvetica-Bold')
-              .text(String(num), cx - 30, cy - 2, { width: 60, align: 'center' });
+            doc.fontSize(ss(26)).fillColor('#1a1a1a').font('Helvetica-Bold')
+              .text(String(num), cx - ss(30), cy - ss(2), { width: ss(60), align: 'center' });
           }
         }
 
         // Raspadito
         if (card.prizeName) {
-          doc.fontSize(11).fillColor('#222222').font('Helvetica-Bold')
-            .text(card.prizeName, T.raspadito.x, T.raspadito.y + 14, {
-              width: T.raspadito.w, align: 'center',
+          doc.fontSize(ss(11)).fillColor('#222222').font('Helvetica-Bold')
+            .text(card.prizeName, sx(T.raspadito.x), sy(T.raspadito.y + 14), {
+              width: ss(T.raspadito.w), align: 'center',
             });
         }
 
@@ -138,16 +146,16 @@ export async function generateDigitalPDF(cards: DigitalCardData[]): Promise<stri
         try {
           const qrUrl = `${VERIFY_BASE_URL}/${card.cardCode}`;
           const qrBuf = await generateQR(qrUrl);
-          doc.image(qrBuf, T.qr.x, T.qr.y, { width: T.qr.size, height: T.qr.size });
+          doc.image(qrBuf, sx(T.qr.x), sy(T.qr.y), { width: ss(T.qr.size), height: ss(T.qr.size) });
         } catch { /* qr optional */ }
 
         // Serial abajo derecha
-        doc.rect(T.serialBottom.x, T.serialBottom.y + 1, T.serialBottom.w, 18).fill('#ffffff');
-        doc.fontSize(13).fillColor('#1a1a1a').font('Helvetica-Bold')
-          .text(card.serial, T.serialBottom.x, T.serialBottom.y + 3, { width: T.serialBottom.w, align: 'center' });
+        doc.rect(sx(T.serialBottom.x), sy(T.serialBottom.y + 1), ss(T.serialBottom.w), ss(18)).fill('#ffffff');
+        doc.fontSize(ss(13)).fillColor('#1a1a1a').font('Helvetica-Bold')
+          .text(card.serial, sx(T.serialBottom.x), sy(T.serialBottom.y + 3), { width: ss(T.serialBottom.w), align: 'center' });
 
         // === LADO DERECHO: Instrucciones ===
-        doc.image(instruccionesBuf, imgW, 0, { width: imgW, height: imgH });
+        doc.image(instruccionesBuf, marginLeft + imgW, 0, { width: imgW, height: imgH });
       }
 
       doc.end();
