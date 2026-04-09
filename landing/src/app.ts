@@ -179,6 +179,7 @@ function renderComingSoon(): string {
       <div style="background:#fff;border-radius:10px;display:inline-block;padding:8px 16px;">
         <img src="/assets/yotumi_logo.png" alt="Yotumi" style="max-width:120px;height:auto;opacity:1;">
       </div>
+      <a href="https://www.megabingotv.com" target="_blank" rel="noopener" style="display:block;margin-top:14px;color:#fff;font-size:13px;text-decoration:underline;opacity:0.85;">Para más información haz clic aquí</a>
     </div>
   </div>
 </body>
