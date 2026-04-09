@@ -532,11 +532,7 @@ function renderLayout(title: string, body: string): string {
       </div>
     </div>
     <div class="footer">
-      <span style="font-size:13px;">Vendedor autorizado del Mega Bingo TV Mundial</span>
-      <div style="background:#fff;border-radius:12px;display:inline-block;padding:12px 24px;margin-top:8px;">
-        <img src="/assets/yotumi_logo.png" alt="Yotumi" style="max-width:160px;height:auto;opacity:1;">
-      </div>
-      <a href="https://www.megabingotv.com" target="_blank" rel="noopener" style="display:block;margin-top:14px;color:#fff;font-size:13px;text-decoration:underline;opacity:0.85;">Para más información acerca del Mega Bingo TV Mundial da clic aquí</a>
+      <a href="https://www.megabingotv.com" target="_blank" rel="noopener" style="color:#fff;font-size:13px;text-decoration:underline;opacity:0.85;">Para más información acerca del Mega Bingo TV Mundial da clic aquí</a>
     </div>
   </div>
   <script src="/assets/checkout.js"></script>
