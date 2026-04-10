@@ -534,6 +534,7 @@ function renderLayout(title: string, body: string): string {
     </div>
     <div class="footer">
       <a href="https://www.megabingotv.com" target="_blank" rel="noopener" style="color:#fff;font-size:13px;text-decoration:underline;opacity:0.85;">Para más información acerca del Mega Bingo TV Mundial da clic aquí</a>
+      <div style="margin-top:10px;color:#fff;font-size:12px;opacity:0.85;">Para soporte escríbenos a <a href="mailto:soporte@megabingodigital.com" style="color:#fff;text-decoration:underline;">soporte@megabingodigital.com</a></div>
     </div>
   </div>
   <script src="/assets/checkout.js"></script>
@@ -555,7 +556,7 @@ function renderLanding(
   if (available <= 0) {
     const body = `
     <div class="card" style="text-align:center;">
-      <h1 style="color:#475569;font-size:20px;font-weight:700;">¡Compra tus cartones digitales<br>por Yappy!</h1>
+      <h1 style="color:#475569;font-size:20px;font-weight:700;">¡Compra tus cartones digitales<br>y paga con Yappy!</h1>
       <div style="margin:30px 0;">
         <div style="font-size:48px;">🔄</div>
         <h2 style="margin-top:16px;">Estamos actualizando nuestro inventario</h2>
@@ -568,7 +569,7 @@ function renderLanding(
 
   const body = `
     <div class="card">
-      <h1 style="color:#475569;font-size:20px;font-weight:700;">¡Compra tus cartones digitales<br>por Yappy!</h1>
+      <h1 style="color:#475569;font-size:20px;font-weight:700;">¡Compra tus cartones digitales<br>y paga con Yappy!</h1>
       <!-- Cartones disponibles oculto — no mostrar al público -->
 
       <form id="orderForm">
