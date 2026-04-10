@@ -11,12 +11,14 @@ if (!existsSync(EXPORTS_DIR)) {
 }
 
 function findAsset(name: string): string {
+  const thisDir = import.meta.dirname;
   const candidates = [
-    resolve(__dirname, '..', 'assets', name),
-    resolve(__dirname, 'assets', name),
+    resolve(thisDir, '..', 'assets', name),
+    resolve(thisDir, 'assets', name),
     resolve(process.cwd(), 'src', 'assets', name),
     resolve(process.cwd(), 'assets', name),
     resolve(process.cwd(), 'server', 'src', 'assets', name),
+    resolve(process.cwd(), 'dist', 'assets', name),
   ];
   for (const p of candidates) {
     if (existsSync(p)) return p;
