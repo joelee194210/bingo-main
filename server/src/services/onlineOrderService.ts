@@ -1,6 +1,6 @@
 import { getPool } from '../database/init.js';
 import { generateUniqueCode } from './cardGenerator.js';
-import { generateDigitalPDF } from './digitalPdfService.js';
+import { generateCardsPDF } from './exportService.js';
 import type { CardNumbers } from '../types/index.js';
 
 export interface OnlineOrder {
@@ -285,25 +285,24 @@ export async function confirmPayment(
     }
 
     // Obtener datos de cartones para generar PDF
-    const { rows: cards } = await client.query<CardRow & { serial: string; use_free_center?: boolean }>(
-      `SELECT c.id, c.card_number, c.card_code, c.validation_code, c.numbers, c.serial,
+    const { rows: cards } = await client.query<CardRow>(
+      `SELECT c.id, c.card_number, c.card_code, c.validation_code, c.numbers,
               e.use_free_center
        FROM cards c JOIN events e ON e.id = c.event_id
        WHERE c.id = ANY($1) ORDER BY c.card_number`,
       [order.card_ids]
     );
 
-    // Generar PDF con plantilla oficial (1.png izquierda + 3.png derecha)
+    // Generar PDF
     const cardData = cards.map(c => ({
       cardNumber: c.card_number,
       cardCode: c.card_code,
       validationCode: c.validation_code,
-      serial: c.serial,
       numbers: c.numbers,
       useFreeCenter: c.use_free_center ?? true,
     }));
 
-    const pdfPath = await generateDigitalPDF(cardData);
+    const pdfPath = await generateCardsPDF(cardData, { cardsPerPage: 4 });
     const downloadToken = generateUniqueCode(20);
 
     // Actualizar orden

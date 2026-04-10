@@ -259,78 +259,38 @@ router.post('/orders/:id/cancel', requirePermission('cards:sell'), async (req: R
   }
 });
 
-// POST /api/venta/orders/:id/resend - Reenviar email (regenera PDF si falta en disco)
+// POST /api/venta/orders/:id/resend - Reenviar email.
+// El PDF vive en el volumen del servicio landing (megabingodigital), que es
+// distinto del volumen de este server. Por eso delegamos por HTTP al landing:
+// el landing lee el PDF de su propio disco y manda el correo. Nunca regenera.
 router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: Request, res: Response) => {
   try {
-    const order = await getOrderById(parseInt((req.params.id as string), 10));
-    if (!order) return res.status(404).json({ success: false, error: 'Orden no encontrada' });
-    if (order.status !== 'completed') {
-      return res.status(400).json({ success: false, error: 'La orden no está completada' });
+    const orderId = parseInt((req.params.id as string), 10);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
     }
 
-    const pool = getPool();
-    const { existsSync } = await import('fs');
-
-    // Si el PDF se perdió (redeploy sin volumen, etc.), regenerarlo.
-    let pdfPath = order.pdf_path;
-    if (!pdfPath || !existsSync(pdfPath)) {
-      console.log(`📄 Regenerando PDF para orden ${order.order_code} (ruta previa: ${pdfPath})`);
-      const { rows: cardsFull } = await pool.query<{
-        card_number: number; card_code: string; validation_code: string;
-        serial: string; numbers: any; use_free_center: boolean | null;
-      }>(
-        `SELECT c.card_number, c.card_code, c.validation_code, c.serial, c.numbers, e.use_free_center
-         FROM cards c JOIN events e ON e.id = c.event_id
-         WHERE c.id = ANY($1) ORDER BY c.card_number`,
-        [order.card_ids]
-      );
-      if (cardsFull.length === 0) {
-        return res.status(400).json({ success: false, error: 'Cartones no encontrados para regenerar PDF' });
-      }
-      pdfPath = await generateDigitalPDF(cardsFull.map(c => ({
-        cardNumber: c.card_number,
-        cardCode: c.card_code,
-        validationCode: c.validation_code,
-        serial: c.serial,
-        numbers: c.numbers,
-        useFreeCenter: c.use_free_center ?? true,
-      })));
-      await pool.query('UPDATE online_orders SET pdf_path = $1, updated_at = NOW() WHERE id = $2', [pdfPath, order.id]);
-      order.pdf_path = pdfPath;
+    const landingUrl = process.env.LANDING_INTERNAL_URL;
+    const secret = process.env.INTERNAL_API_SECRET;
+    if (!landingUrl || !secret) {
+      return res.status(500).json({
+        success: false,
+        error: 'LANDING_INTERNAL_URL o INTERNAL_API_SECRET no configurados en el server',
+      });
     }
 
-    if (!order.download_token) {
-      return res.status(400).json({ success: false, error: 'La orden no tiene download_token' });
-    }
-
-    const { rows: cards } = await pool.query<{ card_code: string }>(
-      'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
-      [order.card_ids]
-    );
-
-    const emailSent = await sendPurchaseEmail({
-      order_code: order.order_code,
-      buyer_name: order.buyer_name,
-      buyer_email: order.buyer_email,
-      quantity: order.quantity,
-      total_amount: Number(order.total_amount),
-      download_token: order.download_token,
-      card_codes: cards.map(c => c.card_code),
-    }, pdfPath);
-
-    if (emailSent) {
-      await pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [order.id]);
-      return res.json({ success: true, sent: true });
-    }
-
-    return res.status(502).json({
-      success: false,
-      error: 'sendPurchaseEmail retornó false. Revisa RESEND_API_KEY, EMAIL_FROM y logs del servidor.',
+    const url = `${landingUrl.replace(/\/$/, '')}/venta/internal/orders/${orderId}/resend`;
+    const upstream = await fetch(url, {
+      method: 'POST',
+      headers: { 'x-internal-secret': secret, 'content-type': 'application/json' },
     });
+
+    const body = await upstream.json().catch(() => ({ success: false, error: 'Respuesta inválida del landing' }));
+    return res.status(upstream.status).json(body);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error reenviando email';
-    console.error('Error en /orders/:id/resend:', msg);
-    res.status(500).json({ success: false, error: msg });
+    console.error('Error en /orders/:id/resend (proxy landing):', msg);
+    res.status(502).json({ success: false, error: `No se pudo contactar al landing: ${msg}` });
   }
 });
 

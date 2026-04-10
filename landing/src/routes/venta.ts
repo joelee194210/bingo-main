@@ -364,6 +364,81 @@ router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
   }
 });
 
+// POST /venta/internal/orders/:id/resend - Reenvía el email de confirmación.
+// Sólo el server admin debe llamar este endpoint (vía proxy), autenticado por
+// shared secret. NO regenera el PDF: si el archivo ya no existe en este volumen,
+// devuelve error — el admin no debe tener forma de regenerar cartones a voluntad.
+router.post('/internal/orders/:id/resend', async (req: Request, res: Response) => {
+  const provided = req.header('x-internal-secret') || '';
+  const expected = process.env.INTERNAL_API_SECRET || '';
+  if (!expected || provided.length !== expected.length || !timingSafeEqual(
+    Buffer.from(provided), Buffer.from(expected)
+  )) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  try {
+    const orderId = parseInt((req.params.id as string), 10);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
+    }
+
+    const pool = getPool();
+    const { rows } = await pool.query(
+      'SELECT * FROM online_orders WHERE id = $1', [orderId]
+    );
+    const order = rows[0];
+    if (!order) return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    if (order.status !== 'completed') {
+      return res.status(400).json({ success: false, error: `La orden está en estado "${order.status}", no se puede reenviar` });
+    }
+    if (!order.pdf_path || !order.download_token) {
+      return res.status(400).json({ success: false, error: 'La orden no tiene PDF o download_token' });
+    }
+
+    const resolvedPath = resolvePath(order.pdf_path);
+    const isSafe = PDF_SAFE_ROOTS.some((root) => resolvedPath.startsWith(root));
+    if (!isSafe) {
+      return res.status(403).json({ success: false, error: 'pdf_path fuera de whitelist' });
+    }
+    if (!existsSync(resolvedPath)) {
+      return res.status(404).json({
+        success: false,
+        error: `PDF no encontrado en el volumen del landing: ${order.pdf_path}. No se puede reenviar.`,
+      });
+    }
+
+    const { rows: cards } = await pool.query<{ card_code: string }>(
+      'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
+      [order.card_ids]
+    );
+
+    const sent = await sendPurchaseEmail({
+      order_code: order.order_code,
+      buyer_name: order.buyer_name,
+      buyer_email: order.buyer_email,
+      quantity: order.quantity,
+      total_amount: Number(order.total_amount),
+      download_token: order.download_token,
+      card_codes: cards.map(c => c.card_code),
+    }, resolvedPath);
+
+    if (!sent) {
+      return res.status(502).json({
+        success: false,
+        error: 'sendPurchaseEmail retornó false. Revisa RESEND_API_KEY del landing o logs.',
+      });
+    }
+
+    await pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [orderId]);
+    return res.json({ success: true, sent: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('Error en /internal/orders/:id/resend:', msg);
+    return res.status(500).json({ success: false, error: msg });
+  }
+});
+
 // GET /venta/api/yappy/ipn - IPN (Instant Payment Notification) de Yappy
 // Yappy llama este endpoint con orderId, Hash, status, domain
 router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
