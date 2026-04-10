@@ -7,9 +7,11 @@ import { resolve as resolvePath, sep as pathSep } from 'path';
 
 // SEC-H5: whitelist de directorios desde donde es seguro servir PDFs generados.
 // Todo pdf_path debe resolver a un archivo dentro de una de estas raíces.
+const EXPORTS_DIR = process.env.EXPORTS_DIR
+  ?? (process.env.NODE_ENV === 'production' ? '/app/exports' : resolvePath(process.cwd(), 'exports'));
 const PDF_SAFE_ROOTS = [
+  EXPORTS_DIR,
   resolvePath(process.cwd(), 'exports'),
-  resolvePath(process.cwd(), 'server', 'exports'),
 ].map((p) => (p.endsWith(pathSep) ? p : p + pathSep));
 
 const router = Router();

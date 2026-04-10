@@ -1,8 +1,11 @@
 import PDFDocument from 'pdfkit';
 import { existsSync, mkdirSync, createWriteStream } from 'fs';
-import { join, resolve } from 'path';
+import { join, resolve, sep } from 'path';
 
-const MOVIMIENTOS_DIR = join(process.cwd(), 'exports', 'movimientos');
+const EXPORTS_BASE = process.env.EXPORTS_DIR
+  ?? (process.env.NODE_ENV === 'production' ? '/app/exports' : join(process.cwd(), 'exports'));
+const MOVIMIENTOS_DIR = join(EXPORTS_BASE, 'movimientos');
+const MOVIMIENTOS_DIR_SAFE = MOVIMIENTOS_DIR.endsWith(sep) ? MOVIMIENTOS_DIR : MOVIMIENTOS_DIR + sep;
 const LOGO_CANDIDATES = [
   resolve(process.cwd(), 'client/public/logo.png'),
   resolve(process.cwd(), 'client/dist/logo.png'),
@@ -513,8 +516,8 @@ export function generateDocumentoPdf(data: DocumentoPdfData): Promise<string> {
 
 export function getMovimientoPdfPath(filename: string): string {
   const sanitized = filename.replace(/[/\\]/g, '').replace(/\.\./g, '');
-  const resolved = join(MOVIMIENTOS_DIR, sanitized);
-  if (!resolved.startsWith(MOVIMIENTOS_DIR)) {
+  const resolved = resolve(join(MOVIMIENTOS_DIR, sanitized));
+  if (resolved !== MOVIMIENTOS_DIR.replace(/[/\\]+$/, '') && !resolved.startsWith(MOVIMIENTOS_DIR_SAFE)) {
     throw new Error('Ruta de archivo no permitida');
   }
   return resolved;

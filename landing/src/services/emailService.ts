@@ -22,7 +22,7 @@ export async function sendPurchaseEmail(data: OrderEmailData, pdfPath: string): 
 
   const from = process.env.EMAIL_FROM || 'ventas@megabingodigital.com';
   const downloadUrl = `${BASE_URL}/venta/descargar/${data.download_token}`;
-  const qtyText = data.quantity === 1 ? '1 carton' : `${data.quantity} cartones`;
+  const qtyText = data.quantity === 1 ? '1 cartón' : `${data.quantity} cartones`;
 
   const html = `
 <!DOCTYPE html>

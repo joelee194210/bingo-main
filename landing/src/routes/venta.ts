@@ -9,10 +9,11 @@ import { resolve as resolvePath, sep as pathSep } from 'path';
 
 // SEC-H5: whitelist de directorios desde donde es seguro servir PDFs generados.
 // Todo pdf_path debe resolver a un archivo dentro de una de estas raíces.
+const EXPORTS_DIR = process.env.EXPORTS_DIR
+  ?? (process.env.NODE_ENV === 'production' ? '/app/exports' : resolvePath(process.cwd(), 'exports'));
 const PDF_SAFE_ROOTS = [
+  EXPORTS_DIR,
   resolvePath(process.cwd(), 'exports'),
-  resolvePath(process.cwd(), 'landing', 'exports'),
-  resolvePath(process.cwd(), 'server', 'exports'),
 ].map((p) => (p.endsWith(pathSep) ? p : p + pathSep));
 
 // Token de confirmación firmado — previene confirmaciones sin pago real
@@ -160,7 +161,7 @@ router.post('/api/yappy/initiate', async (req: Request, res: Response) => {
     const yappy = getYappyButtonClient();
     const totalNum = Number(order.total_amount);
     // Limpiar teléfono: quitar +507, espacios, guiones — dejar solo dígitos
-    const tel = order.buyer_phone.replace(/[\s\-\+]/g, '').replace(/^507/, '');
+    const tel = order.buyer_phone.replace(/[\s+-]/g, '').replace(/^507/, '');
     const params = await yappy.initiatePayment({
       orderId: order.order_code,
       total: totalNum,
@@ -575,7 +576,7 @@ function renderLanding(
         <select id="quantity" name="quantity">
           ${Array.from({ length: maxOrder - config.min_cards_per_order + 1 }, (_, i) => {
             const n = i + config.min_cards_per_order;
-            return `<option value="${n}">${n} cartón${n > 1 ? 'es' : ''}</option>`;
+            return `<option value="${n}">${n} ${n > 1 ? 'cartones' : 'cartón'}</option>`;
           }).join('')}
         </select>
 

@@ -4,7 +4,8 @@ import { join, resolve } from 'path';
 import bwipjs from 'bwip-js';
 import QRCode from 'qrcode';
 
-const EXPORTS_DIR = join(process.cwd(), 'exports');
+const EXPORTS_DIR = process.env.EXPORTS_DIR
+  ?? (process.env.NODE_ENV === 'production' ? '/app/exports' : join(process.cwd(), 'exports'));
 if (!existsSync(EXPORTS_DIR)) {
   mkdirSync(EXPORTS_DIR, { recursive: true });
 }

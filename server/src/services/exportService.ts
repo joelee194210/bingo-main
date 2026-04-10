@@ -4,7 +4,8 @@ import { createWriteStream, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import type { CardNumbers } from '../types/index.js';
 
-const EXPORTS_DIR = join(process.cwd(), 'exports');
+const EXPORTS_DIR = process.env.EXPORTS_DIR
+  ?? (process.env.NODE_ENV === 'production' ? '/app/exports' : join(process.cwd(), 'exports'));
 
 // Asegurar que existe el directorio de exports
 if (!existsSync(EXPORTS_DIR)) {

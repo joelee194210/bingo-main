@@ -18,7 +18,7 @@
     var qty = parseInt(document.getElementById('quantity').value);
     var total = qty * PRICE;
     document.getElementById('totalPrice').textContent = '$' + total.toFixed(2);
-    document.getElementById('priceDetail').textContent = qty + (qty > 1 ? ' cartones' : ' carton') + ' x $' + PRICE.toFixed(2) + ' c/u';
+    document.getElementById('priceDetail').textContent = qty + (qty > 1 ? ' cartones' : ' cartón') + ' x $' + PRICE.toFixed(2) + ' c/u';
   }
   document.getElementById('quantity').addEventListener('change', updatePrice);
 
