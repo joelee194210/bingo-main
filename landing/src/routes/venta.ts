@@ -500,11 +500,11 @@ function renderLayout(title: string, body: string): string {
     .avail-tag { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 8px; background: #f1f5f9; display: inline-block; padding: 4px 14px; border-radius: 20px; }
     .avail-wrap { text-align: center; margin-bottom: 4px; }
     .sponsors { background: #991b1b; border-radius: 16px; padding: 24px 16px; margin-top: 20px; text-align: center; }
-    .sponsors-row { display: flex; align-items: center; justify-content: space-between; }
+    .sponsors-row { display: flex; align-items: center; justify-content: center; gap: 24px; }
     .sponsors-side { display: flex; flex-direction: column; align-items: center; gap: 6px; }
     .sponsors-side img { height: 65px; width: auto; object-fit: contain; }
     .sponsors-side span { color: #ffffff; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-    .sponsors-center { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; padding: 0 12px; }
+    .sponsors-center { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 12px; }
     .sponsors-center img { height: 75px; width: auto; object-fit: contain; }
     .sponsors-text { color: #ffffff; font-size: 10px; line-height: 1.4; opacity: 0.9; text-align: center; }
     @media (max-width: 480px) { .card { padding: 24px 20px; } h1 { font-size: 20px; } .price-display .amount { font-size: 30px; } .sponsors-side img { height: 50px; } .sponsors-center img { height: 60px; } }
@@ -525,10 +525,6 @@ function renderLayout(title: string, body: string): string {
         <div class="sponsors-center">
           <img src="/assets/primera_dama.png" alt="Despacho de la Primera Dama">
           <p class="sponsors-text">A beneficio de APROB del Despacho de la Primera Dama<br>de la República de Panamá.</p>
-        </div>
-        <div class="sponsors-side">
-          <img src="/assets/lnb.png" alt="Lotería Nacional de Beneficencia">
-          <span>Alianza</span>
         </div>
       </div>
     </div>
