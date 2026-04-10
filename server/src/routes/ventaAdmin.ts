@@ -6,7 +6,6 @@ import {
   confirmPayment, cancelOrder, listOrders,
 } from '../services/onlineOrderService.js';
 import { sendPurchaseEmail } from '../services/emailService.js';
-import { generateCardsPDF } from '../services/exportService.js';
 import { generateDigitalPDF } from '../services/digitalPdfService.js';
 
 const router = Router();
@@ -260,16 +259,50 @@ router.post('/orders/:id/cancel', requirePermission('cards:sell'), async (req: R
   }
 });
 
-// POST /api/venta/orders/:id/resend - Reenviar email
+// POST /api/venta/orders/:id/resend - Reenviar email (regenera PDF si falta en disco)
 router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: Request, res: Response) => {
   try {
     const order = await getOrderById(parseInt((req.params.id as string), 10));
     if (!order) return res.status(404).json({ success: false, error: 'Orden no encontrada' });
-    if (order.status !== 'completed' || !order.pdf_path || !order.download_token) {
-      return res.status(400).json({ success: false, error: 'La orden no tiene PDF para enviar' });
+    if (order.status !== 'completed') {
+      return res.status(400).json({ success: false, error: 'La orden no está completada' });
     }
 
     const pool = getPool();
+    const { existsSync } = await import('fs');
+
+    // Si el PDF se perdió (redeploy sin volumen, etc.), regenerarlo.
+    let pdfPath = order.pdf_path;
+    if (!pdfPath || !existsSync(pdfPath)) {
+      console.log(`📄 Regenerando PDF para orden ${order.order_code} (ruta previa: ${pdfPath})`);
+      const { rows: cardsFull } = await pool.query<{
+        card_number: number; card_code: string; validation_code: string;
+        serial: string; numbers: any; use_free_center: boolean | null;
+      }>(
+        `SELECT c.card_number, c.card_code, c.validation_code, c.serial, c.numbers, e.use_free_center
+         FROM cards c JOIN events e ON e.id = c.event_id
+         WHERE c.id = ANY($1) ORDER BY c.card_number`,
+        [order.card_ids]
+      );
+      if (cardsFull.length === 0) {
+        return res.status(400).json({ success: false, error: 'Cartones no encontrados para regenerar PDF' });
+      }
+      pdfPath = await generateDigitalPDF(cardsFull.map(c => ({
+        cardNumber: c.card_number,
+        cardCode: c.card_code,
+        validationCode: c.validation_code,
+        serial: c.serial,
+        numbers: c.numbers,
+        useFreeCenter: c.use_free_center ?? true,
+      })));
+      await pool.query('UPDATE online_orders SET pdf_path = $1, updated_at = NOW() WHERE id = $2', [pdfPath, order.id]);
+      order.pdf_path = pdfPath;
+    }
+
+    if (!order.download_token) {
+      return res.status(400).json({ success: false, error: 'La orden no tiene download_token' });
+    }
+
     const { rows: cards } = await pool.query<{ card_code: string }>(
       'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
       [order.card_ids]
@@ -283,7 +316,7 @@ router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: R
       total_amount: Number(order.total_amount),
       download_token: order.download_token,
       card_codes: cards.map(c => c.card_code),
-    }, order.pdf_path);
+    }, pdfPath);
 
     if (emailSent) {
       await pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [order.id]);
