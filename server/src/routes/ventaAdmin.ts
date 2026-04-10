@@ -287,11 +287,17 @@ router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: R
 
     if (emailSent) {
       await pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [order.id]);
+      return res.json({ success: true, sent: true });
     }
 
-    res.json({ success: true, sent: emailSent });
+    return res.status(502).json({
+      success: false,
+      error: 'sendPurchaseEmail retornó false. Revisa RESEND_API_KEY, EMAIL_FROM y logs del servidor.',
+    });
   } catch (err) {
-    res.status(500).json({ success: false, error: 'Error reenviando email' });
+    const msg = err instanceof Error ? err.message : 'Error reenviando email';
+    console.error('Error en /orders/:id/resend:', msg);
+    res.status(500).json({ success: false, error: msg });
   }
 });
 
