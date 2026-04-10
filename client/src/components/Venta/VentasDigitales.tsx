@@ -350,13 +350,13 @@ export default function VentasDigitales() {
                                   </Button>
                                 </>
                               )}
-                              {order.status === 'completed' && order.email_sent_at && (
+                              {order.status === 'completed' && (
                                 <Button
                                   size="sm" variant="ghost" className="h-7 text-xs"
                                   onClick={() => resendMutation.mutate(order.id)}
                                   disabled={pendingActionId === order.id}
                                 >
-                                  <Mail className="h-3 w-3 mr-1" /> Reenviar
+                                  <Mail className="h-3 w-3 mr-1" /> {order.email_sent_at ? 'Reenviar' : 'Enviar'}
                                 </Button>
                               )}
                             </div>
