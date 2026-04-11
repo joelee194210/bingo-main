@@ -262,7 +262,14 @@ router.post('/orders/:id/cancel', requirePermission('cards:sell'), async (req: R
 // POST /api/venta/orders/:id/resend - Reenviar email.
 // El PDF vive en el volumen del servicio landing (megabingodigital), que es
 // distinto del volumen de este server. Por eso delegamos por HTTP al landing:
-// el landing lee el PDF de su propio disco y manda el correo. Nunca regenera.
+// el landing lee el PDF de su propio disco y manda el correo.
+//
+// URL y secret están hardcoded porque el repo es privado y las env vars de
+// Railway no se estaban propagando al runtime. Si se abre el repo a público,
+// mover a env vars y rotar el secret.
+const LANDING_INTERNAL_URL_FALLBACK = 'https://megabingodigital.com';
+const INTERNAL_RESEND_SECRET_FALLBACK = '1706ad40b38c416e09c5009b340b87d232ae4eb4cd3360c2c0ac9e089ebf6a51';
+
 router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: Request, res: Response) => {
   try {
     const orderId = parseInt((req.params.id as string), 10);
@@ -270,18 +277,8 @@ router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: R
       return res.status(400).json({ success: false, error: 'ID inválido' });
     }
 
-    const landingUrl = process.env.LANDING_INTERNAL_URL;
-    const secret = process.env.INTERNAL_API_SECRET;
-    if (!landingUrl || !secret) {
-      // Debug: listar qué env vars relevantes SÍ ve el proceso
-      const envSeen = Object.keys(process.env)
-        .filter(k => /landing|internal|secret|api/i.test(k))
-        .sort();
-      return res.status(500).json({
-        success: false,
-        error: `LANDING_INTERNAL_URL o INTERNAL_API_SECRET no configurados. landingUrl=${!!landingUrl} secret=${!!secret}. env vars visibles (filtradas): ${envSeen.join(', ') || '(ninguna)'}`,
-      });
-    }
+    const landingUrl = process.env.LANDING_INTERNAL_URL || LANDING_INTERNAL_URL_FALLBACK;
+    const secret = process.env.INTERNAL_API_SECRET || INTERNAL_RESEND_SECRET_FALLBACK;
 
     const url = `${landingUrl.replace(/\/$/, '')}/venta/internal/orders/${orderId}/resend`;
     const upstream = await fetch(url, {
