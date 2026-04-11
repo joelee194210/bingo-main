@@ -582,10 +582,113 @@ function renderLayout(title: string, body: string): string {
     .sponsors-center { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 12px; }
     .sponsors-center img { height: 75px; width: auto; object-fit: contain; }
     .sponsors-text { color: #ffffff; font-size: 10px; line-height: 1.4; opacity: 0.9; text-align: center; }
+
+    /* ===== Menú hamburguesa + FAQ drawer ===== */
+    .menu-toggle { position: fixed; top: 16px; right: 16px; z-index: 50; width: 46px; height: 46px; border-radius: 12px; background: rgba(255,255,255,0.95); border: none; box-shadow: 0 4px 14px rgba(0,0,0,0.25); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 0; transition: transform 0.2s; }
+    .menu-toggle:hover { transform: scale(1.05); }
+    .menu-toggle span { display: block; width: 22px; height: 3px; background: #c0272d; border-radius: 2px; transition: all 0.3s; }
+    .menu-toggle[aria-expanded="true"] span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+    .menu-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+    .menu-toggle[aria-expanded="true"] span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+    .menu-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.3s; backdrop-filter: blur(3px); }
+    .menu-overlay.open { opacity: 1; pointer-events: auto; }
+    .menu-drawer { position: fixed; top: 0; right: 0; height: 100%; width: min(420px, 90vw); background: linear-gradient(180deg, #c0272d 0%, #991b1b 100%); z-index: 45; transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1); overflow-y: auto; box-shadow: -8px 0 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
+    .menu-drawer.open { transform: translateX(0); }
+    .menu-header { padding: 28px 24px 16px; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.15); }
+    .menu-header h2 { color: #fff; font-size: 22px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.3px; }
+    .menu-header p { color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500; line-height: 1.4; }
+    .menu-list { padding: 8px 20px 24px; flex: 1; }
+    .menu-list details { background: rgba(255,255,255,0.08); border-radius: 10px; margin-bottom: 8px; overflow: hidden; transition: background 0.2s; }
+    .menu-list details[open] { background: rgba(255,255,255,0.14); }
+    .menu-list summary { padding: 14px 16px; font-size: 14px; font-weight: 600; color: #fff; cursor: pointer; list-style: none; display: flex; align-items: flex-start; gap: 10px; line-height: 1.4; }
+    .menu-list summary::-webkit-details-marker { display: none; }
+    .menu-list summary::before { content: '+'; flex-shrink: 0; width: 20px; height: 20px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; transition: transform 0.2s; }
+    .menu-list details[open] summary::before { content: '−'; background: #fff; color: #c0272d; }
+    .menu-list .answer { padding: 0 16px 16px 46px; color: rgba(255,255,255,0.9); font-size: 13px; line-height: 1.55; }
+    .menu-list .answer a { color: #fef3c7; text-decoration: underline; word-break: break-all; }
+    .menu-footer { padding: 16px 24px 24px; text-align: center; border-top: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); font-size: 11px; }
+    .menu-footer a { color: #fef3c7; text-decoration: underline; }
+
     @media (max-width: 480px) { .card { padding: 24px 20px; } h1 { font-size: 20px; } .price-display .amount { font-size: 30px; } .sponsors-side img { height: 50px; } .sponsors-center img { height: 60px; } }
   </style>
 </head>
 <body>
+  <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú de preguntas frecuentes" aria-expanded="false" aria-controls="menuDrawer">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="menu-overlay" id="menuOverlay"></div>
+  <aside class="menu-drawer" id="menuDrawer" aria-hidden="true" aria-label="Preguntas frecuentes">
+    <div class="menu-header">
+      <h2>Preguntas Frecuentes</h2>
+      <p>Mega Bingo TV Mundial — Compras de cartones digitales</p>
+    </div>
+    <div class="menu-list">
+      <details>
+        <summary>1. ¿Dónde y cómo puedo comprar cartones digitales?</summary>
+        <div class="answer">Puedes comprar tus cartones digitales ingresando a <a href="https://www.megabingotv.com/digital" target="_blank" rel="noopener">www.megabingotv.com/digital</a>. Solo debes seleccionar la cantidad, registrar tus datos y realizar el pago de forma rápida y segura a través de Yappy.</div>
+      </details>
+      <details>
+        <summary>2. ¿Cómo recibo mis cartones después de pagar?</summary>
+        <div class="answer">Una vez confirmado el pago, recibirás tus cartones digitales en tu correo electrónico. Además, podrás descargarlos inmediatamente desde la página al finalizar tu compra.</div>
+      </details>
+      <details>
+        <summary>3. ¿Es seguro comprar cartones digitales?</summary>
+        <div class="answer">Sí, la plataforma cuenta con procesos seguros de pago y validación que garantizan tu compra.</div>
+      </details>
+      <details>
+        <summary>4. ¿Los cartones digitales tienen los mismos premios que los físicos?</summary>
+        <div class="answer">Sí, participan en los mismos sorteos oficiales y optan por los mismos premios que los cartones físicos.</div>
+      </details>
+      <details>
+        <summary>5. ¿Cómo puedo saber si gané?</summary>
+        <div class="answer">Los números ganadores se anuncian en vivo y también se publican en los canales oficiales. Solo debes verificar tu cartón con los resultados.</div>
+      </details>
+      <details>
+        <summary>6. ¿Mi cartón queda registrado a mi nombre?</summary>
+        <div class="answer">Sí, cada cartón queda asociado a tu compra y a tus datos, lo que permite validar la titularidad en caso de resultar ganador.</div>
+      </details>
+      <details>
+        <summary>7. ¿Es obligatorio imprimir mi cartón para jugar?</summary>
+        <div class="answer">No, no es obligatorio. Puedes jugar directamente con tu cartón digital sin necesidad de imprimirlo.</div>
+      </details>
+      <details>
+        <summary>8. ¿Cómo juego si no imprimo mi cartón?</summary>
+        <div class="answer">Cada cartón tiene un número único que será anunciado durante el sorteo. Con ese número podrás verificar fácilmente si resultas ganador.</div>
+      </details>
+      <details>
+        <summary>9. ¿Qué hago si no recibo mis cartones por correo?</summary>
+        <div class="answer">Primero revisa tu bandeja de spam o correo no deseado. Si aún no los encuentras, puedes escribirnos a <a href="mailto:soporte@megabingodigital.com">soporte@megabingodigital.com</a> y te ayudaremos.</div>
+      </details>
+      <details>
+        <summary>10. ¿Dónde puedo ver más información?</summary>
+        <div class="answer">Puedes encontrar más detalles en: <a href="https://megabingotv.com/preguntas-frecuentes" target="_blank" rel="noopener">megabingotv.com/preguntas-frecuentes</a></div>
+      </details>
+    </div>
+    <div class="menu-footer">
+      ¿Necesitas ayuda? <a href="mailto:soporte@megabingodigital.com">soporte@megabingodigital.com</a>
+    </div>
+  </aside>
+  <script>
+    (function() {
+      var toggle = document.getElementById('menuToggle');
+      var drawer = document.getElementById('menuDrawer');
+      var overlay = document.getElementById('menuOverlay');
+      function setOpen(open) {
+        toggle.setAttribute('aria-expanded', String(open));
+        drawer.setAttribute('aria-hidden', String(!open));
+        drawer.classList.toggle('open', open);
+        overlay.classList.toggle('open', open);
+        document.body.style.overflow = open ? 'hidden' : '';
+      }
+      toggle.addEventListener('click', function() {
+        setOpen(drawer.getAttribute('aria-hidden') === 'true');
+      });
+      overlay.addEventListener('click', function() { setOpen(false); });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') setOpen(false);
+      });
+    })();
+  </script>
   <div class="container">
     <div class="logo">
       <img src="/assets/logo.png" alt="Mega Bingo TV Mundial" id="siteLogo">
