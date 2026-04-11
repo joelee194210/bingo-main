@@ -261,14 +261,12 @@ router.post('/orders/:id/cancel', requirePermission('cards:sell'), async (req: R
 
 // POST /api/venta/orders/:id/resend - Reenviar email.
 // El PDF vive en el volumen del servicio landing (megabingodigital), que es
-// distinto del volumen de este server. Por eso delegamos por HTTP al landing:
-// el landing lee el PDF de su propio disco y manda el correo.
+// distinto del volumen de este server. Delegamos por HTTP al landing: el
+// landing lee el PDF de su propio disco y manda el correo.
 //
-// URL y secret están hardcoded porque el repo es privado y las env vars de
-// Railway no se estaban propagando al runtime. Si se abre el repo a público,
-// mover a env vars y rotar el secret.
-const LANDING_INTERNAL_URL_FALLBACK = 'https://megabingodigital.com';
-const INTERNAL_RESEND_SECRET_FALLBACK = '1706ad40b38c416e09c5009b340b87d232ae4eb4cd3360c2c0ac9e089ebf6a51';
+// Repo privado → secret hardcoded. Si se abre el repo a público, rotar.
+const LANDING_INTERNAL_URL = 'https://megabingodigital.com';
+const INTERNAL_RESEND_SECRET = '1706ad40b38c416e09c5009b340b87d232ae4eb4cd3360c2c0ac9e089ebf6a51';
 
 router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: Request, res: Response) => {
   try {
@@ -277,16 +275,22 @@ router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: R
       return res.status(400).json({ success: false, error: 'ID inválido' });
     }
 
-    const landingUrl = process.env.LANDING_INTERNAL_URL || LANDING_INTERNAL_URL_FALLBACK;
-    const secret = process.env.INTERNAL_API_SECRET || INTERNAL_RESEND_SECRET_FALLBACK;
-
-    const url = `${landingUrl.replace(/\/$/, '')}/venta/internal/orders/${orderId}/resend`;
+    const url = `${LANDING_INTERNAL_URL}/venta/internal/orders/${orderId}/resend`;
     const upstream = await fetch(url, {
       method: 'POST',
-      headers: { 'x-internal-secret': secret, 'content-type': 'application/json' },
+      headers: { 'x-internal-secret': INTERNAL_RESEND_SECRET, 'content-type': 'application/json' },
     });
 
     const body = await upstream.json().catch(() => ({ success: false, error: 'Respuesta inválida del landing' }));
+
+    // Nunca propagar 401 del landing al frontend — el interceptor de axios
+    // del admin interpretaría 401 como sesión expirada y cerraría la sesión
+    // del usuario. Traducimos 401/403 del upstream a 502.
+    if (upstream.status === 401 || upstream.status === 403) {
+      const msg = typeof body === 'object' && body && 'error' in body ? String(body.error) : 'Landing rechazó la autenticación';
+      return res.status(502).json({ success: false, error: `Landing auth error: ${msg}` });
+    }
+
     return res.status(upstream.status).json(body);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error reenviando email';

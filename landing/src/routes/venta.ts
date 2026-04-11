@@ -368,15 +368,15 @@ router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
 // Sólo el server admin debe llamar este endpoint (vía proxy), autenticado por
 // shared secret. Si el PDF no existe en este volumen (caso de órdenes migradas
 // o el volumen se recicló), lo regenera una vez en el volumen del landing.
-// Fallback hardcoded del secret interno cuando la env var no está disponible.
-// Este endpoint solo lo llama el server admin via proxy. Si migras el repo a
-// público, rota este valor y muévelo a INTERNAL_API_SECRET env var.
-const INTERNAL_RESEND_SECRET_FALLBACK = '1706ad40b38c416e09c5009b340b87d232ae4eb4cd3360c2c0ac9e089ebf6a51';
+// Secret hardcoded para /internal/orders/:id/resend. Repo privado, endpoint
+// solo lo llama el server admin. Si se abre el repo a público, rotar este
+// valor y moverlo a env var.
+const INTERNAL_RESEND_SECRET = '1706ad40b38c416e09c5009b340b87d232ae4eb4cd3360c2c0ac9e089ebf6a51';
 
 router.post('/internal/orders/:id/resend', async (req: Request, res: Response) => {
   const provided = req.header('x-internal-secret') || '';
-  const expected = process.env.INTERNAL_API_SECRET || INTERNAL_RESEND_SECRET_FALLBACK;
-  if (!expected || provided.length !== expected.length || !timingSafeEqual(
+  const expected = INTERNAL_RESEND_SECRET;
+  if (provided.length !== expected.length || !timingSafeEqual(
     Buffer.from(provided), Buffer.from(expected)
   )) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
