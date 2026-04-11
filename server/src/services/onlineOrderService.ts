@@ -228,8 +228,6 @@ interface CardRow {
   card_code: string;
   validation_code: string;
   numbers: CardNumbers;
-  event_id: number;
-  serial: string;
   use_free_center?: boolean;
 }
 

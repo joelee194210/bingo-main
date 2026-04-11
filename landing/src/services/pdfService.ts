@@ -1,8 +1,12 @@
 import PDFDocument from 'pdfkit';
 import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'fs';
-import { join, resolve } from 'path';
+import { join, resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import bwipjs from 'bwip-js';
 import QRCode from 'qrcode';
+
+// Node 16+: ESM-compatible sin depender de import.meta.dirname (Node 21.2+).
+const THIS_DIR = dirname(fileURLToPath(import.meta.url));
 
 const EXPORTS_DIR = process.env.EXPORTS_DIR
   ?? (process.env.NODE_ENV === 'production' ? '/app/exports' : join(process.cwd(), 'exports'));
@@ -11,10 +15,9 @@ if (!existsSync(EXPORTS_DIR)) {
 }
 
 function findAsset(name: string): string {
-  const thisDir = import.meta.dirname || __dirname;
   const candidates = [
-    resolve(thisDir, '..', 'assets', name),
-    resolve(thisDir, 'assets', name),
+    resolve(THIS_DIR, '..', 'assets', name),
+    resolve(THIS_DIR, 'assets', name),
     resolve(process.cwd(), 'src', 'assets', name),
     resolve(process.cwd(), 'assets', name),
     resolve(process.cwd(), 'landing', 'src', 'assets', name),
@@ -26,7 +29,7 @@ function findAsset(name: string): string {
   throw new Error(`Asset ${name} no encontrado en: ${candidates.join(', ')}`);
 }
 
-interface CardNumbers { B: number[]; I: number[]; N: number[]; G: number[]; O: number[]; }
+export interface CardNumbers { B: number[]; I: number[]; N: number[]; G: number[]; O: number[]; }
 
 export interface CardData {
   cardNumber: number;

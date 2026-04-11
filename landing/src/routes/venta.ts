@@ -4,6 +4,7 @@ import { getPool } from '../database.js';
 import { createOrder, getOrderByCode, getOrderByDownloadToken, getSalesConfig, confirmPayment } from '../services/orderService.js';
 import { getYappyButtonClient } from '../services/yappyButtonService.js';
 import { sendPurchaseEmail } from '../services/emailService.js';
+import type { CardNumbers } from '../services/pdfService.js';
 import { createReadStream, existsSync } from 'fs';
 import { resolve as resolvePath, sep as pathSep } from 'path';
 
@@ -366,53 +367,70 @@ router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
 
 // POST /venta/internal/orders/:id/resend - Reenvía el email de confirmación.
 // Sólo el server admin debe llamar este endpoint (vía proxy), autenticado por
-// shared secret. Si el PDF no existe en este volumen (caso de órdenes migradas
-// o el volumen se recicló), lo regenera una vez en el volumen del landing.
-// Secret hardcoded para /internal/orders/:id/resend. Repo privado, endpoint
-// solo lo llama el server admin. Si se abre el repo a público, rotar este
-// valor y moverlo a env var.
-const INTERNAL_RESEND_SECRET = '1706ad40b38c416e09c5009b340b87d232ae4eb4cd3360c2c0ac9e089ebf6a51';
-
+// shared secret en INTERNAL_RESEND_SECRET env var. Si el PDF no existe en este
+// volumen (caso de órdenes migradas o volumen reciclado), lo regenera una vez
+// en el volumen del landing dentro de una transacción con SELECT FOR UPDATE
+// para evitar race conditions en clicks concurrentes.
 router.post('/internal/orders/:id/resend', async (req: Request, res: Response) => {
-  const provided = req.header('x-internal-secret') || '';
-  const expected = INTERNAL_RESEND_SECRET;
-  if (provided.length !== expected.length || !timingSafeEqual(
-    Buffer.from(provided), Buffer.from(expected)
-  )) {
+  const expectedRaw = process.env.INTERNAL_RESEND_SECRET || '';
+  if (!expectedRaw) {
+    console.error('❌ INTERNAL_RESEND_SECRET env var no configurada en landing');
+    return res.status(503).json({ success: false, error: 'Servicio no configurado' });
+  }
+
+  const provided = Buffer.from(req.header('x-internal-secret') || '', 'utf8');
+  const expected = Buffer.from(expectedRaw, 'utf8');
+  if (provided.byteLength !== expected.byteLength || !timingSafeEqual(provided, expected)) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
 
-  try {
-    const orderId = parseInt((req.params.id as string), 10);
-    if (!Number.isInteger(orderId) || orderId <= 0) {
-      return res.status(400).json({ success: false, error: 'ID inválido' });
-    }
+  const orderId = parseInt((req.params.id as string), 10);
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return res.status(400).json({ success: false, error: 'ID inválido' });
+  }
 
-    const pool = getPool();
-    const { rows } = await pool.query(
-      'SELECT * FROM online_orders WHERE id = $1', [orderId]
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Lock de la orden para evitar que dos clicks simultáneos regeneren el
+    // PDF en paralelo y dejen archivos huérfanos + dos emails enviados.
+    const { rows } = await client.query<{
+      id: number; order_code: string; status: string; pdf_path: string | null;
+      download_token: string | null; card_ids: number[]; buyer_name: string;
+      buyer_email: string; quantity: number; total_amount: string;
+    }>(
+      `SELECT id, order_code, status, pdf_path, download_token, card_ids,
+              buyer_name, buyer_email, quantity, total_amount
+       FROM online_orders WHERE id = $1 FOR UPDATE`,
+      [orderId]
     );
     const order = rows[0];
-    if (!order) return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    if (!order) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
     if (order.status !== 'completed') {
+      await client.query('ROLLBACK');
       return res.status(400).json({ success: false, error: `La orden está en estado "${order.status}", no se puede reenviar` });
     }
     if (!order.download_token) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ success: false, error: 'La orden no tiene download_token' });
     }
 
-    // Resolver el PDF. Si no existe en este volumen (o apuntaba al admin),
-    // regenerarlo ahora en el volumen del landing.
+    // Resolver el PDF. Si no existe en este volumen, regenerarlo.
     let resolvedPath = order.pdf_path ? resolvePath(order.pdf_path) : '';
     const isSafe = resolvedPath
       ? PDF_SAFE_ROOTS.some((root) => resolvedPath.startsWith(root))
       : false;
 
     if (!resolvedPath || !isSafe || !existsSync(resolvedPath)) {
-      console.log(`📄 Regenerando PDF en landing para orden ${order.order_code} (previo: ${order.pdf_path})`);
-      const { rows: cardsFull } = await pool.query<{
+      console.log(`📄 Regenerando PDF en landing para orden ${order.order_code} (previo: ${order.pdf_path ?? 'null'})`);
+      const { rows: cardsFull } = await client.query<{
         card_number: number; card_code: string; validation_code: string;
-        serial: string; numbers: any; use_free_center: boolean | null;
+        serial: string; numbers: CardNumbers; use_free_center: boolean | null;
       }>(
         `SELECT c.card_number, c.card_code, c.validation_code, c.serial, c.numbers, e.use_free_center
          FROM cards c JOIN events e ON e.id = c.event_id
@@ -420,6 +438,7 @@ router.post('/internal/orders/:id/resend', async (req: Request, res: Response) =
         [order.card_ids]
       );
       if (cardsFull.length === 0) {
+        await client.query('ROLLBACK');
         return res.status(400).json({ success: false, error: 'Cartones no encontrados para regenerar PDF' });
       }
       const { generateCardsPDF } = await import('../services/pdfService.js');
@@ -431,11 +450,14 @@ router.post('/internal/orders/:id/resend', async (req: Request, res: Response) =
         numbers: c.numbers,
         useFreeCenter: c.use_free_center ?? true,
       })), { cardsPerPage: 4 });
-      await pool.query('UPDATE online_orders SET pdf_path = $1, updated_at = NOW() WHERE id = $2', [newPath, orderId]);
+      await client.query(
+        'UPDATE online_orders SET pdf_path = $1, updated_at = NOW() WHERE id = $2',
+        [newPath, orderId]
+      );
       resolvedPath = resolvePath(newPath);
     }
 
-    const { rows: cards } = await pool.query<{ card_code: string }>(
+    const { rows: cards } = await client.query<{ card_code: string }>(
       'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
       [order.card_ids]
     );
@@ -451,18 +473,22 @@ router.post('/internal/orders/:id/resend', async (req: Request, res: Response) =
     }, resolvedPath);
 
     if (!sent) {
+      await client.query('ROLLBACK');
       return res.status(502).json({
         success: false,
-        error: 'sendPurchaseEmail retornó false. Revisa RESEND_API_KEY del landing o logs.',
+        error: 'No se pudo enviar el correo. Revisa la configuración del proveedor de email.',
       });
     }
 
-    await pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [orderId]);
+    await client.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [orderId]);
+    await client.query('COMMIT');
     return res.json({ success: true, sent: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('Error en /internal/orders/:id/resend:', msg);
-    return res.status(500).json({ success: false, error: msg });
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error en /internal/orders/:id/resend:', err);
+    return res.status(500).json({ success: false, error: 'Error interno procesando la orden' });
+  } finally {
+    client.release();
   }
 });
 

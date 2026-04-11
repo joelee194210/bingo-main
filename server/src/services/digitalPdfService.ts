@@ -1,8 +1,13 @@
 import PDFDocument from 'pdfkit';
 import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'fs';
-import { join, resolve } from 'path';
+import { join, resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import bwipjs from 'bwip-js';
 import QRCode from 'qrcode';
+
+// Node 16+: patrón ESM-compatible que NO depende de import.meta.dirname
+// (solo disponible desde Node 21.2). Railway corre Node 20 LTS.
+const THIS_DIR = dirname(fileURLToPath(import.meta.url));
 
 const EXPORTS_DIR = process.env.EXPORTS_DIR
   ?? (process.env.NODE_ENV === 'production' ? '/app/exports' : join(process.cwd(), 'exports'));
@@ -11,10 +16,9 @@ if (!existsSync(EXPORTS_DIR)) {
 }
 
 function findAsset(name: string): string {
-  const thisDir = import.meta.dirname;
   const candidates = [
-    resolve(thisDir, '..', 'assets', name),
-    resolve(thisDir, 'assets', name),
+    resolve(THIS_DIR, '..', 'assets', name),
+    resolve(THIS_DIR, 'assets', name),
     resolve(process.cwd(), 'src', 'assets', name),
     resolve(process.cwd(), 'assets', name),
     resolve(process.cwd(), 'server', 'src', 'assets', name),

@@ -264,10 +264,8 @@ router.post('/orders/:id/cancel', requirePermission('cards:sell'), async (req: R
 // distinto del volumen de este server. Delegamos por HTTP al landing: el
 // landing lee el PDF de su propio disco y manda el correo.
 //
-// Repo privado → secret hardcoded. Si se abre el repo a público, rotar.
-const LANDING_INTERNAL_URL = 'https://megabingodigital.com';
-const INTERNAL_RESEND_SECRET = '1706ad40b38c416e09c5009b340b87d232ae4eb4cd3360c2c0ac9e089ebf6a51';
-
+// LANDING_INTERNAL_URL puede ser override por env var. INTERNAL_RESEND_SECRET
+// debe venir SIEMPRE de env var — debe coincidir con el del servicio landing.
 router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: Request, res: Response) => {
   try {
     const orderId = parseInt((req.params.id as string), 10);
@@ -275,27 +273,70 @@ router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: R
       return res.status(400).json({ success: false, error: 'ID inválido' });
     }
 
-    const url = `${LANDING_INTERNAL_URL}/venta/internal/orders/${orderId}/resend`;
+    const landingUrl = process.env.LANDING_INTERNAL_URL || 'https://megabingodigital.com';
+    const secret = process.env.INTERNAL_RESEND_SECRET;
+    if (!secret) {
+      console.error('❌ INTERNAL_RESEND_SECRET env var no configurada en admin');
+      return res.status(503).json({ success: false, error: 'Servicio no configurado' });
+    }
+
+    const url = `${landingUrl.replace(/\/$/, '')}/venta/internal/orders/${orderId}/resend`;
+
+    // Timeout de 20s — suficiente para cold start del landing + generación de
+    // PDF + envío de email, sin dejar el worker del admin bloqueado indefinidamente.
     const upstream = await fetch(url, {
       method: 'POST',
-      headers: { 'x-internal-secret': INTERNAL_RESEND_SECRET, 'content-type': 'application/json' },
+      headers: { 'x-internal-secret': secret, 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(20_000),
     });
 
-    const body = await upstream.json().catch(() => ({ success: false, error: 'Respuesta inválida del landing' }));
+    // Parsear como JSON; si el body no es JSON válido, tratar como 502.
+    type UpstreamBody = { success?: boolean; error?: string; sent?: boolean };
+    let body: UpstreamBody | null = null;
+    const contentType = upstream.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      body = (await upstream.json().catch(() => null)) as UpstreamBody | null;
+    }
+    if (!body) {
+      return res.status(502).json({ success: false, error: 'Respuesta inválida del landing' });
+    }
 
-    // Nunca propagar 401 del landing al frontend — el interceptor de axios
+    // Nunca propagar 401/403 del landing al frontend — el interceptor de axios
     // del admin interpretaría 401 como sesión expirada y cerraría la sesión
-    // del usuario. Traducimos 401/403 del upstream a 502.
+    // del usuario. Traducimos a 502 con mensaje genérico (no leak del upstream).
     if (upstream.status === 401 || upstream.status === 403) {
-      const msg = typeof body === 'object' && body && 'error' in body ? String(body.error) : 'Landing rechazó la autenticación';
-      return res.status(502).json({ success: false, error: `Landing auth error: ${msg}` });
+      console.error(`[/resend] landing auth rechazada status=${upstream.status} error=${body.error}`);
+      return res.status(502).json({
+        success: false,
+        error: 'Error de autenticación con el servicio de landing. Contactá al equipo técnico.',
+      });
+    }
+
+    // Para 5xx del landing, no forwardear el mensaje interno (puede contener
+    // stack traces, paths del FS, SQL errors). Log server-side y respuesta
+    // genérica al frontend.
+    if (upstream.status >= 500) {
+      console.error(`[/resend] landing error interno status=${upstream.status} error=${body.error}`);
+      return res.status(502).json({
+        success: false,
+        error: 'Error interno del servicio de landing al procesar la orden.',
+      });
     }
 
     return res.status(upstream.status).json(body);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Error reenviando email';
-    console.error('Error en /orders/:id/resend (proxy landing):', msg);
-    res.status(502).json({ success: false, error: `No se pudo contactar al landing: ${msg}` });
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      console.error('[/resend] timeout contactando al landing');
+      return res.status(504).json({
+        success: false,
+        error: 'Tiempo de espera agotado contactando al servicio de landing.',
+      });
+    }
+    console.error('[/resend] error inesperado:', err);
+    return res.status(502).json({
+      success: false,
+      error: 'No se pudo contactar al servicio de landing.',
+    });
   }
 });
 

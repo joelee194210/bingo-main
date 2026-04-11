@@ -132,7 +132,10 @@ export default function VentasDigitales() {
 
   const resendMutation = useMutation({
     mutationFn: (id: number) => { setPendingActionId(id); return api.post(`/venta/orders/${id}/resend`).then(r => r.data); },
-    onSuccess: () => toast.success('Email reenviado'),
+    onSuccess: () => {
+      toast.success('Email reenviado');
+      queryClient.invalidateQueries({ queryKey: ['ventas-digitales'] });
+    },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error reenviando'),
     onSettled: () => setPendingActionId(null),
   });

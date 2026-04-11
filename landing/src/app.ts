@@ -107,6 +107,15 @@ const statusPageLimiter = rateLimit({
 });
 app.use('/venta/estado', statusPageLimiter);
 
+// SEC: rate limit estricto en endpoint interno. Solo el server admin lo llama
+// vía proxy con un secret. Aun con secret, limitamos brute-force y abuse.
+const internalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { success: false, error: 'Rate limit excedido' },
+});
+app.use('/venta/internal', internalLimiter);
+
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'bingo-landing' }));
 
@@ -278,5 +287,3 @@ async function start() {
 }
 
 start();
-// deploy 1775244785
-// redeploy 1749240900
