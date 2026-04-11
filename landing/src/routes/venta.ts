@@ -366,8 +366,8 @@ router.get('/descargar/:downloadToken', async (req: Request, res: Response) => {
 
 // POST /venta/internal/orders/:id/resend - Reenvía el email de confirmación.
 // Sólo el server admin debe llamar este endpoint (vía proxy), autenticado por
-// shared secret. NO regenera el PDF: si el archivo ya no existe en este volumen,
-// devuelve error — el admin no debe tener forma de regenerar cartones a voluntad.
+// shared secret. Si el PDF no existe en este volumen (caso de órdenes migradas
+// o el volumen se recicló), lo regenera una vez en el volumen del landing.
 router.post('/internal/orders/:id/resend', async (req: Request, res: Response) => {
   const provided = req.header('x-internal-secret') || '';
   const expected = process.env.INTERNAL_API_SECRET || '';
@@ -392,20 +392,42 @@ router.post('/internal/orders/:id/resend', async (req: Request, res: Response) =
     if (order.status !== 'completed') {
       return res.status(400).json({ success: false, error: `La orden está en estado "${order.status}", no se puede reenviar` });
     }
-    if (!order.pdf_path || !order.download_token) {
-      return res.status(400).json({ success: false, error: 'La orden no tiene PDF o download_token' });
+    if (!order.download_token) {
+      return res.status(400).json({ success: false, error: 'La orden no tiene download_token' });
     }
 
-    const resolvedPath = resolvePath(order.pdf_path);
-    const isSafe = PDF_SAFE_ROOTS.some((root) => resolvedPath.startsWith(root));
-    if (!isSafe) {
-      return res.status(403).json({ success: false, error: 'pdf_path fuera de whitelist' });
-    }
-    if (!existsSync(resolvedPath)) {
-      return res.status(404).json({
-        success: false,
-        error: `PDF no encontrado en el volumen del landing: ${order.pdf_path}. No se puede reenviar.`,
-      });
+    // Resolver el PDF. Si no existe en este volumen (o apuntaba al admin),
+    // regenerarlo ahora en el volumen del landing.
+    let resolvedPath = order.pdf_path ? resolvePath(order.pdf_path) : '';
+    const isSafe = resolvedPath
+      ? PDF_SAFE_ROOTS.some((root) => resolvedPath.startsWith(root))
+      : false;
+
+    if (!resolvedPath || !isSafe || !existsSync(resolvedPath)) {
+      console.log(`📄 Regenerando PDF en landing para orden ${order.order_code} (previo: ${order.pdf_path})`);
+      const { rows: cardsFull } = await pool.query<{
+        card_number: number; card_code: string; validation_code: string;
+        serial: string; numbers: any; use_free_center: boolean | null;
+      }>(
+        `SELECT c.card_number, c.card_code, c.validation_code, c.serial, c.numbers, e.use_free_center
+         FROM cards c JOIN events e ON e.id = c.event_id
+         WHERE c.id = ANY($1) ORDER BY c.card_number`,
+        [order.card_ids]
+      );
+      if (cardsFull.length === 0) {
+        return res.status(400).json({ success: false, error: 'Cartones no encontrados para regenerar PDF' });
+      }
+      const { generateCardsPDF } = await import('../services/pdfService.js');
+      const newPath = await generateCardsPDF(cardsFull.map(c => ({
+        cardNumber: c.card_number,
+        cardCode: c.card_code,
+        validationCode: c.validation_code,
+        serial: c.serial,
+        numbers: c.numbers,
+        useFreeCenter: c.use_free_center ?? true,
+      })), { cardsPerPage: 4 });
+      await pool.query('UPDATE online_orders SET pdf_path = $1, updated_at = NOW() WHERE id = $2', [newPath, orderId]);
+      resolvedPath = resolvePath(newPath);
     }
 
     const { rows: cards } = await pool.query<{ card_code: string }>(
