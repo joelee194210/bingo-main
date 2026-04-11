@@ -181,7 +181,7 @@ export async function confirmPayment(
   const client = await pool.connect();
 
   let order: OnlineOrder;
-  let cardDataForPdf: Array<{ cardNumber: number; cardCode: string; validationCode: string; serial: string; numbers: CardNumbers; useFreeCenter: boolean; prizeName: string }> = [];
+  let cardDataForPdf: Array<{ cardNumber: number; cardCode: string; validationCode: string; serial: string; numbers: CardNumbers; useFreeCenter: boolean; prizeName?: string }> = [];
 
   try {
     await client.query('BEGIN');
@@ -299,45 +299,28 @@ export async function confirmPayment(
       }
     }
 
-    // Obtener datos de cartones para PDF (con serial y raspadito)
-    const { rows: cards } = await client.query<CardRow & { serial: string; series_number: string }>(
+    // Obtener datos de cartones para PDF. El raspadito viene de c.promo_text,
+    // que el sistema asigna individualmente a cada cartón al crear el lote
+    // (distribuyendo los premios según promo_fixed_rules). NO recalcular
+    // desde promo_fixed_rules por series_number: cartones distintos dentro
+    // de la misma serie pueden tener premios distintos.
+    const { rows: cards } = await client.query<CardRow & { serial: string; promo_text: string | null }>(
       `SELECT c.id, c.card_number, c.card_code, c.validation_code, c.numbers, c.serial,
-              e.use_free_center, l.series_number
+              c.promo_text, e.use_free_center
        FROM cards c
        JOIN events e ON e.id = c.event_id
-       LEFT JOIN lotes l ON l.id = c.lote_id
        WHERE c.id = ANY($1) ORDER BY c.card_number`,
       [order.card_ids]
     );
 
-    // Obtener premio del raspadito y texto "no prize"
-    const { rows: promoConfig } = await client.query<{ no_prize_text: string }>(
-      'SELECT no_prize_text FROM promo_config WHERE event_id = $1', [order.event_id]
-    );
-    const noPrizeText = promoConfig[0]?.no_prize_text || 'Gracias por participar';
-
-    cardDataForPdf = await Promise.all(cards.map(async c => {
-      // Buscar premio del raspadito por series_number
-      let prizeName = noPrizeText;
-      if (c.series_number) {
-        const seriesNum = parseInt(c.series_number, 10);
-        const { rows: prizes } = await client.query<{ prize_name: string }>(
-          `SELECT prize_name FROM promo_fixed_rules
-           WHERE event_id = $1 AND $2 BETWEEN series_from AND series_to LIMIT 1`,
-          [order.event_id, seriesNum]
-        );
-        if (prizes.length > 0) prizeName = prizes[0].prize_name;
-      }
-
-      return {
-        cardNumber: c.card_number,
-        cardCode: c.card_code,
-        validationCode: c.validation_code,
-        serial: c.serial || '',
-        numbers: c.numbers,
-        useFreeCenter: c.use_free_center ?? true,
-        prizeName,
-      };
+    cardDataForPdf = cards.map(c => ({
+      cardNumber: c.card_number,
+      cardCode: c.card_code,
+      validationCode: c.validation_code,
+      serial: c.serial || '',
+      numbers: c.numbers,
+      useFreeCenter: c.use_free_center ?? true,
+      prizeName: c.promo_text || undefined,
     }));
 
     // Marcar como completada (sin PDF aún)

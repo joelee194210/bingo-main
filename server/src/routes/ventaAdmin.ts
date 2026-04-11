@@ -355,15 +355,14 @@ router.post('/descargar-digital', requirePermission('cards:sell'), async (req: R
 
     const pool = getPool();
 
-    // Buscar cartón por serial (JOIN lotes para obtener series_number del raspadito)
+    // Buscar cartón por serial. El raspadito viene de c.promo_text (asignado
+    // individualmente al crear el lote), NO de promo_fixed_rules por series.
     const cardQuery = `SELECT c.id, c.card_number, c.card_code, c.validation_code, c.serial,
-                              c.numbers, c.event_id, c.lote_id, l.series_number
-                       FROM cards c LEFT JOIN lotes l ON l.id = c.lote_id
-                       WHERE c.serial = $1 LIMIT 1`;
+                              c.numbers, c.event_id, c.promo_text
+                       FROM cards c WHERE c.serial = $1 LIMIT 1`;
     const { rows: cards } = await pool.query<{
       id: number; card_number: number; card_code: string; validation_code: string;
-      serial: string; numbers: any; event_id: number; lote_id: number | null;
-      series_number: string | null;
+      serial: string; numbers: any; event_id: number; promo_text: string | null;
     }>(cardQuery, [serial.trim()]);
 
     if (cards.length === 0) {
@@ -386,26 +385,6 @@ router.post('/descargar-digital', requirePermission('cards:sell'), async (req: R
     );
     const useFreeCenter = eventRows[0]?.use_free_center ?? true;
 
-    // Raspadito: buscar premio por series_number, con fallback al texto "sin premio"
-    // del evento. Mismo patrón que landing/src/services/orderService.ts::confirmPayment.
-    const { rows: promoCfg } = await pool.query<{ no_prize_text: string | null }>(
-      'SELECT no_prize_text FROM promo_config WHERE event_id = $1', [card.event_id]
-    );
-    const noPrizeText = promoCfg[0]?.no_prize_text || 'Gracias por participar';
-
-    let prizeName = noPrizeText;
-    if (card.series_number) {
-      const seriesNum = parseInt(card.series_number, 10);
-      if (Number.isFinite(seriesNum)) {
-        const { rows: prizes } = await pool.query<{ prize_name: string }>(
-          `SELECT prize_name FROM promo_fixed_rules
-           WHERE event_id = $1 AND $2 BETWEEN series_from AND series_to LIMIT 1`,
-          [card.event_id, seriesNum]
-        );
-        if (prizes.length > 0) prizeName = prizes[0].prize_name;
-      }
-    }
-
     // Generar PDF con plantilla oficial (mismo formato que venta digital)
     const pdfPath = await generateDigitalPDF([{
       cardNumber: card.card_number,
@@ -414,7 +393,7 @@ router.post('/descargar-digital', requirePermission('cards:sell'), async (req: R
       serial: card.serial,
       numbers: card.numbers,
       useFreeCenter,
-      prizeName,
+      prizeName: card.promo_text || undefined,
     }]);
 
     const username = (req as unknown as { user?: { username?: string } }).user?.username || 'admin';

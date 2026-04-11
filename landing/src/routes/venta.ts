@@ -380,29 +380,20 @@ router.get('/preview-pdf/:eventId', async (req: Request, res: Response) => {
     const params: unknown[] = [eventId];
     if (cardCode) params.push(cardCode.toUpperCase());
 
-    const { rows: cards } = await pool.query<{ card_number: number; card_code: string; validation_code: string; serial: string; numbers: any; use_free_center: boolean; series_number: string }>(
+    const { rows: cards } = await pool.query<{ card_number: number; card_code: string; validation_code: string; serial: string; numbers: any; use_free_center: boolean; promo_text: string | null }>(
       `SELECT c.card_number, c.card_code, c.validation_code, c.serial, c.numbers,
-              e.use_free_center, l.series_number
-       FROM cards c JOIN events e ON e.id = c.event_id LEFT JOIN lotes l ON l.id = c.lote_id
+              c.promo_text, e.use_free_center
+       FROM cards c JOIN events e ON e.id = c.event_id
        WHERE c.event_id = $1 ${whereCard} ${orderBy} LIMIT 1`, params
     );
     if (cards.length === 0) return res.status(404).send('No hay cartones disponibles');
     const c = cards[0];
 
-    // Buscar premio raspadito
-    let prizeName = 'Gracias por participar';
-    if (c.series_number) {
-      const { rows: prizes } = await pool.query<{ prize_name: string }>(
-        `SELECT prize_name FROM promo_fixed_rules WHERE event_id = $1 AND $2 BETWEEN series_from AND series_to LIMIT 1`,
-        [eventId, parseInt(c.series_number, 10)]
-      );
-      if (prizes.length > 0) prizeName = prizes[0].prize_name;
-    }
-
     const { generateCardsPDF } = await import('../services/pdfService.js');
     const pdfPath = await generateCardsPDF([{
       cardNumber: c.card_number, cardCode: c.card_code, validationCode: c.validation_code,
-      serial: c.serial || '', numbers: c.numbers, useFreeCenter: c.use_free_center ?? true, prizeName,
+      serial: c.serial || '', numbers: c.numbers, useFreeCenter: c.use_free_center ?? true,
+      prizeName: c.promo_text || undefined,
     }]);
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -525,17 +516,18 @@ router.post('/internal/orders/:id/resend', async (req: Request, res: Response) =
 
     if (!resolvedPath || !isSafe || !existsSync(resolvedPath)) {
       console.log(`📄 Regenerando PDF en landing para orden ${order.order_code} (previo: ${order.pdf_path ?? 'null'})`);
-      // JOIN lotes para series_number (requerido para el raspadito).
+      // El raspadito viene de c.promo_text (asignado individualmente por cartón
+      // cuando se crea el lote). NO recalcular desde promo_fixed_rules por
+      // series_number: cartones de la misma serie pueden tener premios distintos.
       const { rows: cardsFull } = await client.query<{
         card_number: number; card_code: string; validation_code: string;
         serial: string; numbers: CardNumbers; use_free_center: boolean | null;
-        series_number: string | null;
+        promo_text: string | null;
       }>(
         `SELECT c.card_number, c.card_code, c.validation_code, c.serial, c.numbers,
-                e.use_free_center, l.series_number
+                c.promo_text, e.use_free_center
          FROM cards c
          JOIN events e ON e.id = c.event_id
-         LEFT JOIN lotes l ON l.id = c.lote_id
          WHERE c.id = ANY($1) ORDER BY c.card_number`,
         [order.card_ids]
       );
@@ -544,36 +536,14 @@ router.post('/internal/orders/:id/resend', async (req: Request, res: Response) =
         return res.status(400).json({ success: false, error: 'Cartones no encontrados para regenerar PDF' });
       }
 
-      // Raspadito: mismo patrón que orderService.ts::confirmPayment.
-      // Sin esto, el PDF regenerado queda sin premio ni fallback "Gracias por
-      // participar" en el área gris del cartón.
-      const { rows: promoCfg } = await client.query<{ no_prize_text: string | null }>(
-        'SELECT no_prize_text FROM promo_config WHERE event_id = $1', [order.event_id]
-      );
-      const noPrizeText = promoCfg[0]?.no_prize_text || 'Gracias por participar';
-
-      const cardsForPdf = await Promise.all(cardsFull.map(async c => {
-        let prizeName = noPrizeText;
-        if (c.series_number) {
-          const seriesNum = parseInt(c.series_number, 10);
-          if (Number.isFinite(seriesNum)) {
-            const { rows: prizes } = await client.query<{ prize_name: string }>(
-              `SELECT prize_name FROM promo_fixed_rules
-               WHERE event_id = $1 AND $2 BETWEEN series_from AND series_to LIMIT 1`,
-              [order.event_id, seriesNum]
-            );
-            if (prizes.length > 0) prizeName = prizes[0].prize_name;
-          }
-        }
-        return {
-          cardNumber: c.card_number,
-          cardCode: c.card_code,
-          validationCode: c.validation_code,
-          serial: c.serial,
-          numbers: c.numbers,
-          useFreeCenter: c.use_free_center ?? true,
-          prizeName,
-        };
+      const cardsForPdf = cardsFull.map(c => ({
+        cardNumber: c.card_number,
+        cardCode: c.card_code,
+        validationCode: c.validation_code,
+        serial: c.serial,
+        numbers: c.numbers,
+        useFreeCenter: c.use_free_center ?? true,
+        prizeName: c.promo_text || undefined,
       }));
 
       const { generateCardsPDF } = await import('../services/pdfService.js');
