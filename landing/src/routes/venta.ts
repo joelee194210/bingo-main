@@ -77,6 +77,10 @@ const FAQ_ITEMS: { q: string; answer: string }[] = [
     q: '9. ¿Qué hago si no recibo mis cartones por correo?',
     answer: 'Primero revisa tu bandeja de spam o correo no deseado. Si aún no los encuentras, puedes escribirnos a <a href="mailto:soporte@megabingodigital.com">soporte@megabingodigital.com</a> y te ayudaremos.',
   },
+  {
+    q: '10. ¿Dónde puedo ver más información?',
+    answer: 'Puedes encontrar más detalles en: <a href="https://megabingotv.com/preguntas-frecuentes" target="_blank" rel="noopener">megabingotv.com/preguntas-frecuentes</a>',
+  },
 ];
 
 function renderFaqPageBody(eventId: number): string {
