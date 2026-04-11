@@ -95,7 +95,7 @@ function renderFaqPageBody(eventId: number): string {
       <a href="/venta/${eventId}" class="faq-back" aria-label="Volver a la página de venta">
         ← Volver a la venta
       </a>
-      <h1>Preguntas Frecuentes</h1>
+      <h1 style="color:#1e293b;">Preguntas Frecuentes</h1>
       <p class="subtitle">Mega Bingo TV Mundial — Compras de cartones digitales</p>
       <div class="faq-list">${items}
       </div>
