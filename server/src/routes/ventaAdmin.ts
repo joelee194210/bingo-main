@@ -273,9 +273,13 @@ router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: R
     const landingUrl = process.env.LANDING_INTERNAL_URL;
     const secret = process.env.INTERNAL_API_SECRET;
     if (!landingUrl || !secret) {
+      // Debug: listar qué env vars relevantes SÍ ve el proceso
+      const envSeen = Object.keys(process.env)
+        .filter(k => /landing|internal|secret|api/i.test(k))
+        .sort();
       return res.status(500).json({
         success: false,
-        error: 'LANDING_INTERNAL_URL o INTERNAL_API_SECRET no configurados en el server',
+        error: `LANDING_INTERNAL_URL o INTERNAL_API_SECRET no configurados. landingUrl=${!!landingUrl} secret=${!!secret}. env vars visibles (filtradas): ${envSeen.join(', ') || '(ninguna)'}`,
       });
     }
 
