@@ -38,6 +38,77 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// FAQ data. El `answer` puede contener HTML (links) — son literales controlados,
+// no input de usuario. Para editar preguntas modificá este array.
+const FAQ_ITEMS: { q: string; answer: string }[] = [
+  {
+    q: '1. ¿Dónde y cómo puedo comprar cartones digitales?',
+    answer: 'Puedes comprar tus cartones digitales ingresando a <a href="https://www.megabingotv.com/digital" target="_blank" rel="noopener">www.megabingotv.com/digital</a>. Solo debes seleccionar la cantidad, registrar tus datos y realizar el pago de forma rápida y segura a través de Yappy.',
+  },
+  {
+    q: '2. ¿Cómo recibo mis cartones después de pagar?',
+    answer: 'Una vez confirmado el pago, recibirás tus cartones digitales en tu correo electrónico. Además, podrás descargarlos inmediatamente desde la página al finalizar tu compra.',
+  },
+  {
+    q: '3. ¿Es seguro comprar cartones digitales?',
+    answer: 'Sí, la plataforma cuenta con procesos seguros de pago y validación que garantizan tu compra.',
+  },
+  {
+    q: '4. ¿Los cartones digitales tienen los mismos premios que los físicos?',
+    answer: 'Sí, participan en los mismos sorteos oficiales y optan por los mismos premios que los cartones físicos.',
+  },
+  {
+    q: '5. ¿Cómo puedo saber si gané?',
+    answer: 'Los números ganadores se anuncian en vivo y también se publican en los canales oficiales. Solo debes verificar tu cartón con los resultados.',
+  },
+  {
+    q: '6. ¿Mi cartón queda registrado a mi nombre?',
+    answer: 'Sí, cada cartón queda asociado a tu compra y a tus datos, lo que permite validar la titularidad en caso de resultar ganador.',
+  },
+  {
+    q: '7. ¿Es obligatorio imprimir mi cartón para jugar?',
+    answer: 'No, no es obligatorio. Puedes jugar directamente con tu cartón digital sin necesidad de imprimirlo.',
+  },
+  {
+    q: '8. ¿Cómo juego si no imprimo mi cartón?',
+    answer: 'Cada cartón tiene un número único que será anunciado durante el sorteo. Con ese número podrás verificar fácilmente si resultas ganador.',
+  },
+  {
+    q: '9. ¿Qué hago si no recibo mis cartones por correo?',
+    answer: 'Primero revisa tu bandeja de spam o correo no deseado. Si aún no los encuentras, puedes escribirnos a <a href="mailto:soporte@megabingodigital.com">soporte@megabingodigital.com</a> y te ayudaremos.',
+  },
+  {
+    q: '10. ¿Dónde puedo ver más información?',
+    answer: 'Puedes encontrar más detalles en: <a href="https://megabingotv.com/preguntas-frecuentes" target="_blank" rel="noopener">megabingotv.com/preguntas-frecuentes</a>',
+  },
+];
+
+function renderFaqDrawer(): string {
+  const items = FAQ_ITEMS.map(({ q, answer }) => `
+      <details>
+        <summary>${escapeHtml(q)}</summary>
+        <div class="answer">${answer}</div>
+      </details>`).join('');
+
+  return `
+  <button class="menu-toggle" id="menuToggle" aria-label="Abrir preguntas frecuentes" aria-expanded="false" aria-controls="menuDrawer">
+    <span class="icon" aria-hidden="true">?</span>
+  </button>
+  <div class="menu-overlay" id="menuOverlay"></div>
+  <aside class="menu-drawer" id="menuDrawer" aria-hidden="true" aria-label="Preguntas frecuentes">
+    <div class="menu-header">
+      <h2>Preguntas Frecuentes</h2>
+      <p>Mega Bingo TV Mundial — Compras de cartones digitales</p>
+    </div>
+    <div class="menu-list">${items}
+    </div>
+    <div class="menu-footer">
+      ¿Necesitas ayuda? <a href="mailto:soporte@megabingodigital.com">soporte@megabingodigital.com</a>
+    </div>
+  </aside>
+  <script src="/assets/faq-menu.js" defer></script>`;
+}
+
 // GET /venta/:eventId - Landing page
 router.get('/:eventId', async (req: Request, res: Response) => {
   try {
@@ -664,62 +735,7 @@ function renderLayout(title: string, body: string): string {
   </style>
 </head>
 <body>
-  <button class="menu-toggle" id="menuToggle" aria-label="Abrir preguntas frecuentes" aria-expanded="false" aria-controls="menuDrawer">
-    <span class="icon" aria-hidden="true">?</span>
-  </button>
-  <div class="menu-overlay" id="menuOverlay"></div>
-  <aside class="menu-drawer" id="menuDrawer" aria-hidden="true" aria-label="Preguntas frecuentes">
-    <div class="menu-header">
-      <h2>Preguntas Frecuentes</h2>
-      <p>Mega Bingo TV Mundial — Compras de cartones digitales</p>
-    </div>
-    <div class="menu-list">
-      <details>
-        <summary>1. ¿Dónde y cómo puedo comprar cartones digitales?</summary>
-        <div class="answer">Puedes comprar tus cartones digitales ingresando a <a href="https://www.megabingotv.com/digital" target="_blank" rel="noopener">www.megabingotv.com/digital</a>. Solo debes seleccionar la cantidad, registrar tus datos y realizar el pago de forma rápida y segura a través de Yappy.</div>
-      </details>
-      <details>
-        <summary>2. ¿Cómo recibo mis cartones después de pagar?</summary>
-        <div class="answer">Una vez confirmado el pago, recibirás tus cartones digitales en tu correo electrónico. Además, podrás descargarlos inmediatamente desde la página al finalizar tu compra.</div>
-      </details>
-      <details>
-        <summary>3. ¿Es seguro comprar cartones digitales?</summary>
-        <div class="answer">Sí, la plataforma cuenta con procesos seguros de pago y validación que garantizan tu compra.</div>
-      </details>
-      <details>
-        <summary>4. ¿Los cartones digitales tienen los mismos premios que los físicos?</summary>
-        <div class="answer">Sí, participan en los mismos sorteos oficiales y optan por los mismos premios que los cartones físicos.</div>
-      </details>
-      <details>
-        <summary>5. ¿Cómo puedo saber si gané?</summary>
-        <div class="answer">Los números ganadores se anuncian en vivo y también se publican en los canales oficiales. Solo debes verificar tu cartón con los resultados.</div>
-      </details>
-      <details>
-        <summary>6. ¿Mi cartón queda registrado a mi nombre?</summary>
-        <div class="answer">Sí, cada cartón queda asociado a tu compra y a tus datos, lo que permite validar la titularidad en caso de resultar ganador.</div>
-      </details>
-      <details>
-        <summary>7. ¿Es obligatorio imprimir mi cartón para jugar?</summary>
-        <div class="answer">No, no es obligatorio. Puedes jugar directamente con tu cartón digital sin necesidad de imprimirlo.</div>
-      </details>
-      <details>
-        <summary>8. ¿Cómo juego si no imprimo mi cartón?</summary>
-        <div class="answer">Cada cartón tiene un número único que será anunciado durante el sorteo. Con ese número podrás verificar fácilmente si resultas ganador.</div>
-      </details>
-      <details>
-        <summary>9. ¿Qué hago si no recibo mis cartones por correo?</summary>
-        <div class="answer">Primero revisa tu bandeja de spam o correo no deseado. Si aún no los encuentras, puedes escribirnos a <a href="mailto:soporte@megabingodigital.com">soporte@megabingodigital.com</a> y te ayudaremos.</div>
-      </details>
-      <details>
-        <summary>10. ¿Dónde puedo ver más información?</summary>
-        <div class="answer">Puedes encontrar más detalles en: <a href="https://megabingotv.com/preguntas-frecuentes" target="_blank" rel="noopener">megabingotv.com/preguntas-frecuentes</a></div>
-      </details>
-    </div>
-    <div class="menu-footer">
-      ¿Necesitas ayuda? <a href="mailto:soporte@megabingodigital.com">soporte@megabingodigital.com</a>
-    </div>
-  </aside>
-  <script src="/assets/faq-menu.js" defer></script>
+  ${renderFaqDrawer()}
   <div class="container">
     <div class="logo">
       <img src="/assets/logo.png" alt="Mega Bingo TV Mundial" id="siteLogo">

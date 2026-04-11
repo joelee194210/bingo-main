@@ -4,6 +4,13 @@ import { randomBytes } from 'crypto';
 import type { Pool } from 'pg';
 import type { User, UserPublic, JWTPayload, CreateUserRequest, UpdateUserRequest } from '../types/auth.js';
 
+// Columnas que NO incluyen password_hash — para queries que solo necesitan
+// datos públicos del usuario. Evita traer el hash cuando no hace falta.
+const USER_COLUMNS_PUBLIC = 'id, username, email, full_name, role, is_active, last_login, created_at, updated_at';
+
+// Columnas completas, incluyendo password_hash. Solo para login y changePassword.
+const USER_COLUMNS_WITH_HASH = `${USER_COLUMNS_PUBLIC}, password_hash`;
+
 // Clave secreta para JWT
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -89,7 +96,8 @@ export async function loginUser(
   password: string
 ): Promise<{ token: string; user: UserPublic } | null> {
   const userResult = await pool.query(
-    'SELECT * FROM users WHERE username = $1 AND is_active = true', [username]
+    `SELECT ${USER_COLUMNS_WITH_HASH} FROM users WHERE username = $1 AND is_active = true`,
+    [username]
   );
   const user = userResult.rows[0] as User | undefined;
 
@@ -117,27 +125,34 @@ export async function loginUser(
  * Obtener usuario por ID
  */
 export async function getUserById(pool: Pool, userId: number): Promise<UserPublic | null> {
-  const result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
-  const user = result.rows[0] as User | undefined;
-  return user ? toUserPublic(user) : null;
+  const result = await pool.query(
+    `SELECT ${USER_COLUMNS_PUBLIC} FROM users WHERE id = $1`,
+    [userId]
+  );
+  const user = result.rows[0] as UserPublic | undefined;
+  return user ?? null;
 }
 
 /**
  * Obtener usuario por username
  */
 export async function getUserByUsername(pool: Pool, username: string): Promise<UserPublic | null> {
-  const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-  const user = result.rows[0] as User | undefined;
-  return user ? toUserPublic(user) : null;
+  const result = await pool.query(
+    `SELECT ${USER_COLUMNS_PUBLIC} FROM users WHERE username = $1`,
+    [username]
+  );
+  const user = result.rows[0] as UserPublic | undefined;
+  return user ?? null;
 }
 
 /**
  * Listar todos los usuarios
  */
 export async function getAllUsers(pool: Pool): Promise<UserPublic[]> {
-  const result = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
-  const users = result.rows as User[];
-  return users.map(toUserPublic);
+  const result = await pool.query(
+    `SELECT ${USER_COLUMNS_PUBLIC} FROM users ORDER BY created_at DESC`
+  );
+  return result.rows as UserPublic[];
 }
 
 /**
@@ -170,9 +185,11 @@ export async function createUser(
   `, [data.username, data.email || null, passwordHash, data.full_name, data.role]);
 
   const newUserId = result.rows[0].id;
-  const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [newUserId]);
-  const user = userResult.rows[0] as User;
-  return toUserPublic(user);
+  const userResult = await pool.query(
+    `SELECT ${USER_COLUMNS_PUBLIC} FROM users WHERE id = $1`,
+    [newUserId]
+  );
+  return userResult.rows[0] as UserPublic;
 }
 
 /**
@@ -183,9 +200,8 @@ export async function updateUser(
   userId: number,
   data: UpdateUserRequest
 ): Promise<UserPublic | null> {
-  const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
-  const user = userResult.rows[0] as User | undefined;
-  if (!user) {
+  const userResult = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
+  if (!userResult.rows[0]) {
     return null;
   }
 
@@ -254,8 +270,11 @@ export async function changePassword(
   currentPassword: string,
   newPassword: string
 ): Promise<boolean> {
-  const result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
-  const user = result.rows[0] as User | undefined;
+  const result = await pool.query(
+    'SELECT id, password_hash FROM users WHERE id = $1',
+    [userId]
+  );
+  const user = result.rows[0] as { id: number; password_hash: string } | undefined;
   if (!user) {
     return false;
   }
