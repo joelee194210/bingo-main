@@ -115,7 +115,7 @@ router.get('/:eventId/preguntas-frecuentes', async (req: Request, res: Response)
       return res.status(400).send(renderError('Evento no válido'));
     }
     const body = renderFaqPageBody(eventId);
-    return res.send(renderLayout('Preguntas Frecuentes - Mega Bingo TV Mundial', body, eventId));
+    return res.send(renderLayout('Preguntas Frecuentes - Mega Bingo TV Mundial', body, eventId, false));
   } catch (err) {
     console.error('Error en /preguntas-frecuentes:', err);
     return res.status(500).send(renderError('Error cargando preguntas frecuentes'));
@@ -670,7 +670,7 @@ router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
 
 // ─── HTML Renderers ──────────────────────────────────────────
 
-function renderLayout(title: string, body: string, eventId?: number): string {
+function renderLayout(title: string, body: string, eventId?: number, showFaqLink: boolean = true): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -772,7 +772,7 @@ function renderLayout(title: string, body: string, eventId?: number): string {
           <p class="sponsors-text">A beneficio de APROB del Despacho de la Primera Dama<br>de la República de Panamá.</p>
         </div>
       </div>
-      ${eventId ? `<a href="/venta/${eventId}/preguntas-frecuentes" class="footer-faq-link">PREGUNTAS FRECUENTES</a>` : ''}
+      ${eventId && showFaqLink ? `<a href="/venta/${eventId}/preguntas-frecuentes" class="footer-faq-link">PREGUNTAS FRECUENTES</a>` : ''}
     </div>
     <div class="footer">
       <a href="https://www.megabingotv.com" target="_blank" rel="noopener" style="color:#fff;font-size:13px;text-decoration:underline;opacity:0.85;">Para más información acerca del Mega Bingo TV Mundial da clic aquí</a>
