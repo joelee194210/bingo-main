@@ -79,7 +79,7 @@ const FAQ_ITEMS: { q: string; answer: string }[] = [
   },
   {
     q: '10. ¿Dónde puedo ver más información?',
-    answer: 'Puedes encontrar más detalles en: <a href="https://megabingotv.com/preguntas-frecuentes" target="_blank" rel="noopener">megabingotv.com/preguntas-frecuentes</a>',
+    answer: 'Puedes encontrar más detalles en:<br><a href="https://megabingotv.com/preguntas-frecuentes" target="_blank" rel="noopener">megabingotv.com/preguntas-frecuentes</a>',
   },
 ];
 
@@ -749,7 +749,7 @@ function renderLayout(title: string, body: string, eventId?: number): string {
     .faq-item summary::before { content: '+'; flex-shrink: 0; width: 22px; height: 22px; background: #dc2626; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; transition: transform 0.2s; }
     .faq-item[open] summary::before { content: '−'; }
     .faq-answer { padding: 0 16px 16px 48px; color: #475569; font-size: 13px; line-height: 1.6; }
-    .faq-answer a { color: #dc2626; text-decoration: underline; word-break: break-all; }
+    .faq-answer a { color: #dc2626; text-decoration: underline; overflow-wrap: anywhere; }
     .footer-faq-link { display: inline-block; margin-top: 12px; color: #fff; font-size: 13px; text-decoration: underline; opacity: 0.9; }
 
     @media (max-width: 480px) { .card { padding: 24px 20px; } h1 { font-size: 20px; } .price-display .amount { font-size: 30px; } .sponsors-side img { height: 50px; } .sponsors-center img { height: 60px; } }
