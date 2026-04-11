@@ -708,8 +708,8 @@ function renderLayout(title: string, body: string): string {
     .sponsors-text { color: #ffffff; font-size: 10px; line-height: 1.4; opacity: 0.9; text-align: center; }
 
     /* ===== Menú hamburguesa + FAQ drawer ===== */
-    .menu-toggle { position: fixed; top: 16px; left: 16px; z-index: 50; width: 46px; height: 46px; border-radius: 12px; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); border: none; box-shadow: 0 4px 14px rgba(0,0,0,0.35); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform 0.2s, box-shadow 0.2s; }
-    .menu-toggle:hover { transform: scale(1.06); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+    .menu-toggle { position: fixed; top: 16px; left: 16px; z-index: 50; width: 46px; height: 46px; border-radius: 12px; background: linear-gradient(135deg, rgba(220,38,38,0.65) 0%, rgba(153,27,27,0.65) 100%); border: none; box-shadow: 0 4px 14px rgba(0,0,0,0.25); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform 0.2s, box-shadow 0.2s, background 0.2s; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+    .menu-toggle:hover { transform: scale(1.06); box-shadow: 0 6px 18px rgba(0,0,0,0.35); background: linear-gradient(135deg, rgba(220,38,38,0.85) 0%, rgba(153,27,27,0.85) 100%); }
     .menu-toggle .icon { display: block; color: #d1d5db; font-size: 26px; font-weight: 800; font-family: 'Inter', sans-serif; line-height: 1; transition: transform 0.25s; }
     .menu-toggle[aria-expanded="true"] .icon { transform: rotate(15deg) scale(0.9); }
     .menu-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.3s; backdrop-filter: blur(3px); }
