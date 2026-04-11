@@ -5,7 +5,7 @@ import { createOrder, getOrderByCode, getOrderByDownloadToken, getSalesConfig, c
 import { getYappyButtonClient } from '../services/yappyButtonService.js';
 import { sendPurchaseEmail } from '../services/emailService.js';
 import type { CardNumbers } from '../services/pdfService.js';
-import { createReadStream, existsSync } from 'fs';
+import { createReadStream, existsSync, unlinkSync } from 'fs';
 import { resolve as resolvePath, sep as pathSep } from 'path';
 
 // SEC-H5: whitelist de directorios desde donde es seguro servir PDFs generados.
@@ -77,37 +77,46 @@ const FAQ_ITEMS: { q: string; answer: string }[] = [
     q: '9. ¿Qué hago si no recibo mis cartones por correo?',
     answer: 'Primero revisa tu bandeja de spam o correo no deseado. Si aún no los encuentras, puedes escribirnos a <a href="mailto:soporte@megabingodigital.com">soporte@megabingodigital.com</a> y te ayudaremos.',
   },
-  {
-    q: '10. ¿Dónde puedo ver más información?',
-    answer: 'Puedes encontrar más detalles en: <a href="https://megabingotv.com/preguntas-frecuentes" target="_blank" rel="noopener">megabingotv.com/preguntas-frecuentes</a>',
-  },
 ];
 
-function renderFaqDrawer(): string {
+function renderFaqPageBody(eventId: number): string {
   const items = FAQ_ITEMS.map(({ q, answer }) => `
-      <details>
+      <details class="faq-item">
         <summary>${escapeHtml(q)}</summary>
-        <div class="answer">${answer}</div>
+        <div class="faq-answer">${answer}</div>
       </details>`).join('');
 
   return `
-  <button class="menu-toggle" id="menuToggle" aria-label="Abrir preguntas frecuentes" aria-expanded="false" aria-controls="menuDrawer">
-    <span class="icon" aria-hidden="true">?</span>
-  </button>
-  <div class="menu-overlay" id="menuOverlay"></div>
-  <aside class="menu-drawer" id="menuDrawer" aria-hidden="true" aria-label="Preguntas frecuentes">
-    <div class="menu-header">
-      <h2>Preguntas Frecuentes</h2>
-      <p>Mega Bingo TV Mundial — Compras de cartones digitales</p>
-    </div>
-    <div class="menu-list">${items}
-    </div>
-    <div class="menu-footer">
-      ¿Necesitas ayuda? <a href="mailto:soporte@megabingodigital.com">soporte@megabingodigital.com</a>
-    </div>
-  </aside>
-  <script src="/assets/faq-menu.js" defer></script>`;
+    <div class="card">
+      <a href="/venta/${eventId}" class="faq-back" aria-label="Volver a la página de venta">
+        ← Volver a la venta
+      </a>
+      <h1>Preguntas Frecuentes</h1>
+      <p class="subtitle">Mega Bingo TV Mundial — Compras de cartones digitales</p>
+      <div class="faq-list">${items}
+      </div>
+      <p style="text-align:center;font-size:13px;color:#64748b;margin-top:20px;">
+        ¿Necesitas ayuda? <a href="mailto:soporte@megabingodigital.com" style="color:#dc2626;">soporte@megabingodigital.com</a>
+      </p>
+    </div>`;
 }
+
+// GET /venta/:eventId/preguntas-frecuentes - Página de preguntas frecuentes
+// Contiene las mismas FAQs que antes vivían en el drawer del menú hamburguesa,
+// con botón "Volver a la venta" que devuelve al landing de ese evento.
+router.get('/:eventId/preguntas-frecuentes', async (req: Request, res: Response) => {
+  try {
+    const eventId = parseInt(req.params.eventId as string, 10);
+    if (isNaN(eventId) || eventId <= 0) {
+      return res.status(400).send(renderError('Evento no válido'));
+    }
+    const body = renderFaqPageBody(eventId);
+    return res.send(renderLayout('Preguntas Frecuentes - Mega Bingo TV Mundial', body, eventId));
+  } catch (err) {
+    console.error('Error en /preguntas-frecuentes:', err);
+    return res.status(500).send(renderError('Error cargando preguntas frecuentes'));
+  }
+});
 
 // GET /venta/:eventId - Landing page
 router.get('/:eventId', async (req: Request, res: Response) => {
@@ -470,10 +479,10 @@ router.post('/internal/orders/:id/resend', async (req: Request, res: Response) =
     const { rows } = await client.query<{
       id: number; order_code: string; status: string; pdf_path: string | null;
       download_token: string | null; card_ids: number[]; buyer_name: string;
-      buyer_email: string; quantity: number; total_amount: string;
+      buyer_email: string; quantity: number; total_amount: string; event_id: number;
     }>(
       `SELECT id, order_code, status, pdf_path, download_token, card_ids,
-              buyer_name, buyer_email, quantity, total_amount
+              buyer_name, buyer_email, quantity, total_amount, event_id
        FROM online_orders WHERE id = $1 FOR UPDATE`,
       [orderId]
     );
@@ -497,14 +506,36 @@ router.post('/internal/orders/:id/resend', async (req: Request, res: Response) =
       ? PDF_SAFE_ROOTS.some((root) => resolvedPath.startsWith(root))
       : false;
 
+    // Regeneración forzada: el admin pidió rehacer el PDF aunque ya exista.
+    // Borra el archivo previo (sólo si está dentro del whitelist de rutas
+    // seguras) y limpia pdf_path para caer en la rama de regeneración.
+    const forceRegenerate = req.body?.regenerate === true;
+    if (forceRegenerate && resolvedPath && isSafe && existsSync(resolvedPath)) {
+      try {
+        unlinkSync(resolvedPath);
+        console.log(`🗑️  PDF forzado a regenerar: ${order.order_code}`);
+      } catch (err) {
+        console.warn(`No se pudo borrar PDF previo de ${order.order_code}:`, err);
+      }
+      await client.query(
+        'UPDATE online_orders SET pdf_path = NULL WHERE id = $1', [orderId]
+      );
+      resolvedPath = '';
+    }
+
     if (!resolvedPath || !isSafe || !existsSync(resolvedPath)) {
       console.log(`📄 Regenerando PDF en landing para orden ${order.order_code} (previo: ${order.pdf_path ?? 'null'})`);
+      // JOIN lotes para series_number (requerido para el raspadito).
       const { rows: cardsFull } = await client.query<{
         card_number: number; card_code: string; validation_code: string;
         serial: string; numbers: CardNumbers; use_free_center: boolean | null;
+        series_number: string | null;
       }>(
-        `SELECT c.card_number, c.card_code, c.validation_code, c.serial, c.numbers, e.use_free_center
-         FROM cards c JOIN events e ON e.id = c.event_id
+        `SELECT c.card_number, c.card_code, c.validation_code, c.serial, c.numbers,
+                e.use_free_center, l.series_number
+         FROM cards c
+         JOIN events e ON e.id = c.event_id
+         LEFT JOIN lotes l ON l.id = c.lote_id
          WHERE c.id = ANY($1) ORDER BY c.card_number`,
         [order.card_ids]
       );
@@ -512,15 +543,41 @@ router.post('/internal/orders/:id/resend', async (req: Request, res: Response) =
         await client.query('ROLLBACK');
         return res.status(400).json({ success: false, error: 'Cartones no encontrados para regenerar PDF' });
       }
+
+      // Raspadito: mismo patrón que orderService.ts::confirmPayment.
+      // Sin esto, el PDF regenerado queda sin premio ni fallback "Gracias por
+      // participar" en el área gris del cartón.
+      const { rows: promoCfg } = await client.query<{ no_prize_text: string | null }>(
+        'SELECT no_prize_text FROM promo_config WHERE event_id = $1', [order.event_id]
+      );
+      const noPrizeText = promoCfg[0]?.no_prize_text || 'Gracias por participar';
+
+      const cardsForPdf = await Promise.all(cardsFull.map(async c => {
+        let prizeName = noPrizeText;
+        if (c.series_number) {
+          const seriesNum = parseInt(c.series_number, 10);
+          if (Number.isFinite(seriesNum)) {
+            const { rows: prizes } = await client.query<{ prize_name: string }>(
+              `SELECT prize_name FROM promo_fixed_rules
+               WHERE event_id = $1 AND $2 BETWEEN series_from AND series_to LIMIT 1`,
+              [order.event_id, seriesNum]
+            );
+            if (prizes.length > 0) prizeName = prizes[0].prize_name;
+          }
+        }
+        return {
+          cardNumber: c.card_number,
+          cardCode: c.card_code,
+          validationCode: c.validation_code,
+          serial: c.serial,
+          numbers: c.numbers,
+          useFreeCenter: c.use_free_center ?? true,
+          prizeName,
+        };
+      }));
+
       const { generateCardsPDF } = await import('../services/pdfService.js');
-      const newPath = await generateCardsPDF(cardsFull.map(c => ({
-        cardNumber: c.card_number,
-        cardCode: c.card_code,
-        validationCode: c.validation_code,
-        serial: c.serial,
-        numbers: c.numbers,
-        useFreeCenter: c.use_free_center ?? true,
-      })), { cardsPerPage: 4 });
+      const newPath = await generateCardsPDF(cardsForPdf, { cardsPerPage: 4 });
       await client.query(
         'UPDATE online_orders SET pdf_path = $1, updated_at = NOW() WHERE id = $2',
         [newPath, orderId]
@@ -639,7 +696,7 @@ router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
 
 // ─── HTML Renderers ──────────────────────────────────────────
 
-function renderLayout(title: string, body: string): string {
+function renderLayout(title: string, body: string, eventId?: number): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -707,35 +764,24 @@ function renderLayout(title: string, body: string): string {
     .sponsors-center img { height: 75px; width: auto; object-fit: contain; }
     .sponsors-text { color: #ffffff; font-size: 10px; line-height: 1.4; opacity: 0.9; text-align: center; }
 
-    /* ===== Menú hamburguesa + FAQ drawer ===== */
-    .menu-toggle { position: fixed; top: 16px; left: 16px; z-index: 50; width: 46px; height: 46px; border-radius: 12px; background: linear-gradient(135deg, rgba(220,38,38,0.35) 0%, rgba(153,27,27,0.35) 100%); border: none; box-shadow: 0 4px 14px rgba(0,0,0,0.2); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform 0.2s, box-shadow 0.2s, background 0.2s; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-    .menu-toggle:hover { transform: scale(1.06); box-shadow: 0 6px 18px rgba(0,0,0,0.3); background: linear-gradient(135deg, rgba(220,38,38,0.6) 0%, rgba(153,27,27,0.6) 100%); }
-    .menu-toggle .icon { display: block; color: #d1d5db; font-size: 26px; font-weight: 800; font-family: 'Inter', sans-serif; line-height: 1; transition: transform 0.25s; }
-    .menu-toggle[aria-expanded="true"] .icon { transform: rotate(15deg) scale(0.9); }
-    .menu-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.3s; backdrop-filter: blur(3px); }
-    .menu-overlay.open { opacity: 1; pointer-events: auto; }
-    .menu-drawer { position: fixed; top: 0; left: 0; height: 100%; width: min(420px, 90vw); background: linear-gradient(180deg, #c0272d 0%, #991b1b 100%); z-index: 45; transform: translateX(-100%); transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1); overflow-y: auto; box-shadow: 8px 0 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
-    .menu-drawer.open { transform: translateX(0); }
-    .menu-header { padding: 28px 24px 16px 74px; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.15); }
-    .menu-header h2 { color: #fff; font-size: 22px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.3px; }
-    .menu-header p { color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500; line-height: 1.4; }
-    .menu-list { padding: 8px 20px 24px; flex: 1; }
-    .menu-list details { background: rgba(255,255,255,0.08); border-radius: 10px; margin-bottom: 8px; overflow: hidden; transition: background 0.2s; }
-    .menu-list details[open] { background: rgba(255,255,255,0.14); }
-    .menu-list summary { padding: 14px 16px; font-size: 14px; font-weight: 600; color: #fff; cursor: pointer; list-style: none; display: flex; align-items: flex-start; gap: 10px; line-height: 1.4; }
-    .menu-list summary::-webkit-details-marker { display: none; }
-    .menu-list summary::before { content: '+'; flex-shrink: 0; width: 20px; height: 20px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; transition: transform 0.2s; }
-    .menu-list details[open] summary::before { content: '−'; background: #fff; color: #c0272d; }
-    .menu-list .answer { padding: 0 16px 16px 46px; color: rgba(255,255,255,0.9); font-size: 13px; line-height: 1.55; }
-    .menu-list .answer a { color: #fef3c7; text-decoration: underline; word-break: break-all; }
-    .menu-footer { padding: 16px 24px 24px; text-align: center; border-top: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); font-size: 11px; }
-    .menu-footer a { color: #fef3c7; text-decoration: underline; }
+    /* ===== Página FAQ ===== */
+    .faq-back { display: inline-flex; align-items: center; gap: 6px; color: #dc2626; font-size: 14px; font-weight: 600; text-decoration: none; margin-bottom: 16px; padding: 6px 10px; border-radius: 8px; transition: background 0.2s; }
+    .faq-back:hover { background: #fef2f2; }
+    .faq-list { margin-top: 20px; }
+    .faq-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 10px; overflow: hidden; transition: background 0.2s; }
+    .faq-item[open] { background: #fff; border-color: #cbd5e1; }
+    .faq-item summary { padding: 14px 16px; font-size: 14px; font-weight: 600; color: #1e293b; cursor: pointer; list-style: none; display: flex; align-items: flex-start; gap: 10px; line-height: 1.4; }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::before { content: '+'; flex-shrink: 0; width: 22px; height: 22px; background: #dc2626; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; transition: transform 0.2s; }
+    .faq-item[open] summary::before { content: '−'; }
+    .faq-answer { padding: 0 16px 16px 48px; color: #475569; font-size: 13px; line-height: 1.6; }
+    .faq-answer a { color: #dc2626; text-decoration: underline; word-break: break-all; }
+    .footer-faq-link { display: inline-block; margin-top: 12px; color: #fff; font-size: 13px; text-decoration: underline; opacity: 0.9; }
 
     @media (max-width: 480px) { .card { padding: 24px 20px; } h1 { font-size: 20px; } .price-display .amount { font-size: 30px; } .sponsors-side img { height: 50px; } .sponsors-center img { height: 60px; } }
   </style>
 </head>
 <body>
-  ${renderFaqDrawer()}
   <div class="container">
     <div class="logo">
       <img src="/assets/logo.png" alt="Mega Bingo TV Mundial" id="siteLogo">
@@ -752,6 +798,7 @@ function renderLayout(title: string, body: string): string {
           <p class="sponsors-text">A beneficio de APROB del Despacho de la Primera Dama<br>de la República de Panamá.</p>
         </div>
       </div>
+      ${eventId ? `<a href="/venta/${eventId}/preguntas-frecuentes" class="footer-faq-link">PREGUNTAS FRECUENTES</a>` : ''}
     </div>
     <div class="footer">
       <a href="https://www.megabingotv.com" target="_blank" rel="noopener" style="color:#fff;font-size:13px;text-decoration:underline;opacity:0.85;">Para más información acerca del Mega Bingo TV Mundial da clic aquí</a>
@@ -785,7 +832,7 @@ function renderLanding(
       </div>
       <button id="retryBtn" class="btn btn-primary">Reintentar</button>
     </div>`;
-    return renderLayout(`${title} - No disponible`, body);
+    return renderLayout(`${title} - No disponible`, body, event.id);
   }
 
   const body = `
@@ -848,7 +895,7 @@ function renderLanding(
     <div id="appConfig" data-price="${escapeHtml(String(price))}" data-event-id="${escapeHtml(String(event.id))}" data-ref="${ref ? escapeHtml(ref) : ''}"></div>
     <script type="module" src="${escapeHtml(yappyCdnUrl)}"></script>`;
 
-  return renderLayout(`Comprar Cartones - ${title}`, body);
+  return renderLayout(`Comprar Cartones - ${title}`, body, event.id);
 }
 
 function renderStatus(
@@ -950,7 +997,7 @@ function renderStatus(
       ${statusHtml}
     </div>`;
 
-  return renderLayout(`Orden ${order.order_code}`, body);
+  return renderLayout(`Orden ${order.order_code}`, body, order.event_id);
 }
 
 function renderError(message: string): string {

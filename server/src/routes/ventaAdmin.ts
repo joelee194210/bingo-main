@@ -282,11 +282,16 @@ router.post('/orders/:id/resend', requirePermission('cards:sell'), async (req: R
 
     const url = `${landingUrl.replace(/\/$/, '')}/venta/internal/orders/${orderId}/resend`;
 
+    // Regeneración forzada opcional — el landing borra el PDF previo del
+    // volumen y lo regenera desde cero (útil cuando el PDF viejo quedó mal).
+    const regenerate = (req.body as { regenerate?: unknown } | undefined)?.regenerate === true;
+
     // Timeout de 20s — suficiente para cold start del landing + generación de
     // PDF + envío de email, sin dejar el worker del admin bloqueado indefinidamente.
     const upstream = await fetch(url, {
       method: 'POST',
       headers: { 'x-internal-secret': secret, 'content-type': 'application/json' },
+      body: JSON.stringify({ regenerate }),
       signal: AbortSignal.timeout(20_000),
     });
 
@@ -350,25 +355,23 @@ router.post('/descargar-digital', requirePermission('cards:sell'), async (req: R
 
     const pool = getPool();
 
-    // Buscar cartón por serial
+    // Buscar cartón por serial (JOIN lotes para obtener series_number del raspadito)
+    const cardQuery = `SELECT c.id, c.card_number, c.card_code, c.validation_code, c.serial,
+                              c.numbers, c.event_id, c.lote_id, l.series_number
+                       FROM cards c LEFT JOIN lotes l ON l.id = c.lote_id
+                       WHERE c.serial = $1 LIMIT 1`;
     const { rows: cards } = await pool.query<{
       id: number; card_number: number; card_code: string; validation_code: string;
       serial: string; numbers: any; event_id: number; lote_id: number | null;
-    }>(
-      `SELECT c.id, c.card_number, c.card_code, c.validation_code, c.serial, c.numbers, c.event_id, c.lote_id
-       FROM cards c WHERE c.serial = $1 LIMIT 1`,
-      [serial.trim()]
-    );
+      series_number: string | null;
+    }>(cardQuery, [serial.trim()]);
 
     if (cards.length === 0) {
       // Intentar buscar con padding
       const padded = serial.includes('-')
         ? serial.split('-').map((p: string, i: number) => i === 0 ? p.padStart(5, '0') : p.padStart(2, '0')).join('-')
         : serial;
-      const { rows: cards2 } = await pool.query(
-        'SELECT id, card_number, card_code, validation_code, serial, numbers, event_id, lote_id FROM cards WHERE serial = $1 LIMIT 1',
-        [padded]
-      );
+      const { rows: cards2 } = await pool.query(cardQuery, [padded]);
       if (cards2.length === 0) {
         return res.status(404).json({ success: false, error: 'Cartón no encontrado con ese serial' });
       }
@@ -383,6 +386,26 @@ router.post('/descargar-digital', requirePermission('cards:sell'), async (req: R
     );
     const useFreeCenter = eventRows[0]?.use_free_center ?? true;
 
+    // Raspadito: buscar premio por series_number, con fallback al texto "sin premio"
+    // del evento. Mismo patrón que landing/src/services/orderService.ts::confirmPayment.
+    const { rows: promoCfg } = await pool.query<{ no_prize_text: string | null }>(
+      'SELECT no_prize_text FROM promo_config WHERE event_id = $1', [card.event_id]
+    );
+    const noPrizeText = promoCfg[0]?.no_prize_text || 'Gracias por participar';
+
+    let prizeName = noPrizeText;
+    if (card.series_number) {
+      const seriesNum = parseInt(card.series_number, 10);
+      if (Number.isFinite(seriesNum)) {
+        const { rows: prizes } = await pool.query<{ prize_name: string }>(
+          `SELECT prize_name FROM promo_fixed_rules
+           WHERE event_id = $1 AND $2 BETWEEN series_from AND series_to LIMIT 1`,
+          [card.event_id, seriesNum]
+        );
+        if (prizes.length > 0) prizeName = prizes[0].prize_name;
+      }
+    }
+
     // Generar PDF con plantilla oficial (mismo formato que venta digital)
     const pdfPath = await generateDigitalPDF([{
       cardNumber: card.card_number,
@@ -391,6 +414,7 @@ router.post('/descargar-digital', requirePermission('cards:sell'), async (req: R
       serial: card.serial,
       numbers: card.numbers,
       useFreeCenter,
+      prizeName,
     }]);
 
     const username = (req as unknown as { user?: { username?: string } }).user?.username || 'admin';

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Loader2, ChevronLeft, ChevronRight, ShoppingCart,
   DollarSign, CreditCard, CheckCircle, XCircle, Clock, Mail,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, RefreshCw,
 } from 'lucide-react';
 import api from '@/services/api';
 import { getEvents } from '@/services/api';
@@ -131,9 +131,12 @@ export default function VentasDigitales() {
   });
 
   const resendMutation = useMutation({
-    mutationFn: (id: number) => { setPendingActionId(id); return api.post(`/venta/orders/${id}/resend`).then(r => r.data); },
-    onSuccess: () => {
-      toast.success('Email reenviado');
+    mutationFn: ({ id, regenerate }: { id: number; regenerate?: boolean }) => {
+      setPendingActionId(id);
+      return api.post(`/venta/orders/${id}/resend`, { regenerate: regenerate === true }).then(r => r.data);
+    },
+    onSuccess: (_data, variables) => {
+      toast.success(variables.regenerate ? 'PDF regenerado y email reenviado' : 'Email reenviado');
       queryClient.invalidateQueries({ queryKey: ['ventas-digitales'] });
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error reenviando'),
@@ -354,13 +357,23 @@ export default function VentasDigitales() {
                                 </>
                               )}
                               {order.status === 'completed' && (
-                                <Button
-                                  size="sm" variant="ghost" className="h-7 text-xs"
-                                  onClick={() => resendMutation.mutate(order.id)}
-                                  disabled={pendingActionId === order.id}
-                                >
-                                  <Mail className="h-3 w-3 mr-1" /> {order.email_sent_at ? 'Reenviar' : 'Enviar'}
-                                </Button>
+                                <>
+                                  <Button
+                                    size="sm" variant="ghost" className="h-7 text-xs"
+                                    onClick={() => resendMutation.mutate({ id: order.id })}
+                                    disabled={pendingActionId === order.id}
+                                  >
+                                    <Mail className="h-3 w-3 mr-1" /> {order.email_sent_at ? 'Reenviar' : 'Enviar'}
+                                  </Button>
+                                  <Button
+                                    size="sm" variant="outline" className="h-7 text-xs"
+                                    onClick={() => resendMutation.mutate({ id: order.id, regenerate: true })}
+                                    disabled={pendingActionId === order.id}
+                                    title="Borra el PDF viejo y lo regenera desde cero antes de enviar"
+                                  >
+                                    <RefreshCw className="h-3 w-3 mr-1" /> Regenerar
+                                  </Button>
+                                </>
                               )}
                             </div>
                           </td>
