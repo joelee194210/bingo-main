@@ -367,7 +367,14 @@ export default function VentasDigitales() {
                                   </Button>
                                   <Button
                                     size="sm" variant="outline" className="h-7 text-xs"
-                                    onClick={() => resendMutation.mutate({ id: order.id, regenerate: true })}
+                                    onClick={() => {
+                                      const ok = window.confirm(
+                                        `¿Regenerar el PDF de la orden ${order.order_code}?\n\n` +
+                                        `Esto BORRA el archivo PDF anterior y genera uno nuevo, ` +
+                                        `y después ENVÍA un email real al comprador (${order.buyer_email}).`
+                                      );
+                                      if (ok) resendMutation.mutate({ id: order.id, regenerate: true });
+                                    }}
                                     disabled={pendingActionId === order.id}
                                     title="Borra el PDF viejo y lo regenera desde cero antes de enviar"
                                   >
