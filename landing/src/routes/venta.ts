@@ -594,7 +594,7 @@ function renderLayout(title: string, body: string): string {
     .menu-overlay.open { opacity: 1; pointer-events: auto; }
     .menu-drawer { position: fixed; top: 0; left: 0; height: 100%; width: min(420px, 90vw); background: linear-gradient(180deg, #c0272d 0%, #991b1b 100%); z-index: 45; transform: translateX(-100%); transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1); overflow-y: auto; box-shadow: 8px 0 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
     .menu-drawer.open { transform: translateX(0); }
-    .menu-header { padding: 28px 24px 16px; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.15); }
+    .menu-header { padding: 28px 24px 16px 74px; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.15); }
     .menu-header h2 { color: #fff; font-size: 22px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.3px; }
     .menu-header p { color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500; line-height: 1.4; }
     .menu-list { padding: 8px 20px 24px; flex: 1; }
