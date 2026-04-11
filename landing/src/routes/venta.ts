@@ -611,12 +611,10 @@ function renderLayout(title: string, body: string): string {
     .sponsors-text { color: #ffffff; font-size: 10px; line-height: 1.4; opacity: 0.9; text-align: center; }
 
     /* ===== Menú hamburguesa + FAQ drawer ===== */
-    .menu-toggle { position: fixed; top: 16px; left: 16px; z-index: 50; width: 46px; height: 46px; border-radius: 12px; background: rgba(255,255,255,0.95); border: none; box-shadow: 0 4px 14px rgba(0,0,0,0.25); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 0; transition: transform 0.2s; }
-    .menu-toggle:hover { transform: scale(1.05); }
-    .menu-toggle span { display: block; width: 22px; height: 3px; background: #c0272d; border-radius: 2px; transition: all 0.3s; }
-    .menu-toggle[aria-expanded="true"] span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
-    .menu-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
-    .menu-toggle[aria-expanded="true"] span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+    .menu-toggle { position: fixed; top: 16px; left: 16px; z-index: 50; width: 46px; height: 46px; border-radius: 12px; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); border: none; box-shadow: 0 4px 14px rgba(0,0,0,0.35); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform 0.2s, box-shadow 0.2s; }
+    .menu-toggle:hover { transform: scale(1.06); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+    .menu-toggle .icon { display: block; color: #d1d5db; font-size: 26px; font-weight: 800; font-family: 'Inter', sans-serif; line-height: 1; transition: transform 0.25s; }
+    .menu-toggle[aria-expanded="true"] .icon { transform: rotate(15deg) scale(0.9); }
     .menu-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.3s; backdrop-filter: blur(3px); }
     .menu-overlay.open { opacity: 1; pointer-events: auto; }
     .menu-drawer { position: fixed; top: 0; left: 0; height: 100%; width: min(420px, 90vw); background: linear-gradient(180deg, #c0272d 0%, #991b1b 100%); z-index: 45; transform: translateX(-100%); transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1); overflow-y: auto; box-shadow: 8px 0 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
@@ -640,8 +638,8 @@ function renderLayout(title: string, body: string): string {
   </style>
 </head>
 <body>
-  <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú de preguntas frecuentes" aria-expanded="false" aria-controls="menuDrawer">
-    <span></span><span></span><span></span>
+  <button class="menu-toggle" id="menuToggle" aria-label="Abrir preguntas frecuentes" aria-expanded="false" aria-controls="menuDrawer">
+    <span class="icon" aria-hidden="true">?</span>
   </button>
   <div class="menu-overlay" id="menuOverlay"></div>
   <aside class="menu-drawer" id="menuDrawer" aria-hidden="true" aria-label="Preguntas frecuentes">
