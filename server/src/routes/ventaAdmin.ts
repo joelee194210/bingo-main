@@ -255,6 +255,9 @@ router.post('/orders/:id/confirm', requirePermission('cards:sell'), async (req: 
 router.post('/orders/:id/confirm-expired', requirePermission('cards:sell'), async (req: Request, res: Response) => {
   try {
     const orderId = parseInt((req.params.id as string), 10);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
+    }
     const username = (req as unknown as { user?: { username?: string } }).user?.username || 'admin';
 
     const order = await confirmExpiredOrder(orderId, username);
@@ -288,9 +291,16 @@ router.post('/orders/:id/confirm-expired', requirePermission('cards:sell'), asyn
 });
 
 // POST /api/venta/orders/:id/cancel
+// Nota: cancelOrder sólo acepta status IN ('pending_payment','payment_confirmed').
+// Las expiradas NO se cancelan — el admin debe usar /confirm-expired si el cliente
+// realmente pagó, o dejar la orden en estado 'expired' (los cartones ya quedaron libres).
 router.post('/orders/:id/cancel', requirePermission('cards:sell'), async (req: Request, res: Response) => {
   try {
-    const order = await cancelOrder(parseInt((req.params.id as string), 10));
+    const orderId = parseInt((req.params.id as string), 10);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
+    }
+    const order = await cancelOrder(orderId);
     res.json({ success: true, data: order });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error cancelando orden';

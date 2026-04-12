@@ -305,4 +305,9 @@ async function runMigrations(p: Pool): Promise<void> {
     await p.query(migrationSql);
     console.log('✅ Migración aplicada: tablas online_sales_config y online_orders creadas');
   }
+
+  // Migration: GIN index sobre online_orders.card_ids — crítico para performance
+  // de la query "NOT EXISTS ... o.card_ids @> ARRAY[c.id]" en createOrder y
+  // confirmExpiredOrder. Sin este índice, con 600k cartones el scan es O(N*M).
+  await p.query('CREATE INDEX IF NOT EXISTS idx_online_orders_card_ids_gin ON online_orders USING GIN (card_ids)');
 }

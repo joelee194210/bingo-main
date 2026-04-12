@@ -283,46 +283,62 @@ export async function confirmPayment(
       );
     }
 
-    // Obtener datos de cartones para generar PDF
-    const { rows: cards } = await client.query<CardRow>(
+    // Obtener datos de cartones para generar PDF (con serial + promo_text del raspadito)
+    const { rows: cards } = await client.query<CardRow & { serial: string; promo_text: string | null }>(
       `SELECT c.id, c.card_number, c.card_code, c.validation_code, c.numbers,
-              e.use_free_center
+              c.serial, c.promo_text, e.use_free_center
        FROM cards c JOIN events e ON e.id = c.event_id
        WHERE c.id = ANY($1) ORDER BY c.card_number`,
       [order.card_ids]
     );
 
-    // Generar PDF
-    const cardData = cards.map(c => ({
-      cardNumber: c.card_number,
-      cardCode: c.card_code,
-      validationCode: c.validation_code,
-      numbers: c.numbers,
-      useFreeCenter: c.use_free_center ?? true,
-    }));
-
-    const pdfPath = await generateCardsPDF(cardData, { cardsPerPage: 4 });
     const downloadToken = generateUniqueCode(20);
 
-    // Actualizar orden
-    const { rows: updated } = await client.query<OnlineOrder>(
+    // Actualizar orden a 'completed' ANTES del PDF — transacción corta.
+    // El PDF se genera fuera de la transacción para evitar mantener locks
+    // durante el I/O del filesystem. Si falla la generación, la orden queda
+    // completed sin pdf_path — recuperable vía botón "Regenerar" del admin.
+    await client.query(
       `UPDATE online_orders SET
         status = 'completed',
         payment_confirmed_at = NOW(),
         payment_confirmed_by = $1,
         yappy_transaction_id = $2,
         yappy_transaction_data = $3,
-        pdf_path = $4,
-        download_token = $5,
+        download_token = $4,
         updated_at = NOW()
-       WHERE id = $6
-       RETURNING *`,
+       WHERE id = $5`,
       [confirmedBy, yappyTxnId || null, yappyTxnData ? JSON.stringify(yappyTxnData) : null,
-       pdfPath, downloadToken, orderId]
+       downloadToken, orderId]
     );
 
     await client.query('COMMIT');
-    return updated[0];
+
+    // Generar PDF FUERA de la transacción con plantilla oficial y raspadito.
+    const cardData = cards.map(c => ({
+      cardNumber: c.card_number,
+      cardCode: c.card_code,
+      validationCode: c.validation_code,
+      serial: c.serial || '',
+      numbers: c.numbers,
+      useFreeCenter: c.use_free_center ?? true,
+      prizeName: c.promo_text || undefined,
+    }));
+
+    try {
+      const pdfPath = await generateDigitalPDF(cardData);
+      const { rows: updated } = await pool.query<OnlineOrder>(
+        'UPDATE online_orders SET pdf_path = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+        [pdfPath, orderId]
+      );
+      return updated[0];
+    } catch (pdfErr) {
+      console.error(`[confirmPayment] orden ${orderId} completada pero falló generación PDF:`, pdfErr);
+      const { rows } = await pool.query<OnlineOrder>(
+        'SELECT * FROM online_orders WHERE id = $1', [orderId]
+      );
+      return rows[0];
+    }
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -338,6 +354,16 @@ export async function confirmExpiredOrder(
   const pool = getPool();
   const client = await pool.connect();
 
+  // Paso 1 (transacción corta): lock de la orden, selección y asignación de
+  // cartones nuevos, marcar is_sold, cambiar status a 'completed'.
+  // El PDF se genera DESPUÉS del commit para no mantener locks durante I/O
+  // de filesystem (~10s). Si falla la generación del PDF, la orden queda
+  // 'completed' sin pdf_path — recuperable con el botón "Regenerar" del admin.
+  const downloadToken = generateUniqueCode(20);
+  let order: OnlineOrder;
+  let newCardIds: number[];
+  let cards: Array<CardRow & { serial: string; promo_text: string | null }>;
+
   try {
     await client.query('BEGIN');
 
@@ -345,7 +371,7 @@ export async function confirmExpiredOrder(
       'SELECT * FROM online_orders WHERE id = $1 FOR UPDATE', [orderId]
     );
     if (orderRows.length === 0) throw new Error('Orden no encontrada');
-    const order = orderRows[0];
+    order = orderRows[0];
     if (order.status !== 'expired') {
       throw new Error(`La orden tiene status "${order.status}", se esperaba "expired"`);
     }
@@ -379,12 +405,7 @@ export async function confirmExpiredOrder(
       throw new Error(`No hay suficientes cartones libres (necesita ${order.quantity}, disponibles ${newCards.length})`);
     }
 
-    const newCardIds = newCards.map(c => c.id);
-
-    await client.query(
-      'UPDATE online_orders SET card_ids = $1 WHERE id = $2',
-      [newCardIds, orderId]
-    );
+    newCardIds = newCards.map(c => c.id);
 
     await client.query(
       `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP,
@@ -393,48 +414,64 @@ export async function confirmExpiredOrder(
       [order.buyer_name, order.buyer_phone, order.buyer_cedula, newCardIds]
     );
 
-    const { rows: cards } = await client.query<CardRow & { serial: string; promo_text: string | null }>(
+    const cardsResult = await client.query<CardRow & { serial: string; promo_text: string | null }>(
       `SELECT c.id, c.card_number, c.card_code, c.validation_code, c.numbers,
               c.serial, c.promo_text, e.use_free_center
        FROM cards c JOIN events e ON e.id = c.event_id
        WHERE c.id = ANY($1) ORDER BY c.card_number`,
       [newCardIds]
     );
+    cards = cardsResult.rows;
 
-    const cardData = cards.map(c => ({
-      cardNumber: c.card_number,
-      cardCode: c.card_code,
-      validationCode: c.validation_code,
-      serial: c.serial || '',
-      numbers: c.numbers,
-      useFreeCenter: c.use_free_center ?? true,
-      prizeName: c.promo_text || undefined,
-    }));
-
-    const pdfPath = await generateDigitalPDF(cardData);
-    const downloadToken = generateUniqueCode(20);
-
-    const { rows: updated } = await client.query<OnlineOrder>(
+    await client.query(
       `UPDATE online_orders SET
         status = 'completed',
         card_ids = $1,
         payment_confirmed_at = NOW(),
         payment_confirmed_by = $2,
-        pdf_path = $3,
-        download_token = $4,
+        download_token = $3,
         updated_at = NOW()
-       WHERE id = $5
-       RETURNING *`,
-      [newCardIds, confirmedBy, pdfPath, downloadToken, orderId]
+       WHERE id = $4`,
+      [newCardIds, confirmedBy, downloadToken, orderId]
     );
 
     await client.query('COMMIT');
-    return updated[0];
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
+  }
+
+  // Paso 2 (fuera de transacción): generar PDF y actualizar pdf_path.
+  // Si falla aquí, la orden queda 'completed' sin PDF. El admin puede disparar
+  // "Regenerar" desde la UI para volver a generarlo. No re-arroja el error
+  // total — devuelve la orden igual para que el admin sepa que los cartones
+  // quedaron asignados.
+  const cardData = cards.map(c => ({
+    cardNumber: c.card_number,
+    cardCode: c.card_code,
+    validationCode: c.validation_code,
+    serial: c.serial || '',
+    numbers: c.numbers,
+    useFreeCenter: c.use_free_center ?? true,
+    prizeName: c.promo_text || undefined,
+  }));
+
+  const pool2 = getPool();
+  try {
+    const pdfPath = await generateDigitalPDF(cardData);
+    const { rows: updated } = await pool2.query<OnlineOrder>(
+      'UPDATE online_orders SET pdf_path = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [pdfPath, orderId]
+    );
+    return updated[0];
+  } catch (err) {
+    console.error(`[confirmExpiredOrder] orden ${orderId} completada pero falló generación PDF:`, err);
+    const { rows } = await pool2.query<OnlineOrder>(
+      'SELECT * FROM online_orders WHERE id = $1', [orderId]
+    );
+    return rows[0];
   }
 }
 
