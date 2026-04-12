@@ -1,6 +1,7 @@
 import { getPool } from '../database/init.js';
 import { generateUniqueCode } from './cardGenerator.js';
 import { generateCardsPDF } from './exportService.js';
+import { generateDigitalPDF } from './digitalPdfService.js';
 import type { CardNumbers } from '../types/index.js';
 
 export interface OnlineOrder {
@@ -318,6 +319,113 @@ export async function confirmPayment(
        RETURNING *`,
       [confirmedBy, yappyTxnId || null, yappyTxnData ? JSON.stringify(yappyTxnData) : null,
        pdfPath, downloadToken, orderId]
+    );
+
+    await client.query('COMMIT');
+    return updated[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function confirmExpiredOrder(
+  orderId: number,
+  confirmedBy: string
+): Promise<OnlineOrder> {
+  const pool = getPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const { rows: orderRows } = await client.query<OnlineOrder>(
+      'SELECT * FROM online_orders WHERE id = $1 FOR UPDATE', [orderId]
+    );
+    if (orderRows.length === 0) throw new Error('Orden no encontrada');
+    const order = orderRows[0];
+    if (order.status !== 'expired') {
+      throw new Error(`La orden tiene status "${order.status}", se esperaba "expired"`);
+    }
+
+    const { rows: cfgRows } = await client.query<{ almacen_id: number | null }>(
+      'SELECT almacen_id FROM online_sales_config WHERE event_id = $1', [order.event_id]
+    );
+    const almacenId = cfgRows[0]?.almacen_id;
+
+    const almacenFilter = almacenId ? 'AND c.almacen_id = $3' : '';
+    const params: unknown[] = [order.event_id, order.quantity];
+    if (almacenId) params.push(almacenId);
+
+    const { rows: newCards } = await client.query<{ id: number }>(
+      `SELECT c.id FROM cards c
+       WHERE c.event_id = $1 AND c.is_sold = FALSE
+         ${almacenFilter}
+         AND NOT EXISTS (
+           SELECT 1 FROM online_orders o
+           WHERE o.event_id = $1
+             AND o.status IN ('pending_payment','payment_confirmed','cards_assigned')
+             AND o.card_ids @> ARRAY[c.id]
+         )
+       ORDER BY c.card_number
+       LIMIT $2
+       FOR UPDATE SKIP LOCKED`,
+      params
+    );
+
+    if (newCards.length < order.quantity) {
+      throw new Error(`No hay suficientes cartones libres (necesita ${order.quantity}, disponibles ${newCards.length})`);
+    }
+
+    const newCardIds = newCards.map(c => c.id);
+
+    await client.query(
+      'UPDATE online_orders SET card_ids = $1 WHERE id = $2',
+      [newCardIds, orderId]
+    );
+
+    await client.query(
+      `UPDATE cards SET is_sold = true, sold_at = CURRENT_TIMESTAMP,
+       buyer_name = $1, buyer_phone = $2, buyer_cedula = $3
+       WHERE id = ANY($4)`,
+      [order.buyer_name, order.buyer_phone, order.buyer_cedula, newCardIds]
+    );
+
+    const { rows: cards } = await client.query<CardRow & { serial: string; promo_text: string | null }>(
+      `SELECT c.id, c.card_number, c.card_code, c.validation_code, c.numbers,
+              c.serial, c.promo_text, e.use_free_center
+       FROM cards c JOIN events e ON e.id = c.event_id
+       WHERE c.id = ANY($1) ORDER BY c.card_number`,
+      [newCardIds]
+    );
+
+    const cardData = cards.map(c => ({
+      cardNumber: c.card_number,
+      cardCode: c.card_code,
+      validationCode: c.validation_code,
+      serial: c.serial || '',
+      numbers: c.numbers,
+      useFreeCenter: c.use_free_center ?? true,
+      prizeName: c.promo_text || undefined,
+    }));
+
+    const pdfPath = await generateDigitalPDF(cardData);
+    const downloadToken = generateUniqueCode(20);
+
+    const { rows: updated } = await client.query<OnlineOrder>(
+      `UPDATE online_orders SET
+        status = 'completed',
+        card_ids = $1,
+        payment_confirmed_at = NOW(),
+        payment_confirmed_by = $2,
+        pdf_path = $3,
+        download_token = $4,
+        updated_at = NOW()
+       WHERE id = $5
+       RETURNING *`,
+      [newCardIds, confirmedBy, pdfPath, downloadToken, orderId]
     );
 
     await client.query('COMMIT');

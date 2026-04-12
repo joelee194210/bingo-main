@@ -3,7 +3,7 @@ import { requirePermission } from '../middleware/auth.js';
 import { getPool } from '../database/init.js';
 import {
   getSalesConfig, upsertSalesConfig, getOrderById,
-  confirmPayment, cancelOrder, listOrders,
+  confirmPayment, confirmExpiredOrder, cancelOrder, listOrders,
 } from '../services/onlineOrderService.js';
 import { sendPurchaseEmail } from '../services/emailService.js';
 import { generateDigitalPDF } from '../services/digitalPdfService.js';
@@ -244,6 +244,45 @@ router.post('/orders/:id/confirm', requirePermission('cards:sell'), async (req: 
     res.json({ success: true, data: order });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Error confirmando pago';
+    res.status(400).json({ success: false, error: msg });
+  }
+});
+
+// POST /api/venta/orders/:id/confirm-expired
+// Confirma una orden expirada asignando cartones NUEVOS libres (los originales
+// pueden haber sido tomados por otra orden). Genera PDF con plantilla oficial
+// + raspadito correcto y envía email al comprador.
+router.post('/orders/:id/confirm-expired', requirePermission('cards:sell'), async (req: Request, res: Response) => {
+  try {
+    const orderId = parseInt((req.params.id as string), 10);
+    const username = (req as unknown as { user?: { username?: string } }).user?.username || 'admin';
+
+    const order = await confirmExpiredOrder(orderId, username);
+
+    if (order.pdf_path && order.download_token) {
+      const pool = getPool();
+      const { rows: cards } = await pool.query<{ card_code: string }>(
+        'SELECT card_code FROM cards WHERE id = ANY($1) ORDER BY card_number',
+        [order.card_ids]
+      );
+      const emailSent = await sendPurchaseEmail({
+        order_code: order.order_code,
+        buyer_name: order.buyer_name,
+        buyer_email: order.buyer_email,
+        quantity: order.quantity,
+        total_amount: Number(order.total_amount),
+        download_token: order.download_token,
+        card_codes: cards.map(c => c.card_code),
+      }, order.pdf_path);
+
+      if (emailSent) {
+        await pool.query('UPDATE online_orders SET email_sent_at = NOW() WHERE id = $1', [orderId]);
+      }
+    }
+
+    res.json({ success: true, data: order });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Error confirmando orden expirada';
     res.status(400).json({ success: false, error: msg });
   }
 });

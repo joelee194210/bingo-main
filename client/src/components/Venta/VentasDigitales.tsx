@@ -130,6 +130,16 @@ export default function VentasDigitales() {
     onSettled: () => setPendingActionId(null),
   });
 
+  const confirmExpiredMutation = useMutation({
+    mutationFn: (id: number) => { setPendingActionId(id); return api.post(`/venta/orders/${id}/confirm-expired`).then(r => r.data); },
+    onSuccess: () => {
+      toast.success('Orden expirada confirmada — cartones nuevos asignados y email enviado');
+      queryClient.invalidateQueries({ queryKey: ['ventas-digitales'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error confirmando orden expirada'),
+    onSettled: () => setPendingActionId(null),
+  });
+
   const resendMutation = useMutation({
     mutationFn: ({ id, regenerate }: { id: number; regenerate?: boolean }) => {
       setPendingActionId(id);
@@ -381,6 +391,23 @@ export default function VentasDigitales() {
                                     <RefreshCw className="h-3 w-3 mr-1" /> Regenerar
                                   </Button>
                                 </>
+                              )}
+                              {order.status === 'expired' && (
+                                <Button
+                                  size="sm" variant="outline" className="h-7 text-xs"
+                                  onClick={() => {
+                                    const ok = window.confirm(
+                                      `¿Confirmar pago de la orden expirada ${order.order_code}?\n\n` +
+                                      `Se asignarán cartones NUEVOS (los originales pueden estar en otra orden).\n` +
+                                      `Se generará PDF y se enviará email a ${order.buyer_email}.`
+                                    );
+                                    if (ok) confirmExpiredMutation.mutate(order.id);
+                                  }}
+                                  disabled={pendingActionId === order.id}
+                                  title="Asigna cartones nuevos, genera PDF y envía email"
+                                >
+                                  <CheckCircle className="h-3 w-3 mr-1" /> Confirmar pago
+                                </Button>
                               )}
                             </div>
                           </td>
