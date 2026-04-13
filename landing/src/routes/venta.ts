@@ -670,7 +670,7 @@ router.get('/api/yappy/ipn', async (req: Request, res: Response) => {
 
 // ─── HTML Renderers ──────────────────────────────────────────
 
-function renderLayout(title: string, body: string, eventId?: number, showFaqLink: boolean = true): string {
+export function renderLayout(title: string, body: string, eventId?: number, showFaqLink: boolean = true): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head>

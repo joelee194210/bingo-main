@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { resolve } from 'path';
 import { initPool, getPool } from './database.js';
-import ventaRouter from './routes/venta.js';
+import ventaRouter, { renderLayout } from './routes/venta.js';
 import { expireStaleOrders } from './services/orderService.js';
 import { captureRequestData } from './services/tracking.js';
 
@@ -201,6 +201,27 @@ app.use((req, res, next) => {
 
 // Todas las rutas de venta
 app.use('/venta', ventaRouter);
+
+// Ruta /panama — placeholder con el layout estándar (logos Primera Dama /
+// Bingos Nacionales + link PREGUNTAS FRECUENTES + footer de soporte). El
+// contenido del body queda vacío por ahora; se completa cuando llegue el
+// diseño. El eventId se toma de DEFAULT_EVENT_ID para que el link de FAQ
+// apunte al evento activo.
+app.get('/panama', (_req, res) => {
+  const defaultEventStr = process.env.DEFAULT_EVENT_ID;
+  const defaultEvent = defaultEventStr ? parseInt(defaultEventStr, 10) : undefined;
+  const eventIdForFooter = Number.isInteger(defaultEvent) && (defaultEvent as number) > 0
+    ? defaultEvent
+    : undefined;
+
+  const body = `
+    <div class="card" style="text-align:center;">
+      <h1>Panamá</h1>
+      <p class="subtitle" style="margin-top:16px;">Próximamente</p>
+    </div>`;
+
+  res.send(renderLayout('Panamá - Mega Bingo TV Mundial', body, eventIdForFooter));
+});
 
 // Ruta raíz redirige a /venta con el evento por defecto (configurable)
 app.get('/', (_req, res) => {
