@@ -208,7 +208,7 @@ img {
     font-size: 11px;
     font-weight: 300;
     color: #666;
-    line-height: 1.7;
+    line-height: 2;
     margin: 10px 4px 6px;
 }
 
@@ -294,7 +294,7 @@ img {
     .caja { padding: 14px 12px; transform: translateY(-60px); }
     .faltan, .fecha, .fechaa { font-size: 14px; }
     .btn-compra { font-size: 14px; padding: 11px 8px; }
-    .terminos { font-size: 10px; line-height: 1.7; margin: 8px 4px; }
+    .terminos { font-size: 10px; line-height: 2; margin: 8px 4px; }
     .info-bloque { gap: 10px; }
     .col-logo img { width: 48px; height: 48px; }
     .col-texto { font-size: 11px; }
