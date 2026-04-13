@@ -148,11 +148,11 @@ img {
 .caja {
     background: #fff;
     border-radius: 15px;
-    padding: 5px;
+    padding: 16px 14px;
     text-align: center;
     position: relative;
     z-index: 10;
-    transform: translateY(-75px); 
+    transform: translateY(-75px);
 
     box-shadow: 0 10px 25px rgba(0,0,0,0.25);
 }
@@ -184,10 +184,11 @@ img {
 
 /* BOTÓN */
 .btn-compra {
-    display: inline-block;
+    display: block;
     width: 100%;
     max-width: 420px;
-    padding: 8px 0;
+    margin: 0 auto;
+    padding: 10px 0;
     background: linear-gradient(to right, #c82d1a, #e63826);
     color: #fff;
     font-family: 'Poppins', sans-serif;
@@ -205,9 +206,10 @@ img {
 .terminos {
     font-family: 'Poppins', sans-serif;
     font-size: 11px;
-    font-weight: 100;
+    font-weight: 300;
     color: #666;
-    line-height: .5;
+    line-height: 1.4;
+    margin: 10px 4px 6px;
 }
 
 /* INFO BLOQUE */
@@ -279,6 +281,31 @@ img {
 @media (max-width: 480px) {
     .sponsors-side img { height: 50px; }
     .sponsors-center img { height: 60px; }
+}
+
+/* RESPONSIVE — iPhone SE, Mini y pantallas chicas (hasta 420px) */
+@media (max-width: 420px) {
+    .contenedor { padding: 10px; }
+    .hero { min-height: 260px; }
+    .premio { font-size: 24px; }
+    .linea1, .linea2 { font-size: 16px; }
+    .centro { font-size: 46px; }
+    .signo { font-size: 22px; }
+    .caja { padding: 14px 12px; transform: translateY(-60px); }
+    .faltan, .fecha, .fechaa { font-size: 14px; }
+    .btn-compra { font-size: 14px; padding: 11px 8px; }
+    .terminos { font-size: 10px; line-height: 1.5; margin: 8px 4px; }
+    .info-bloque { gap: 10px; }
+    .col-logo img { width: 48px; height: 48px; }
+    .col-texto { font-size: 11px; }
+    .banner { margin-top: -50px; }
+}
+
+/* RESPONSIVE — pantallas muy estrechas (320px, iPhone SE 1st gen) */
+@media (max-width: 340px) {
+    .premio { font-size: 20px; }
+    .btn-compra { font-size: 13px; }
+    .caja { transform: translateY(-50px); }
 }
 
 /* CONFETI */
