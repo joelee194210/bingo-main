@@ -65,7 +65,14 @@ app.use('/assets', express.static(altAssetsPath, { maxAge: '7d' }));
 
 // Imágenes para correos — URLs absolutas planas bajo /mail/*.png.
 // Se sirven siempre, incluso con LANDING_ENABLED=false (ver guard abajo).
-app.use('/mail', express.static(resolve(assetsPath, 'mail'), { maxAge: '7d' }));
+// Override CORP a cross-origin para que los clientes de correo y páginas
+// externas (file://, otros dominios) puedan embeberlas sin ser bloqueadas
+// por el Cross-Origin-Resource-Policy: same-origin que impone helmet.
+app.use('/mail', (_req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+}, express.static(resolve(assetsPath, 'mail'), { maxAge: '7d' }));
 
 // Rate limits
 const orderLimiter = rateLimit({
