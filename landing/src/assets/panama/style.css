@@ -264,6 +264,7 @@ img {
 }
 
 /* FOOTER ESTÁNDAR (replica el renderLayout de las otras páginas del landing) */
+.sponsors, .footer { font-family: 'Inter', -apple-system, sans-serif; }
 .sponsors { background: #991b1b; border-radius: 16px; padding: 24px 16px; margin-top: 20px; text-align: center; }
 .sponsors-row { display: flex; align-items: center; justify-content: center; gap: 24px; }
 .sponsors-side { display: flex; flex-direction: column; align-items: center; gap: 6px; }

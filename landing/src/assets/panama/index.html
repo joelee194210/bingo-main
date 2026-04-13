@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mega Bingo TV Mundial - Panamá</title>
     <base href="/assets/panama/">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -99,7 +99,7 @@
               <p class="sponsors-text">A beneficio de APROB del Despacho de la Primera Dama<br>de la República de Panamá.</p>
             </div>
           </div>
-          <p style="color:#fff;font-weight:700;text-align:center;margin-top:14px;font-size:11px;line-height:1.4;">Resolución de la JCJ Nº MEF-RES-2026-547 del 3 de marzo de 2026.</p>
+          <p style="color:#fff;font-weight:700;text-align:center;margin-top:14px;font-size:11px;line-height:1.4;font-family:'Inter',-apple-system,sans-serif;">Resolución de la JCJ Nº MEF-RES-2026-547 del 3 de marzo de 2026.</p>
           <a href="/venta/12/preguntas-frecuentes" class="footer-faq-link">PREGUNTAS FRECUENTES</a>
         </div>
         <div class="footer">
@@ -109,27 +109,8 @@
 
     </div>
 
-    <!-- CONFETI -->
-    <script>
-        function crearConfeti() {
-            const confeti = document.createElement('div');
-            confeti.classList.add('confeti');
-
-            confeti.style.left = Math.random() * 100 + 'vw';
-            confeti.style.backgroundColor = colores[Math.floor(Math.random() * colores.length)];
-            confeti.style.animationDuration = (Math.random() * 3 + 2) + 's';
-
-            document.body.appendChild(confeti);
-
-            setTimeout(() => {
-                confeti.remove();
-            }, 5000);
-        }
-
-        const colores = ['#ff0', '#f00', '#0f0', '#00f', '#ff7a00'];
-
-        setInterval(crearConfeti, 300);
-    </script>
+    <!-- CONFETI (externo porque CSP del landing bloquea inline scripts) -->
+    <script src="confeti.js" defer></script>
 
 </body>
 </html>
