@@ -4,7 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { resolve } from 'path';
+import { resolve, join } from 'path';
 import { initPool, getPool } from './database.js';
 import ventaRouter, { renderLayout } from './routes/venta.js';
 import { expireStaleOrders } from './services/orderService.js';
@@ -202,14 +202,12 @@ app.use((req, res, next) => {
 // Todas las rutas de venta
 app.use('/venta', ventaRouter);
 
-// Ruta /panama — placeholder. Body vacío hasta que llegue el diseño.
+// Ruta /panama — landing promocional con diseño propio.
+// Sirve el archivo HTML estático ubicado en src/assets/panama/index.html.
+// El HTML declara <base href="/assets/panama/"> para que style.css e imágenes
+// resuelvan bajo /assets/panama/* (servido por el static middleware).
 app.get('/panama', (_req, res) => {
-  const body = `
-    <div class="card" style="text-align:center;">
-      <h1>Panamá</h1>
-      <p class="subtitle" style="margin-top:16px;">Próximamente</p>
-    </div>`;
-  res.send(renderLayout('Panamá - Mega Bingo TV Mundial', body));
+  res.sendFile(join(assetsPath, 'panama', 'index.html'));
 });
 
 // Ruta raíz redirige a /venta con el evento por defecto (configurable)

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mega Bingo TV Mundial - Panamá</title>
+    <base href="/assets/panama/">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="contenedor">
+
+        <!-- LOGO -->
+        <header class="header">
+            <img src="imagenes/logo.png" alt="Logo">
+        </header>
+
+        <!-- HERO - FONDO GANADOR -->
+        <section class="hero">
+            <div class="contenido-hero">
+
+                <p class="linea1">Participa para ganar</p>
+
+                <h1 class="premio">
+                    Casa, Carro y Viajes
+                </h1>
+
+                <p class="linea2">
+                    para ver  jugar a <span class="panama">Panamá</span> 
+                </p>
+
+                <div class="precio">
+                    <span class="izq">Por solo</span>
+                    <span class="signo">$</span>
+                    <span class="centro">5</span>
+                    <span class="der">palos</span>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- CAJA BLANCA DE TEXTO -->
+        <section class="caja">
+
+            <p class="faltan">¡Faltan pocos días!</p>
+
+            <p class="fecha">
+                <span class="fechaa"> PRIMER BINGO: 23 DE ABRIL</span>
+            </p>
+
+            <a href="https://www.megabingodigital.com/venta/12" class="btn-compra" target="_blank">
+                COMPRA TU CARTÓN AQUÍ
+            </a>
+
+            <p class="terminos">
+                Sitio oficial para comprar cartones
+                de Bingo en formato digital
+            </p>
+
+            <div class="info-bloque">
+
+                <div class="col-logo">
+                    <img src="imagenes/logo2.png" alt="logo">
+                </div>
+
+                <div class="col-texto">
+
+                    <div class="linea">
+                        <span class="icono">✔</span>
+                        <span>Compra segura con Yappy</span>
+                    </div>
+
+                    <div class="linea">
+                        <span class="icono">✔</span>
+                        <span>Organizado por Bingos Nacionales</span>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- BANNER -->
+        <img src="imagenes/banner.png" class="banner">
+
+        <!-- FOOTER ESTÁNDAR (mismo que el renderLayout de las otras páginas) -->
+        <div class="sponsors">
+          <div class="sponsors-row">
+            <div class="sponsors-side">
+              <img src="/assets/bingos_nacionales.png" alt="Bingos Nacionales">
+              <span>Organiza</span>
+            </div>
+            <div class="sponsors-center">
+              <img src="/assets/primera_dama.png" alt="Despacho de la Primera Dama">
+              <p class="sponsors-text">A beneficio de APROB del Despacho de la Primera Dama<br>de la República de Panamá.</p>
+            </div>
+          </div>
+          <a href="/venta/12/preguntas-frecuentes" class="footer-faq-link">PREGUNTAS FRECUENTES</a>
+        </div>
+        <div class="footer">
+          <a href="https://www.megabingotv.com" target="_blank" rel="noopener" style="color:#fff;font-size:13px;text-decoration:underline;opacity:0.85;">Para más información acerca del Mega Bingo TV Mundial da clic aquí</a>
+          <div style="margin-top:10px;color:#fff;font-size:12px;opacity:0.85;">Para soporte escríbenos a <a href="mailto:soporte@megabingodigital.com" style="color:#fff;text-decoration:underline;">soporte@megabingodigital.com</a></div>
+        </div>
+
+    </div>
+
+    <!-- CONFETI -->
+    <script>
+        function crearConfeti() {
+            const confeti = document.createElement('div');
+            confeti.classList.add('confeti');
+
+            confeti.style.left = Math.random() * 100 + 'vw';
+            confeti.style.backgroundColor = colores[Math.floor(Math.random() * colores.length)];
+            confeti.style.animationDuration = (Math.random() * 3 + 2) + 's';
+
+            document.body.appendChild(confeti);
+
+            setTimeout(() => {
+                confeti.remove();
+            }, 5000);
+        }
+
+        const colores = ['#ff0', '#f00', '#0f0', '#00f', '#ff7a00'];
+
+        setInterval(crearConfeti, 300);
+    </script>
+
+</body>
+</html>
