@@ -63,6 +63,10 @@ const altAssetsPath = resolve(process.cwd(), 'assets');
 app.use('/assets', express.static(assetsPath, { maxAge: '7d' }));
 app.use('/assets', express.static(altAssetsPath, { maxAge: '7d' }));
 
+// Imágenes para correos — URLs absolutas planas bajo /mail/*.png.
+// Se sirven siempre, incluso con LANDING_ENABLED=false (ver guard abajo).
+app.use('/mail', express.static(resolve(assetsPath, 'mail'), { maxAge: '7d' }));
+
 // Rate limits
 const orderLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -191,7 +195,7 @@ app.use((req, res, next) => {
   const enabled = process.env.LANDING_ENABLED === 'true';
   if (enabled) return next();
   // Permitir health check, assets y APIs internas siempre
-  if (req.path === '/health' || req.path.startsWith('/assets')) return next();
+  if (req.path === '/health' || req.path.startsWith('/assets') || req.path.startsWith('/mail')) return next();
   // API endpoints retornan JSON de error
   if (req.path.includes('/api/')) {
     return res.status(503).json({ success: false, error: 'Venta digital no disponible' });
