@@ -62,6 +62,18 @@ const MODO_LABELS: Record<ModoPOS, string> = {
   devolucion: 'Devolución',
 };
 
+const MODOS_VALIDOS: ReadonlySet<string> = new Set<ModoPOS>(['venta', 'consignacion', 'devolucion']);
+const isModoPOS = (v: string): v is ModoPOS => MODOS_VALIDOS.has(v);
+
+function getApiErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const resp = (err as { response?: { data?: { error?: string } } }).response;
+    if (resp?.data?.error) return resp.data.error;
+  }
+  if (err instanceof Error) return err.message;
+  return fallback;
+}
+
 export default function VentaGeneralPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -84,6 +96,9 @@ export default function VentaGeneralPage() {
     if (nuevo === modo) return;
     setModo(nuevo);
     setItems([]);
+    setBuyerName('');
+    setBuyerCedula('');
+    setBuyerPhone('');
     setFirmaEntrega(null);
     setFirmaRecibe(null);
   };
@@ -236,7 +251,8 @@ export default function VentaGeneralPage() {
           nombre_entrega: currentAlmacen.almacen_name,
           nombre_recibe: currentAlmacen.almacen_name,
         });
-        const d = result.data!;
+        if (!result.data) throw new Error(result.error ?? 'Sin datos del servidor');
+        const d = result.data;
         documentoId = d.documentoId; exitosos = d.exitosos; errores = d.errores;
         totalCartones = exitosos;
       } else {
@@ -253,7 +269,8 @@ export default function VentaGeneralPage() {
           nombre_recibe: buyerName.trim(),
           accion: modo,
         });
-        const d = result.data!;
+        if (!result.data) throw new Error(result.error ?? 'Sin datos del servidor');
+        const d = result.data;
         documentoId = d.documentoId; exitosos = d.exitosos; totalCartones = d.totalCartones; errores = d.errores;
       }
 
@@ -281,8 +298,8 @@ export default function VentaGeneralPage() {
         errores.forEach(e => toast.error(e));
         if (documentoId && exitosos > 0) await downloadPdf(documentoId);
       }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error ?? `Error al ejecutar ${MODO_LABELS[modo].toLowerCase()}`);
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, `Error al ejecutar ${MODO_LABELS[modo].toLowerCase()}`));
     } finally {
       setProcessing(false);
     }
@@ -344,7 +361,7 @@ export default function VentaGeneralPage() {
       </div>
 
       {/* Selector de modo */}
-      <Tabs value={modo} onValueChange={(v) => cambiarModo(v as ModoPOS)}>
+      <Tabs value={modo} onValueChange={(v) => { if (isModoPOS(v)) cambiarModo(v); }}>
         <TabsList className="grid w-full grid-cols-3 max-w-xl">
           <TabsTrigger value="venta" className="gap-1">
             <ShoppingCart className="h-4 w-4" /> Venta
@@ -469,25 +486,27 @@ export default function VentaGeneralPage() {
 
               {/* Input manual */}
               <div className="flex gap-2 items-end">
-                <div className="space-y-2">
-                  <Label>Tipo</Label>
-                  <Select value={tipoEntidad} onValueChange={(v) => setTipoEntidad(v as TipoEntidad)}>
-                    <SelectTrigger className="w-[130px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="caja">Caja</SelectItem>
-                      <SelectItem value="libreta">Lote</SelectItem>
-                      <SelectItem value="carton">Carton</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {modo !== 'devolucion' && (
+                  <div className="space-y-2">
+                    <Label>Tipo</Label>
+                    <Select value={tipoEntidad} onValueChange={(v) => setTipoEntidad(v as TipoEntidad)}>
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="caja">Caja</SelectItem>
+                        <SelectItem value="libreta">Lote</SelectItem>
+                        <SelectItem value="carton">Carton</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-2 flex-1">
-                  <Label>Codigo</Label>
+                  <Label>{modo === 'devolucion' ? 'Código del cartón vendido/consignado' : 'Codigo'}</Label>
                   <Input
                     value={inputRef}
                     onChange={(e) => setInputRef(e.target.value)}
-                    placeholder="Ej: C0001, L0001, ABC12"
+                    placeholder={modo === 'devolucion' ? 'Ej: ABC12 o 00081-01' : 'Ej: C0001, L0001, ABC12'}
                     onKeyDown={(e) => { if (e.key === 'Enter') addItem(); }}
                   />
                 </div>

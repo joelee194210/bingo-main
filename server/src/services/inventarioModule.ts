@@ -870,8 +870,10 @@ export async function ejecutarMovimientoBulk(
         if (data.almacen_origen_id && caja.almacen_id !== data.almacen_origen_id) {
           throw new Error(`Caja "${item.referencia}" no esta en el almacen origen`);
         }
-        // Verificar que no se mueva al mismo almacén
-        if (caja.almacen_id === data.almacen_destino_id) {
+        // Verificar que no se mueva al mismo almacén — excepto en devolución POS
+        // donde origen y destino son intencionalmente el mismo (el cartón vuelve
+        // al inventario disponible del mismo almacén que lo vendió).
+        if (!isDevolucion && caja.almacen_id === data.almacen_destino_id) {
           throw new Error(`Caja "${item.referencia}" ya esta en el almacen destino`);
         }
         if (!isDevolucion && caja.status === 'agotada') throw new Error(`Caja "${item.referencia}" ya esta agotada`);
@@ -910,8 +912,8 @@ export async function ejecutarMovimientoBulk(
         if (data.almacen_origen_id && lote.almacen_id !== data.almacen_origen_id) {
           throw new Error(`Libreta "${item.referencia}" no esta en el almacen origen`);
         }
-        // Verificar que no se mueva al mismo almacén
-        if (lote.almacen_id === data.almacen_destino_id) {
+        // Verificar que no se mueva al mismo almacén — excepto en devolución POS.
+        if (!isDevolucion && lote.almacen_id === data.almacen_destino_id) {
           throw new Error(`Libreta "${item.referencia}" ya esta en el almacen destino`);
         }
         if (!isDevolucion && lote.status === 'vendido_completo') throw new Error(`Libreta "${item.referencia}" ya vendida`);
@@ -962,8 +964,8 @@ export async function ejecutarMovimientoBulk(
         if (data.almacen_origen_id && card.almacen_id !== data.almacen_origen_id) {
           throw new Error(`Carton "${item.referencia}" no esta en el almacen origen`);
         }
-        // Verificar que no se mueva al mismo almacén
-        if (card.almacen_id === data.almacen_destino_id) {
+        // Verificar que no se mueva al mismo almacén — excepto en devolución POS.
+        if (!isDevolucion && card.almacen_id === data.almacen_destino_id) {
           throw new Error(`Carton "${item.referencia}" ya esta en el almacen destino`);
         }
         if (!isDevolucion && card.is_sold) throw new Error(`Carton "${item.referencia}" ya vendido`);

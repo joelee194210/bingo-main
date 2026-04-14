@@ -180,6 +180,17 @@ const generalLimiter = rateLimit({
 });
 app.use('/api', generalLimiter);
 
+// Limiter más estricto para endpoints de escaneo POS que devuelven PII de
+// compradores (buyer_name). Previene enumeración por scripts.
+const posScanLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60, // ritmo realista de un scanner manual
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Demasiados escaneos en poco tiempo. Espere un momento.' },
+});
+app.use('/api/inventario/validar-devolucion', posScanLimiter);
+
 // Logging middleware
 app.use((req, _res, next) => {
   console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);

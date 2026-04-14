@@ -631,6 +631,8 @@ router.post('/venta', requirePermission('inventory:sell'), async (req, res) => {
 
 // Devolución desde POS — escanea cartones vendidos/consignados desde el
 // almacén del usuario y los inactiva (delegando en ejecutarMovimientoBulk).
+// Restricción: admin/moderator/loteria pueden devolver cualquier cartón del
+// almacén; sellers solo pueden devolver lo que ellos mismos vendieron.
 router.post('/devolucion-pos', requirePermission('inventory:sell'), async (req, res) => {
   try {
     const pool = getPool();
@@ -643,6 +645,26 @@ router.post('/devolucion-pos', requirePermission('inventory:sell'), async (req, 
     if (!await verificarAccesoAlmacen(pool, userId, reqUser.role, [almacen_id])) {
       return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
     }
+
+    // Ownership check: roles supervisores ven todo; el resto solo lo suyo.
+    const supervisor = ['admin', 'moderator', 'loteria'].includes(reqUser.role);
+    if (!supervisor) {
+      const cartones = (items as { tipo: string; referencia: string }[]).filter(i => i.tipo === 'carton');
+      for (const it of cartones) {
+        let serialSearch = (it.referencia as string).toUpperCase();
+        const m = serialSearch.match(/^(\d+)-(\d+)$/);
+        if (m) serialSearch = m[1].padStart(5, '0') + '-' + m[2].padStart(2, '0');
+        const r = await pool.query(
+          `SELECT sold_by FROM cards WHERE event_id = $1 AND (card_code = $2 OR serial = $3) LIMIT 1`,
+          [event_id, it.referencia, serialSearch]
+        );
+        const soldBy = r.rows[0]?.sold_by;
+        if (soldBy && soldBy !== userId) {
+          return res.status(403).json({ success: false, error: `Carton "${it.referencia}" fue vendido por otro usuario; solo puede devolverlo el vendedor original` });
+        }
+      }
+    }
+
     const firmas = (firma_entrega || firma_recibe) ? { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } : undefined;
     const data = await inv.ejecutarMovimientoBulk(pool, event_id, {
       accion: 'devolucion',
@@ -677,19 +699,41 @@ router.get('/validar-devolucion/:eventId/:referencia', requirePermission('invent
     const m = ref.match(/^(\d+)-(\d+)$/);
     if (m) serialSearch = m[1].padStart(5, '0') + '-' + m[2].padStart(2, '0');
 
-    // Carton individual
+    // Carton individual. La subquery busca el último documento de venta o
+    // consignación que afectó este cartón. Considera 3 formas de match:
+    //   1. movimiento individual con referencia = card_code o serial
+    //   2. movimiento de libreta cuyo lote contiene este cartón
+    //   3. movimiento de caja cuyo lote_id padre del cartón comparte caja_id
     const cardRes = await pool.query(
-      `SELECT c.id, c.card_code, c.serial, c.is_sold, c.almacen_id, c.buyer_name,
-              (SELECT d.accion FROM inv_movimientos mv JOIN inv_documentos d ON d.id = mv.documento_id
-               WHERE mv.tipo_entidad = 'carton' AND (mv.referencia = c.card_code OR mv.referencia = c.serial)
-                 AND d.accion IN ('venta','consignacion')
-               ORDER BY mv.created_at DESC LIMIT 1) AS accion_origen
+      `SELECT c.id, c.card_code, c.serial, c.is_sold, c.almacen_id, c.buyer_name, c.lote_id,
+              (SELECT l.caja_id FROM lotes l WHERE l.id = c.lote_id) AS caja_id,
+              (SELECT l.lote_code FROM lotes l WHERE l.id = c.lote_id) AS lote_code,
+              (SELECT cj.caja_code FROM cajas cj WHERE cj.id = (SELECT l.caja_id FROM lotes l WHERE l.id = c.lote_id)) AS caja_code
        FROM cards c WHERE (c.card_code = $1 OR c.serial = $3) AND c.event_id = $2`,
       [ref, eventId, serialSearch]
     );
     if (cardRes.rows.length > 0) {
       const c = cardRes.rows[0];
+      // Buscar acción de origen vía cualquier nivel: cartón, libreta o caja.
+      const origenRes = await pool.query(
+        `SELECT d.accion
+         FROM inv_movimientos mv
+         JOIN inv_documentos d ON d.id = mv.documento_id
+         WHERE mv.event_id = $1
+           AND d.accion IN ('venta','consignacion')
+           AND (
+             (mv.tipo_entidad = 'carton' AND (mv.referencia = $2 OR mv.referencia = $3))
+             OR (mv.tipo_entidad = 'libreta' AND mv.referencia = $4)
+             OR (mv.tipo_entidad = 'caja' AND mv.referencia = $5)
+           )
+         ORDER BY mv.created_at DESC LIMIT 1`,
+        [eventId, c.card_code, c.serial, c.lote_code, c.caja_code]
+      );
+      const accionOrigen: string | null = origenRes.rows[0]?.accion || null;
       const valido = c.is_sold && c.almacen_id === almacenId;
+      const verbo = accionOrigen === 'consignacion' ? 'Consignado'
+        : accionOrigen === 'venta' ? 'Vendido'
+        : 'Vendido (origen sin documento)'; // fallback defensivo si la subquery no encontró match
       return res.json({
         success: true,
         data: {
@@ -698,10 +742,10 @@ router.get('/validar-devolucion/:eventId/:referencia', requirePermission('invent
           is_sold: c.is_sold,
           vendido_desde_almacen: c.almacen_id === almacenId,
           buyer_name: c.buyer_name,
-          accion_origen: c.accion_origen || (c.is_sold ? 'venta' : null),
+          accion_origen: accionOrigen,
           valido,
           info: valido
-            ? `${c.accion_origen === 'consignacion' ? 'Consignado' : 'Vendido'} a ${c.buyer_name || 'desconocido'}`
+            ? `${verbo} a ${c.buyer_name || 'desconocido'}`
             : (!c.is_sold ? 'Cartón no está vendido/consignado' : 'No pertenece a este almacén'),
         },
       });
