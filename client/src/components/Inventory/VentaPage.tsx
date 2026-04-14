@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Plus, Trash2, Package, ClipboardList, ScanLine,
-  Loader2, CreditCard, Warehouse,
+  Loader2, CreditCard, Warehouse, Handshake, RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,10 +18,13 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   getMisAlmacenes,
   getResumenInventario,
   ejecutarVenta,
+  ejecutarDevolucionPOS,
+  validarDevolucion,
   getDocumentoPdf,
   validarReferencia,
 } from '@/services/api';
@@ -52,10 +55,19 @@ interface ItemVenta {
   info?: string;
 }
 
+type ModoPOS = 'venta' | 'consignacion' | 'devolucion';
+
+const MODO_LABELS: Record<ModoPOS, string> = {
+  venta: 'Venta',
+  consignacion: 'Consignación',
+  devolucion: 'Devolución',
+};
+
 export default function VentaPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  const [modo, setModo] = useState<ModoPOS>('venta');
   const [selectedAlmacen, setSelectedAlmacen] = useState<string>('');
   const [tipoEntidad, setTipoEntidad] = useState<TipoEntidad>('caja');
   const [inputRef, setInputRef] = useState('');
@@ -69,6 +81,15 @@ export default function VentaPage() {
   const [processing, setProcessing] = useState(false);
   const [validating, setValidating] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+
+  const cambiarModo = (nuevo: ModoPOS) => {
+    if (nuevo === modo) return;
+    setModo(nuevo);
+    // Resetear lista para no mezclar items vendidos vs disponibles entre modos
+    setItems([]);
+    setFirmaEntrega(null);
+    setFirmaRecibe(null);
+  };
 
   const { data: misAlmacenesData, isLoading: loadingAlmacenes } = useQuery({
     queryKey: ['mis-almacenes'],
@@ -114,6 +135,24 @@ export default function VentaPage() {
 
     setValidating(true);
     try {
+      // Modo devolución: validar contra cartones vendidos/consignados desde este almacén
+      if (modo === 'devolucion') {
+        const result = await validarDevolucion(currentAlmacen.event_id, normalizedCode, currentAlmacen.almacen_id);
+        const data = result.data;
+        if (!data || !data.existe) {
+          toast.error(`"${normalizedCode}" no existe`);
+          return;
+        }
+        if (!data.valido) {
+          toast.error(`"${normalizedCode}" — ${data.info}`);
+          return;
+        }
+        setItems(prev => [...prev, { tipo: 'carton', referencia: normalizedCode, validado: true, info: data.info }]);
+        toast.success(`${normalizedCode} — ${data.info}`);
+        return;
+      }
+
+      // Modo venta o consignación: validar disponibilidad
       const result = await validarReferencia(currentAlmacen.event_id, normalizedCode, currentAlmacen.almacen_id);
       const data = result.data;
 
@@ -175,7 +214,8 @@ export default function VentaPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `VENTA-${documentoId.toString().padStart(6, '0')}.pdf`;
+      const prefix = modo === 'consignacion' ? 'CONSIGNACION' : modo === 'devolucion' ? 'DEVOLUCION' : 'VENTA';
+      a.download = `${prefix}-${documentoId.toString().padStart(6, '0')}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -183,28 +223,48 @@ export default function VentaPage() {
     }
   };
 
-  const handleVenta = async () => {
+  const handleEjecutar = async () => {
     if (!currentAlmacen || items.length === 0) return;
 
-    if (!confirm(`¿Confirmar venta de ${validItems.length} item(s) a ${buyerName || 'Comprador'}?`)) return;
+    const accionLabel = MODO_LABELS[modo].toLowerCase();
+    const sujeto = modo === 'devolucion' ? 'almacén' : (buyerName || 'Comprador');
+    if (!confirm(`¿Confirmar ${accionLabel} de ${validItems.length} item(s) a ${sujeto}?`)) return;
 
     setProcessing(true);
     try {
-      const result = await ejecutarVenta({
-        event_id: currentAlmacen.event_id,
-        almacen_id: currentAlmacen.almacen_id,
-        items: validItems.map(i => ({ tipo: i.tipo, referencia: i.referencia })),
-        buyer_name: buyerName || undefined,
-        buyer_cedula: buyerCedula || undefined,
-        buyer_libreta: buyerLibreta || undefined,
-        buyer_phone: buyerPhone || undefined,
-        firma_entrega: firmaEntrega || undefined,
-        firma_recibe: firmaRecibe || undefined,
-        nombre_entrega: currentAlmacen.almacen_name,
-        nombre_recibe: buyerName || 'Comprador',
-      });
+      let documentoId = 0, exitosos = 0, totalCartones = 0, errores: string[] = [];
 
-      const { documentoId, exitosos, totalCartones, errores } = result.data!;
+      if (modo === 'devolucion') {
+        const result = await ejecutarDevolucionPOS({
+          event_id: currentAlmacen.event_id,
+          almacen_id: currentAlmacen.almacen_id,
+          items: validItems.map(i => ({ tipo: i.tipo, referencia: i.referencia })),
+          firma_entrega: firmaEntrega || undefined,
+          firma_recibe: firmaRecibe || undefined,
+          nombre_entrega: currentAlmacen.almacen_name,
+          nombre_recibe: currentAlmacen.almacen_name,
+        });
+        const d = result.data!;
+        documentoId = d.documentoId; exitosos = d.exitosos; errores = d.errores;
+        totalCartones = exitosos;
+      } else {
+        const result = await ejecutarVenta({
+          event_id: currentAlmacen.event_id,
+          almacen_id: currentAlmacen.almacen_id,
+          items: validItems.map(i => ({ tipo: i.tipo, referencia: i.referencia })),
+          buyer_name: buyerName || undefined,
+          buyer_cedula: buyerCedula || undefined,
+          buyer_libreta: buyerLibreta || undefined,
+          buyer_phone: buyerPhone || undefined,
+          firma_entrega: firmaEntrega || undefined,
+          firma_recibe: firmaRecibe || undefined,
+          nombre_entrega: currentAlmacen.almacen_name,
+          nombre_recibe: buyerName || (modo === 'consignacion' ? 'Consignatario' : 'Comprador'),
+          accion: modo,
+        });
+        const d = result.data!;
+        documentoId = d.documentoId; exitosos = d.exitosos; totalCartones = d.totalCartones; errores = d.errores;
+      }
 
       // Invalidar queries
       queryClient.invalidateQueries({ queryKey: ['resumen-inventario'] });
@@ -216,8 +276,9 @@ export default function VentaPage() {
       queryClient.invalidateQueries({ queryKey: ['libretas-sueltas'] });
       queryClient.invalidateQueries({ queryKey: ['cartones-sueltos'] });
 
+      const verbo = modo === 'devolucion' ? 'devueltos' : modo === 'consignacion' ? 'consignados' : 'vendidos';
       if (errores.length === 0) {
-        toast.success(`${exitosos} items vendidos — ${totalCartones} cartones`);
+        toast.success(`${exitosos} items ${verbo}${totalCartones ? ` — ${totalCartones} cartones` : ''}`);
         if (documentoId) await downloadPdf(documentoId);
         // Reset
         setItems([]);
@@ -228,19 +289,21 @@ export default function VentaPage() {
         setFirmaEntrega(null);
         setFirmaRecibe(null);
       } else {
-        if (exitosos > 0) toast.success(`${exitosos} items vendidos`);
+        if (exitosos > 0) toast.success(`${exitosos} items ${verbo}`);
         errores.forEach(e => toast.error(e));
         if (documentoId && exitosos > 0) await downloadPdf(documentoId);
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error ?? 'Error al ejecutar venta');
+      toast.error(err.response?.data?.error ?? `Error al ejecutar ${MODO_LABELS[modo].toLowerCase()}`);
     } finally {
       setProcessing(false);
     }
   };
 
   const validItems = items.filter(i => i.validado);
-  const canExecute = validItems.length > 0 && !!currentAlmacen && !!buyerName && !!firmaEntrega;
+  const requiereComprador = modo !== 'devolucion';
+  const canExecute = validItems.length > 0 && !!currentAlmacen && !!firmaEntrega
+    && (!requiereComprador || !!buyerName);
 
   const countByType = items.reduce<Record<string, number>>((acc, i) => {
     acc[i.tipo] = (acc[i.tipo] || 0) + 1;
@@ -275,16 +338,36 @@ export default function VentaPage() {
     );
   }
 
+  const ModoIcon = modo === 'consignacion' ? Handshake : modo === 'devolucion' ? RotateCcw : ShoppingCart;
+  const subtitle = modo === 'consignacion'
+    ? 'Entregar en consignación — los cartones quedan marcados como vendidos hasta su devolución'
+    : modo === 'devolucion'
+      ? 'Devolver cartones vendidos o consignados al inventario disponible'
+      : 'Vender cajas, lotes o cartones de tu almacen';
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <ShoppingCart className="h-6 w-6" /> Punto de Venta Loteria
+          <ModoIcon className="h-6 w-6" /> Punto de Venta Loteria
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Vender cajas, lotes o cartones de tu almacen
-        </p>
+        <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>
       </div>
+
+      {/* Selector de modo */}
+      <Tabs value={modo} onValueChange={(v) => cambiarModo(v as ModoPOS)}>
+        <TabsList className="grid w-full grid-cols-3 max-w-xl">
+          <TabsTrigger value="venta" className="gap-1">
+            <ShoppingCart className="h-4 w-4" /> Venta
+          </TabsTrigger>
+          <TabsTrigger value="consignacion" className="gap-1">
+            <Handshake className="h-4 w-4" /> Consignación
+          </TabsTrigger>
+          <TabsTrigger value="devolucion" className="gap-1">
+            <RotateCcw className="h-4 w-4" /> Devolución
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Almacen selector */}
       {misAlmacenes.length > 1 && (
@@ -327,29 +410,35 @@ export default function VentaPage() {
             )}
           </div>
 
-          {/* Datos del billetero */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Billetero</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <BilleteroSearch
-                onSelect={(b) => {
-                  setBuyerName(b.nombre);
-                  setBuyerCedula(b.cedula);
-                  setBuyerLibreta(b.libreta);
-                }}
-                selectedNombre={buyerName}
-                selectedCedula={buyerCedula}
-                selectedLibreta={buyerLibreta}
-              />
-            </CardContent>
-          </Card>
+          {/* Datos del billetero / consignatario (oculto en devolución) */}
+          {requiereComprador && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {modo === 'consignacion' ? 'Consignatario' : 'Billetero'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <BilleteroSearch
+                  onSelect={(b) => {
+                    setBuyerName(b.nombre);
+                    setBuyerCedula(b.cedula);
+                    setBuyerLibreta(b.libreta);
+                  }}
+                  selectedNombre={buyerName}
+                  selectedCedula={buyerCedula}
+                  selectedLibreta={buyerLibreta}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Agregar items */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Items a vender</CardTitle>
+              <CardTitle className="text-base">
+                {modo === 'devolucion' ? 'Cartones a devolver' : modo === 'consignacion' ? 'Items a consignar' : 'Items a vender'}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Scanner QR */}
@@ -464,11 +553,15 @@ export default function VentaPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <SignaturePad
-                label={`Vendedor: ${user?.full_name || user?.username || ''}`}
+                label={`${modo === 'devolucion' ? 'Recibe' : 'Vendedor'}: ${user?.full_name || user?.username || ''}`}
                 onSignatureChange={setFirmaEntrega}
               />
               <SignaturePad
-                label={`Billetero: ${buyerName || '(seleccionar)'} ${buyerLibreta ? `- Lib: ${buyerLibreta}` : ''} ${buyerCedula ? `- ${buyerCedula}` : ''}`}
+                label={
+                  modo === 'devolucion'
+                    ? 'Entrega (devolvedor)'
+                    : `${modo === 'consignacion' ? 'Consignatario' : 'Billetero'}: ${buyerName || '(seleccionar)'} ${buyerLibreta ? `- Lib: ${buyerLibreta}` : ''} ${buyerCedula ? `- ${buyerCedula}` : ''}`
+                }
                 onSignatureChange={setFirmaRecibe}
               />
             </CardContent>
@@ -478,16 +571,16 @@ export default function VentaPage() {
           <div className="flex justify-end">
             <Button
               size="lg"
-              onClick={handleVenta}
+              onClick={handleEjecutar}
               disabled={!canExecute || processing}
               className="gap-2"
             >
               {processing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <ShoppingCart className="h-4 w-4" />
+                <ModoIcon className="h-4 w-4" />
               )}
-              Ejecutar Venta ({validItems.length} items)
+              Ejecutar {MODO_LABELS[modo]} ({validItems.length} items)
             </Button>
           </div>
         </>

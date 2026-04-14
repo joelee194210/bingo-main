@@ -388,8 +388,26 @@ export const ejecutarVenta = (data: {
   items: { tipo: string; referencia: string }[];
   buyer_name?: string; buyer_cedula?: string; buyer_libreta?: string; buyer_phone?: string;
   firma_entrega?: string; firma_recibe?: string; nombre_entrega?: string; nombre_recibe?: string;
+  accion?: 'venta' | 'consignacion';
 }) =>
   api.post<ApiResponse<{ documentoId: number; exitosos: number; totalCartones: number; errores: string[] }>>('/inventario/venta', data).then(r => r.data);
+
+export const ejecutarDevolucionPOS = (data: {
+  event_id: number; almacen_id: number;
+  items: { tipo: string; referencia: string }[];
+  firma_entrega?: string; firma_recibe?: string; nombre_entrega?: string; nombre_recibe?: string;
+}) =>
+  api.post<ApiResponse<{ documentoId: number; exitosos: number; errores: string[] }>>('/inventario/devolucion-pos', data).then(r => r.data);
+
+export const validarDevolucion = (eventId: number, referencia: string, almacenId: number) =>
+  api.get<ApiResponse<{
+    tipo?: 'carton'; existe: boolean; valido: boolean;
+    is_sold?: boolean; vendido_desde_almacen?: boolean;
+    buyer_name?: string; accion_origen?: 'venta' | 'consignacion' | null;
+    info: string;
+  }>>(`/inventario/validar-devolucion/${eventId}/${encodeURIComponent(referencia)}`, {
+    params: { almacen_id: almacenId },
+  }).then(r => r.data);
 
 // =====================================================
 // INVENTARIO - MOVIMIENTOS
@@ -507,6 +525,7 @@ export interface ReporteVentasResumen {
 export interface ReporteVentasDetalle {
   documento_id: number;
   fecha: string;
+  tipo?: 'venta' | 'consignacion';
   almacen_id: number;
   almacen_nombre: string;
   comprador: string;
@@ -523,10 +542,11 @@ export interface ReporteVentasDetalle {
 export interface ReporteVentasData {
   resumen: ReporteVentasResumen[];
   detalle: ReporteVentasDetalle[];
+  devoluciones?: { cartones_devueltos: number; documentos_devolucion: number };
   totales: { cartones: number; documentos: number };
 }
 
-export const getReporteVentas = (eventId: number, params: { desde: string; hasta: string; almacen_id?: number; vendedor_id?: number; solo_agencias?: boolean }) =>
+export const getReporteVentas = (eventId: number, params: { desde: string; hasta: string; almacen_id?: number; vendedor_id?: number; solo_agencias?: boolean; tipo?: 'todos' | 'venta' | 'consignacion' }) =>
   api.get<ApiResponse<ReporteVentasData>>(`/reports/sales/${eventId}`, { params }).then(r => r.data);
 
 export const downloadReporteVentasPdf = (eventId: number, params: { desde: string; hasta: string; almacen_id?: number; vendedor_id?: number; solo_agencias?: boolean }) =>

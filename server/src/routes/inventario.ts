@@ -595,16 +595,18 @@ router.post('/movimiento-bulk', requirePermission('inventory:move'), async (req,
   }
 });
 
-// Ejecutar venta
+// Ejecutar venta o consignacion (ambas marcan is_sold=true; la diferencia
+// es inv_documentos.accion para distinguir en reportes/movimientos)
 router.post('/venta', requirePermission('inventory:sell'), async (req, res) => {
   try {
     const pool = getPool();
     const reqUser = req.user!;
     const userId = reqUser.id;
-    const { event_id, almacen_id, items, buyer_name, buyer_cedula, buyer_libreta, buyer_phone, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body;
+    const { event_id, almacen_id, items, buyer_name, buyer_cedula, buyer_libreta, buyer_phone, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe, accion } = req.body;
     if (!event_id || !almacen_id || !items?.length) {
       return res.status(400).json({ success: false, error: 'event_id, almacen_id e items son requeridos' });
     }
+    const accionValidada: 'venta' | 'consignacion' = accion === 'consignacion' ? 'consignacion' : 'venta';
     // Verificar acceso al almacen
     if (!await verificarAccesoAlmacen(pool, userId, reqUser.role, [almacen_id])) {
       return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
@@ -618,9 +620,93 @@ router.post('/venta', requirePermission('inventory:sell'), async (req, res) => {
       buyer_libreta,
       buyer_phone,
       firmas,
+      accion: accionValidada,
     }, userId);
-    logActivity(pool, auditFromReq(req, 'venta', 'inventory', { event_id, items_count: items.length, total_cartones: data.totalCartones }));
+    logActivity(pool, auditFromReq(req, accionValidada, 'inventory', { event_id, items_count: items.length, total_cartones: data.totalCartones }));
     res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Devolución desde POS — escanea cartones vendidos/consignados desde el
+// almacén del usuario y los inactiva (delegando en ejecutarMovimientoBulk).
+router.post('/devolucion-pos', requirePermission('inventory:sell'), async (req, res) => {
+  try {
+    const pool = getPool();
+    const reqUser = req.user!;
+    const userId = reqUser.id;
+    const { event_id, almacen_id, items, firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } = req.body;
+    if (!event_id || !almacen_id || !items?.length) {
+      return res.status(400).json({ success: false, error: 'event_id, almacen_id e items son requeridos' });
+    }
+    if (!await verificarAccesoAlmacen(pool, userId, reqUser.role, [almacen_id])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
+    }
+    const firmas = (firma_entrega || firma_recibe) ? { firma_entrega, firma_recibe, nombre_entrega, nombre_recibe } : undefined;
+    const data = await inv.ejecutarMovimientoBulk(pool, event_id, {
+      accion: 'devolucion',
+      almacen_destino_id: almacen_id,
+      almacen_origen_id: almacen_id,
+      items,
+      firmas,
+    }, userId);
+    logActivity(pool, auditFromReq(req, 'devolucion', 'inventory', { event_id, items_count: items.length }));
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Validar referencia para devolución desde POS — verifica que esté vendido/consignado y
+// pertenezca al almacén del usuario. Devuelve info del comprador para mostrar en UI.
+router.get('/validar-devolucion/:eventId/:referencia', requirePermission('inventory:sell'), async (req, res) => {
+  try {
+    const pool = getPool();
+    const reqUser = req.user!;
+    const eventId = parseInt(req.params.eventId as string, 10);
+    const ref = (req.params.referencia as string).toUpperCase();
+    const almacenId = req.query.almacen_id ? parseInt(req.query.almacen_id as string, 10) : undefined;
+    if (!almacenId) return res.status(400).json({ success: false, error: 'almacen_id es requerido' });
+    if (!await verificarAccesoAlmacen(pool, reqUser.id, reqUser.role, [almacenId])) {
+      return res.status(403).json({ success: false, error: 'No tiene acceso a este almacen' });
+    }
+
+    // Normalizar serial NN-NN → 00NNN-NN
+    let serialSearch = ref;
+    const m = ref.match(/^(\d+)-(\d+)$/);
+    if (m) serialSearch = m[1].padStart(5, '0') + '-' + m[2].padStart(2, '0');
+
+    // Carton individual
+    const cardRes = await pool.query(
+      `SELECT c.id, c.card_code, c.serial, c.is_sold, c.almacen_id, c.buyer_name,
+              (SELECT d.accion FROM inv_movimientos mv JOIN inv_documentos d ON d.id = mv.documento_id
+               WHERE mv.tipo_entidad = 'carton' AND (mv.referencia = c.card_code OR mv.referencia = c.serial)
+                 AND d.accion IN ('venta','consignacion')
+               ORDER BY mv.created_at DESC LIMIT 1) AS accion_origen
+       FROM cards c WHERE (c.card_code = $1 OR c.serial = $3) AND c.event_id = $2`,
+      [ref, eventId, serialSearch]
+    );
+    if (cardRes.rows.length > 0) {
+      const c = cardRes.rows[0];
+      const valido = c.is_sold && c.almacen_id === almacenId;
+      return res.json({
+        success: true,
+        data: {
+          tipo: 'carton',
+          existe: true,
+          is_sold: c.is_sold,
+          vendido_desde_almacen: c.almacen_id === almacenId,
+          buyer_name: c.buyer_name,
+          accion_origen: c.accion_origen || (c.is_sold ? 'venta' : null),
+          valido,
+          info: valido
+            ? `${c.accion_origen === 'consignacion' ? 'Consignado' : 'Vendido'} a ${c.buyer_name || 'desconocido'}`
+            : (!c.is_sold ? 'Cartón no está vendido/consignado' : 'No pertenece a este almacén'),
+        },
+      });
+    }
+    return res.json({ success: true, data: { existe: false, valido: false, info: 'No encontrado' } });
   } catch (error) {
     res.status(400).json({ success: false, error: (error as Error).message });
   }

@@ -1141,9 +1141,11 @@ export async function ejecutarVenta(
     buyer_libreta?: string;
     buyer_phone?: string;
     firmas?: FirmaData;
+    accion?: 'venta' | 'consignacion';
   },
   userId: number
 ): Promise<{ documentoId: number; exitosos: number; totalCartones: number; errores: string[] }> {
+  const accion: 'venta' | 'consignacion' = data.accion === 'consignacion' ? 'consignacion' : 'venta';
   const errores: string[] = [];
   let exitosos = 0;
   let totalCartones = 0;
@@ -1165,8 +1167,8 @@ export async function ejecutarVenta(
   // Crear documento
   const docResult = await client.query(
     `INSERT INTO inv_documentos (event_id, accion, de_almacen_id, de_nombre, a_nombre, a_cedula, a_libreta, total_items, total_cartones, realizado_por)
-     VALUES ($1, 'venta', $2, $3, $4, $5, $6, $7, 0, $8) RETURNING id, created_at`,
-    [eventId, data.almacen_id, almacenName, data.buyer_name || 'Comprador', data.buyer_cedula || null, data.buyer_libreta || null, data.items.length, userId]
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9) RETURNING id, created_at`,
+    [eventId, accion, data.almacen_id, almacenName, data.buyer_name || (accion === 'consignacion' ? 'Consignatario' : 'Comprador'), data.buyer_cedula || null, data.buyer_libreta || null, data.items.length, userId]
   );
   const documentoId = docResult.rows[0].id;
   const docCreatedAt = docResult.rows[0].created_at;
@@ -1364,8 +1366,8 @@ export async function ejecutarVenta(
       // Registrar movimiento
       await client.query(
         `INSERT INTO inv_movimientos (event_id, almacen_id, tipo_entidad, referencia, accion, de_persona, a_persona, cantidad_cartones, detalles, realizado_por, documento_id)
-         VALUES ($1, $2, $3, $4, 'venta', $5, $6, $7, $8, $9, $10)`,
-        [eventId, data.almacen_id, item.tipo, item.referencia, almacenName, data.buyer_name || 'Comprador',
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [eventId, data.almacen_id, item.tipo, item.referencia, accion, almacenName, data.buyer_name || (accion === 'consignacion' ? 'Consignatario' : 'Comprador'),
          detalle.cartones, JSON.stringify({ buyer_phone: data.buyer_phone, buyer_cedula: data.buyer_cedula, buyer_libreta: data.buyer_libreta }), userId, documentoId]
       );
 
@@ -1395,11 +1397,11 @@ export async function ejecutarVenta(
     try {
       const pdfPath = await generateDocumentoPdf({
         documentoId,
-        accion: 'venta',
+        accion,
         fecha: docCreatedAt,
         eventoNombre: eventResult.rows[0]?.name || '',
         deNombre: almacenName,
-        aNombre: data.buyer_name || 'Comprador',
+        aNombre: data.buyer_name || (accion === 'consignacion' ? 'Consignatario' : 'Comprador'),
         totalItems: exitosos,
         totalCartones,
         asignadoPor: userResult.rows[0]?.full_name || 'Sistema',
@@ -1407,12 +1409,12 @@ export async function ejecutarVenta(
         firmaEntrega: data.firmas?.firma_entrega,
         firmaRecibe: data.firmas?.firma_recibe,
         nombreEntrega: data.firmas?.nombre_entrega || almacenName,
-        nombreRecibe: data.firmas?.nombre_recibe || data.buyer_name || 'Comprador',
+        nombreRecibe: data.firmas?.nombre_recibe || data.buyer_name || (accion === 'consignacion' ? 'Consignatario' : 'Comprador'),
       });
       const pdfFilename = pdfPath.split('/').pop();
       await pool.query('UPDATE inv_documentos SET pdf_path = $1 WHERE id = $2', [pdfFilename, documentoId]);
     } catch (err) {
-      console.error('Error generando PDF de venta:', err);
+      console.error(`Error generando PDF de ${accion}:`, err);
     }
   }
 

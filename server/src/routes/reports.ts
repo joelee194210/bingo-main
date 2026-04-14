@@ -168,6 +168,11 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
     const almacen_id = req.query.almacen_id as string | undefined;
     const vendedor_id = req.query.vendedor_id as string | undefined;
     const soloAgencias = req.query.solo_agencias === 'true';
+    // tipo: 'todos' (venta+consignacion), 'venta', 'consignacion'. Default 'todos'.
+    const tipoQ = (req.query.tipo as string | undefined) || 'todos';
+    const accionesIncluidas = tipoQ === 'venta' ? ['venta']
+      : tipoQ === 'consignacion' ? ['consignacion']
+      : ['venta', 'consignacion'];
 
     // Verificar permiso según tipo de reporte
     const user = (req as any).user;
@@ -229,10 +234,10 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
 
     const { rows: resumen } = await pool.query(resumenQuery, resumenParams);
 
-    // 2. Detalle de documentos de venta en el rango
+    // 2. Detalle de documentos de venta y/o consignación en el rango
     const detalleQuery = `
       SELECT
-        d.id as documento_id, d.created_at as fecha,
+        d.id as documento_id, d.created_at as fecha, d.accion as tipo,
         a.id as almacen_id, a.name as almacen_nombre,
         d.a_nombre as comprador, d.a_cedula as cedula, d.a_libreta as libreta,
         d.total_items, d.total_cartones,
@@ -248,7 +253,7 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
       LEFT JOIN almacenes a ON d.de_almacen_id = a.id
       LEFT JOIN users u ON d.realizado_por = u.id
       WHERE d.event_id = $1
-        AND d.accion = 'venta'
+        AND d.accion = ANY($${almacenFilter && vendedorFilter ? 6 : almacenFilter || vendedorFilter ? 5 : 4})
         AND DATE(d.created_at) BETWEEN $2 AND $3
         ${soloAgencias ? 'AND a.es_agencia_loteria = true' : ''}
         ${almacenFilter ? 'AND d.de_almacen_id = $4' : ''}
@@ -256,9 +261,30 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
       GROUP BY d.id, a.id, a.name, u.id, u.full_name
       ORDER BY d.created_at DESC
     `;
-    const { rows: detalle } = await pool.query(detalleQuery, resumenParams);
+    const detalleParams = [...resumenParams, accionesIncluidas];
+    const { rows: detalle } = await pool.query(detalleQuery, detalleParams);
 
-    // 3. Totales
+    // 3. Devoluciones en el rango (para restar de totales)
+    const devolucionesQuery = `
+      SELECT COALESCE(SUM(m.cantidad_cartones), 0)::int as cartones_devueltos,
+             COUNT(DISTINCT d.id)::int as documentos_devolucion
+      FROM inv_documentos d
+      JOIN inv_movimientos m ON m.documento_id = d.id
+      LEFT JOIN almacenes a ON d.a_almacen_id = a.id
+      WHERE d.event_id = $1
+        AND d.accion = 'devolucion'
+        AND DATE(d.created_at) BETWEEN $2 AND $3
+        ${soloAgencias ? 'AND a.es_agencia_loteria = true' : ''}
+        ${almacenFilter ? 'AND d.a_almacen_id = $4' : ''}
+        ${vendedorFilter ? `AND d.realizado_por = $${almacenFilter ? 5 : 4}` : ''}
+    `;
+    const { rows: devRows } = await pool.query(devolucionesQuery, resumenParams);
+    const devoluciones = devRows[0] || { cartones_devueltos: 0, documentos_devolucion: 0 };
+
+    // 4. Totales — el resumen ya cuenta is_sold=true al momento de la consulta,
+    // por lo que devoluciones procesadas dentro del rango ya están descontadas
+    // implícitamente (esos cards ya no tienen is_sold=true). Reportamos aparte
+    // para visibilidad.
     const totalCartones = resumen.reduce((sum: number, r: any) => sum + r.cartones_vendidos, 0);
 
     res.json({
@@ -266,6 +292,7 @@ router.get('/sales/:eventId', async (req: Request, res: Response) => {
       data: {
         resumen,
         detalle,
+        devoluciones,
         totales: {
           cartones: totalCartones,
           documentos: detalle.length,
