@@ -1,0 +1,1000 @@
+openapi: 3.0.0 
+info:  
+  version: 1.1.0  
+  title: Yappy - Commerce Integration  
+  description: Yappy services exposition for commerce integration  
+  contact:    
+    name: Integration Team    
+    email: integracionesdev@yappy.com.pa 
+servers:  
+  - url: 'http://localhost:3000'    
+    description: Path relativo global
+tags:  
+  - name: Session    
+    description: 'Operations related to session management'  
+  - name: Movement    
+    description: 'Movements information'
+  - name: Collection-Method
+    description: 'Collection Method resources'
+
+paths: 
+  /v1/session/login:    
+    post:      
+      summary: Generate the session in yappy      
+      tags:       
+        - Session     
+      description: 'receives the encrypted seed and the client id to return the session token'
+      operationId: generate-session      
+      parameters:      
+        - $ref: '#/components/parameters/Ip'     
+        - $ref: '#/components/parameters/Channel'    
+      requestBody:        
+        description: latests request payload        
+        content:          
+          application/json:            
+            schema:              
+              properties:                
+                body:                 
+                  $ref: '#/components/schemas/SessionRequestDTO'              
+              required:                
+                - body
+      responses:
+        '200':         
+          description: Success response      
+          content:          
+            application/json:   
+              schema:    
+                $ref: '#/components/schemas/SessionResponseDTO'       
+              examples:     
+                ok:         
+                  $ref: '#/components/examples/SessionTokenExample'     
+        '400':          
+          description: Internal Error          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/StatusDTO'              
+              examples:                
+                Internal Error:                  
+                  $ref: '#/components/examples/BadRequestExample'        
+        '500':          
+          description: Infrastructure Error          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/StatusDTO'              
+              examples:                
+                Infrastructure Error:                  
+                  $ref: '#/components/examples/InternalErrorExample'
+      security:      
+        - Api-Key: []    
+        - Secret-Key: []
+
+  /v1/session/logout:    
+    get:      
+      summary: Yappy logout   
+      tags:  
+        - Session     
+      description: 'Log out session in yappy'    
+      operationId: close-session    
+      parameters:     
+        - $ref: '#/components/parameters/Ip'      
+        - $ref: '#/components/parameters/Channel'    
+      responses:      
+        '200':        
+          description: Success      
+          content:        
+            application/json:     
+              schema:           
+                $ref: '#/components/schemas/SessionCloseResponseDTO'
+        '400':          
+          description: Internal Error          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/StatusDTO'              
+              examples:                
+                Internal Error:                  
+                  $ref: '#/components/examples/BadRequestExample'        
+        '500':          
+          description: Infrastructure Error          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/StatusDTO'              
+              examples:                
+                Infrastructure Error:                  
+                  $ref: '#/components/examples/InternalErrorExample'
+
+  /v1/movement/history:
+    post:      
+      summary: List the transactions sent and received by a particular user or merchant.  
+      tags: 
+        - Movement      
+      description: List the transactions sent and received by a particular user or merchant.      
+      parameters:        
+        - $ref: '#/components/parameters/Ip'        
+        - $ref: '#/components/parameters/Channel'      
+      operationId: history      
+      requestBody:        
+        description: latests request payload        
+        content:          
+          application/json:            
+            schema:              
+              properties:                
+                body:                 
+                  $ref: '#/components/schemas/MovementHistoryRequestDTO'      
+              required:                
+                - body            
+            examples:              
+              firstRequest:
+                $ref: '#/components/examples/MovementHistoryFirstRequestExample'  
+              firstFilterRequest:
+                $ref: '#/components/examples/MovementHistoryFirstFilterRequestExample'
+              fullDateRequest:
+                $ref: '#/components/examples/MovementHistoryRequestExample'    
+              filterRequest:
+                $ref: '#/components/examples/MovementHistoryFilterRequestExample'    
+      responses:        
+        '200':
+          description: Successful response          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/MovementHistoryResponseDTO'              
+              examples:                
+                checkout:                  
+                  $ref: '#/components/examples/MovementHistoryResponseExample'
+                checkoutDebit:                  
+                  $ref: '#/components/examples/MovementHistoryDebitResponseExample'               
+                pos:                  
+                  $ref: '#/components/examples/MovementHistoryPOSResponseExample'
+        '400':          
+          description: Internal Error          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/StatusDTO'              
+              examples:                
+                Internal Error:                  
+                  $ref: '#/components/examples/BadRequestExample'        
+        '500':          
+          description: Infrastructure Error          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/StatusDTO'              
+              examples:                
+                Infrastructure Error:                  
+                  $ref: '#/components/examples/InternalErrorExample'
+
+  /v1/movement/{transaction-id}:
+    get:      
+      summary:  Detail of the transactions sent and received by a particular user or merchant.  
+      tags: 
+        - Movement      
+      description: Detail of the transactions sent and received by a particular user or merchant.      
+      parameters:        
+        - $ref: '#/components/parameters/Ip'        
+        - $ref: '#/components/parameters/Channel'
+        - $ref: '#/components/parameters/Transaction-id'
+      operationId: history-detail
+      responses:        
+        '200':
+          description: Successful response          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/MovementHistoryDetailResponseDTO'
+              examples:                
+                checkout:                  
+                  $ref: '#/components/examples/MovementHistoryDetailResponseExample'
+                checkoutDebit:                  
+                  $ref: '#/components/examples/MovementHistoryDetailDebitResponseExample'               
+                pos:                  
+                  $ref: '#/components/examples/MovementHistoryPOSDetailResponseExample'
+        '400':          
+          description: Internal Error          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/StatusDTO'              
+              examples:                
+                Internal Error:                  
+                  $ref: '#/components/examples/BadRequestExample'        
+        '500':          
+          description: Infrastructure Error          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/StatusDTO'              
+              examples:                
+                Infrastructure Error:                  
+                  $ref: '#/components/examples/InternalErrorExample'
+
+  /v1/collection-method:
+    get:      
+      summary: List of Collection method
+      tags: 
+        - Collection-Method      
+      description: Get Collections method in Yappy+.      
+      parameters:        
+        - $ref: '#/components/parameters/Ip'        
+        - $ref: '#/components/parameters/Channel'      
+      operationId: collections      
+      responses:        
+        '200':
+          description: Successful response          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/CollectionMethodResponseDTO'              
+              examples:                
+                ok:                  
+                  $ref: '#/components/examples/CollectionMethodResponseExample'
+        '400':          
+          description: Internal Error          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/StatusDTO'              
+              examples:                
+                Internal Error:                  
+                  $ref: '#/components/examples/BadRequestExample'        
+        '500':          
+          description: Infrastructure Error          
+          content:            
+            application/json:              
+              schema:                
+                $ref: '#/components/schemas/StatusDTO'              
+              examples:                
+                Infrastructure Error:                  
+                  $ref: '#/components/examples/InternalErrorExample'
+
+components:  
+  parameters:    
+    Ip:      
+      description: IP address of the request      
+      in: header      
+      name: Client-Ip      
+      schema:        
+        type: string      
+      required: true    
+    Channel:      
+      description: Channel associated to the request      
+      in: header      
+      name: Channel      
+      schema:        
+        type: string      
+      required: true  
+    Transaction-id:      
+      description: Id associated to the transaction      
+      in: path 
+      name: transaction-id      
+      schema:        
+        type: string      
+      required: true
+  schemas:    
+    StatusDTO:      
+      type: object      
+      properties:        
+        code:
+          description: Response code
+          type: string
+          example: YP-0000
+        description:
+          description: Response description
+          type: string
+          example: Se ha realizado la ejecución del servicio correctamente      
+      required:        
+        - code        
+        - description   
+    SessionRequestDTO:
+      description: Session request      
+      type: object      
+      properties:        
+        code: 
+          description: Code generated by commerce
+          type: string
+          example: 'df127d9965c38cb3cf9677c52b47fdb7d4bc69b60a9af8671effa976d0b0e802'
+    SessionResponseDTO:      
+      description: Session response      
+      type: object      
+      properties:        
+        body:
+          $ref: '#/components/schemas/SessionDTO'        
+        status:
+          $ref: '#/components/schemas/StatusDTO'      
+      required:        
+        - status   
+    SessionDTO:      
+      description: Session response      
+      type: object     
+      properties:        
+        token:
+          $ref: '#/components/schemas/TokenDTO'
+        state: 
+          description: Estado asociado a la sesión
+          type: string
+          example: 'OPEN'
+        open_at:
+          description: Fecha de creación de la sesión
+          type: string
+          format: date-time
+          example: '2021-02-24T10:00:55.000Z'
+    SessionCloseResponseDTO:      
+      description: Session response      
+      type: object      
+      properties:        
+        status:
+          $ref: '#/components/schemas/StatusDTO'      
+      required:        
+        - status   
+    TokenDTO:      
+      type: object     
+      properties:        
+        token:
+          description: encrypted data
+          type: string
+          example:
+            df127d9965c38cb3cf9677c52b47fdb7d4bc69b60a9af8671effa976d0b0e802   
+    MovementHistoryRequestDTO:      
+      description: History latest request      
+      type: object      
+      properties:        
+        pagination:
+           $ref: '#/components/schemas/PaginationDTO'
+        filter:
+          $ref: '#/components/schemas/FilterDTO'
+    MovementHistoryResponseDTO:      
+      description: Response object      
+      type: object      
+      properties:        
+        body:
+          $ref: '#/components/schemas/TransactionsDTO'        
+        status:
+          $ref: '#/components/schemas/StatusDTO'      
+      required:        
+        - status        
+    MovementHistoryDetailResponseDTO:      
+      description: Response object      
+      type: object      
+      properties:        
+        body:
+          $ref: '#/components/schemas/TransactionDetailDTO'
+        status:
+          $ref: '#/components/schemas/StatusDTO'      
+      required:        
+        - status 
+    TransactionsDTO:      
+      description: Transaction List      
+      type: object      
+      properties:
+        pagination:
+          $ref: '#/components/schemas/PaginationDTO'
+        transactions:        
+          $ref: '#/components/schemas/TransactionsListDTO'
+
+    TransactionsListDTO:      
+      description: Transaction List      
+      type: array      
+      items:        
+        $ref: '#/components/schemas/TransactionDetailDTO'
+
+    TransactionDetailDTO:      
+      description: Details Transaction      
+      type: object      
+      properties:        
+        id:
+          description: Transaction identifier
+          type: string
+          example: ACBCDE-12345        
+        number:
+          type: string
+          description: Id de referencia de transacción del banco
+          example: '94821'        
+        registration_date:
+          description: Fecha de creacion de la transacción
+          type: string
+          format: date-time
+          example: '2021-02-24T10:00:55.000Z'        
+        payment_date:
+          description: Fecha de creacion de la transacción
+          type: string
+          format: date-time
+          example: '2021-02-24T10:00:55.000Z'         
+        cut_off_date:
+          description: Fecha de corte de la transacción
+          type: string
+          format: date
+          example: '2021-02-24'        
+        type:
+          description: Payment type
+          type: string
+          example: PAYMENT
+          enum:
+            - TXN
+            - TXN-PAY
+            - TXN-COM        
+        category:
+          description: categorizes the transaction into Interbank or Intrabank
+          type: string
+          example: INTERBANK
+          enum:
+            - INTERBANK
+            - INTRABANK        
+        charge:
+          $ref: '#/components/schemas/ChargeAmountDTO'        
+        fee:
+          $ref: '#/components/schemas/FeeDTO'        
+        description:
+          description: Transaccion description.
+          type: string
+          example: Pago de servicios XYZ       
+        bill_description:
+          description: Transaccion bill description.
+          type: string
+          example: Por perdido ABCDE-76456        
+        status:
+          description: Transaccion status.
+          type: string
+          example: COMPLETED
+          enum:
+            - PENDING
+            - EXECUTED
+            - COMPLETED
+            - REJECTED
+            - FAILED        
+        metadata:
+          $ref: '#/components/schemas/MetadataDTO'        
+        debitor:
+          $ref: '#/components/schemas/BankCustomer'
+        creditor:
+          $ref: '#/components/schemas/BankCustomer'
+      required:        
+        - id        
+        - type   
+    PaginationDTO:      
+      description: pagination object      
+      type: object      
+      properties:        
+        start_date:
+          description: Start date for query
+          type: string
+          format: date-time
+          example: '2021-02-24'       
+        end_date:
+          description: End date for query
+          type: string
+          format: date-time
+          example: '2021-02-24'       
+        payment_date:
+          description: Date last payment movement
+          type: string
+          format: date-time
+          example: '2021-02-24T10:00:55.000Z'
+          nullable: true        
+        merchant_date:
+          description: Date last merchant transaction
+          type: string
+          format: date-time
+          example: '2021-02-24T10:00:55.000Z'
+          nullable: true        
+        has_next_page:
+          description: Query has next page
+          type: boolean
+          example: true
+        limit:
+          description: Number of records
+          type: integer
+          example: 0
+    FilterDTO:
+      description: Especifica el filtro a aplicar en el proceso de consulta de transacciones      
+      type: array      
+      items:        
+        $ref: '#/components/schemas/ObjectGenericDTO'
+    ChargeAmountDTO:      
+      description: Money object with breakdown of amounts      
+      type: object     
+      properties:        
+        amount:
+          description: Total amount of the transaction
+          type: number
+          example: 45.05        
+        partial_amount:
+          description: Partial transaction amount without including tip and tax
+          type: number
+          example: 42.05        
+        tip:
+          description: Tip amount
+          type: number
+          example: 1.00        
+        tax:
+          description: Transaction tax
+          type: number
+          example: 2.05        
+        currency:
+          description: Accepted ISO 4217 currency codes
+          type: string
+          example: USD
+          enum:
+            - USD      
+      required:        
+        - amount        
+        - currency        
+    FeeDTO:      
+      description: Fee object     
+      type: object   
+      properties:       
+        amount:
+          description: Total amount of the transaction
+          type: number
+          example: 45.05        
+        currency:
+          description: Accepted ISO 4217 currency codes
+          type: string
+          example: USD
+          enum:
+            - USD     
+    BankCustomer:      
+      description: Customer information at the bank      
+      type: object     
+      properties:      
+        alias:
+          description: customer alias
+          type: string
+          example: '+50761417992'        
+        complete_name:
+          description: firstname and lastname of customer's
+          type: string
+          example: Maria Perez        
+        alias_type:
+          description: client type
+          type: string
+          example: P       
+        bank_name:
+          description: customer bank name
+          type: string
+          example: Banco General
+    MetadataDTO:      
+      description: Metadata associated to the Transaction      
+      type: array      
+      items:        
+        $ref: '#/components/schemas/ObjectGenericDTO'
+    ObjectGenericDTO:
+      description: Especifica objeto generico
+      type: object
+      properties:
+        id:
+          description: Identificador del elemento
+          type: string
+          example: 'id'
+        value:
+          description: Valor del elemento
+          type: string
+          example: 'Value'
+      required:
+        - id
+        - value
+    CollectionMethodResponseDTO:
+      description: Objeto request
+      type: object
+      properties:
+        alias:
+          description: name or alias of pay point
+          example: caja 1
+        type:
+          $ref: '#/components/schemas/CollectionMethodListDTO'
+        status:
+          $ref: '#/components/schemas/StatusDTO'
+    CollectionMethodListDTO:      
+      description: Collection Method list
+      type: array      
+      items:        
+        $ref: '#/components/schemas/CollectionMethodDTO'
+    CollectionMethodDTO:      
+      description: Collection Method associated to the Commerce      
+      type: object      
+      properties:        
+        alias:
+          description: alias collection
+          type: string
+          example: lab1       
+        type:
+          description: collection type
+          type: string
+          example: BOTON_DE_PAGO
+          enum:
+            - DIRECTORIO
+            - BOTON_DE_PAGO
+            - PUNTO_YAPPY
+            - INTEGRACION_YAPPY
+            - PUNTO_DE_VENTA
+        details:        
+          $ref: '#/components/schemas/DetailsDTO'
+    DetailsDTO:      
+      description: Details associated to the Collection method      
+      type: array      
+      items:        
+        $ref: '#/components/schemas/ObjectGenericDTO'
+  examples:  
+    SessionTokenExample:      
+      value:        
+        body:
+          token: 'eyJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAtMjU2In0.rfDUhierBJaJ1k-fGd5JbyU-ChUECbJjkwd2LcA13kghAg56grh16Rmvj_j-n9Xhxnc5dJclfuXX5P-f6tohpfxNeFALKh05muLr8sTFp7__Goxupc4tmvTlcr9SKVdbRTezYcSZ0FndvSFrp-ZWtW5iDklvebwOFC6_9ibYIAwCobwineG4JnJTFOWeKMoLQ9BRL6Ir7KHk9PqpUJqowzUhiM85otiff_fKQMYXxRhJ6ayY8Hh27FRIF-FAlJP-sShgBdHUtDQr90Ud16_FZVN89_Kpz_2R7tIVLp2CyENkSyTU_m8OGevBYhXUo7qzpw0qd09n4SBSE0Q4qzeXMg.WAoyB76mCDPuCa0o.Tq8K7gbGjGtQMnas5oF2MhyMtQN8r8rQkT61dNZz92yswwIdCklWZYyTUyk3yjfLqje-0fd9lCe4VE8c7jnjQmaVq_8XPd7BmJ4MfCjfnuqUfkn-Q-7_FdzkoyZW5cDqXeTfxFGm7qKCcCj43SfG5xiCJn8mVZqpBmr7u45k0YOXcnObL47hMQoavAGW_t6KSoTcKyAkfm2pFbI.tsH7jajI9op-DPUunODeP'
+          state: 'OPEN'
+          open_at: '2021-02-24T10:00:55.000Z'
+        status:
+          code: 'YP-0000'
+          description: 'Se ha realizado la ejecución del servicio correctamente'
+    MovementHistoryFirstRequestExample:      
+      value:       
+        body:
+          pagination:
+            start_date: '2024-02-24'
+            end_date: '2024-03-24'
+            limit: 10
+    MovementHistoryFirstFilterRequestExample:      
+      value:        
+        body:
+          pagination:
+            start_date: '2024-02-24'
+            end_date: '2024-03-24'
+            limit: 10
+          filter:
+            - id: ROLE
+              value: 'DEBIT/CREDIT'
+            - id: COLLECTION_ALIAS
+              value: 'CAJA01|CAJA02|CAJA03'
+    MovementHistoryRequestExample:      
+      value:        
+        body:
+          pagination:
+            start_date: '2024-02-24'
+            end_date: '2024-03-24'
+            has_next_page: true
+            limit: 10
+            token: 'eyJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAtMjU2In0.rfDUhierBJaJ1k-fGd5JbyU-ChUECbJjkwd2LcA13kghAg56grh16Rmvj_j-n9Xhxnc5dJclfuXX5P-f6tohpfxNeFALKh05muLr8sTFp7__Goxupc4tmvTlcr9SKVdbRTezYcSZ0FndvSFrp-ZWtW5iDklvebwOFC6_9ibYIAwCobwineG4JnJTFOWeKMoLQ9BRL6Ir7KHk9PqpUJqowzUhiM85otiff_fKQMYXxRhJ6ayY8Hh27FRIF-FAlJP-sShgBdHUtDQr90Ud16_FZVN89_Kpz_2R7tIVLp2CyENkSyTU_m8OGevBYhXUo7qzpw0qd09n4SBSE0Q4qzeXMg.WAoyB76mCDPuCa0o.Tq8K7gbGjGtQMnas5oF2MhyMtQN8r8rQkT61dNZz92yswwIdCklWZYyTUyk3yjfLqje-0fd9lCe4VE8c7jnjQmaVq_8XPd7BmJ4MfCjfnuqUfkn-Q-7_FdzkoyZW5cDqXeTfxFGm7qKCcCj43SfG5xiCJn8mVZqpBmr7u45k0YOXcnObL47hMQoavAGW_t6KSoTcKyAkfm2pFbI.tsH7jajI9op-DPUunODeP'
+    MovementHistoryFilterRequestExample:      
+      value:        
+        body:
+          pagination:
+            start_date: '2024-02-24'
+            end_date: '2024-03-24'
+            has_next_page: true
+            limit: 10
+            token: 'eyJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAtMjU2In0.rfDUhierBJaJ1k-fGd5JbyU-ChUECbJjkwd2LcA13kghAg56grh16Rmvj_j-n9Xhxnc5dJclfuXX5P-f6tohpfxNeFALKh05muLr8sTFp7__Goxupc4tmvTlcr9SKVdbRTezYcSZ0FndvSFrp-ZWtW5iDklvebwOFC6_9ibYIAwCobwineG4JnJTFOWeKMoLQ9BRL6Ir7KHk9PqpUJqowzUhiM85otiff_fKQMYXxRhJ6ayY8Hh27FRIF-FAlJP-sShgBdHUtDQr90Ud16_FZVN89_Kpz_2R7tIVLp2CyENkSyTU_m8OGevBYhXUo7qzpw0qd09n4SBSE0Q4qzeXMg.WAoyB76mCDPuCa0o.Tq8K7gbGjGtQMnas5oF2MhyMtQN8r8rQkT61dNZz92yswwIdCklWZYyTUyk3yjfLqje-0fd9lCe4VE8c7jnjQmaVq_8XPd7BmJ4MfCjfnuqUfkn-Q-7_FdzkoyZW5cDqXeTfxFGm7qKCcCj43SfG5xiCJn8mVZqpBmr7u45k0YOXcnObL47hMQoavAGW_t6KSoTcKyAkfm2pFbI.tsH7jajI9op-DPUunODeP'
+          filter:
+            - id: ROLE
+              value: 'DEBIT/CREDIT'
+            - id: COLLECTION_ALIAS
+              value: 'CAJA01|CAJA02|CAJA03'
+    MovementHistoryPOSResponseExample:      
+      value:        
+        body:
+          pagination:
+            start_date: '2024-02-24'
+            end_date: '2024-03-24'
+            has_next_page: true
+            limit: 10
+            token: 'eyJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAtMjU2In0.rfDUhierBJaJ1k-fGd5JbyU-ChUECbJjkwd2LcA13kghAg56grh16Rmvj_j-n9Xhxnc5dJclfuXX5P-f6tohpfxNeFALKh05muLr8sTFp7__Goxupc4tmvTlcr9SKVdbRTezYcSZ0FndvSFrp-ZWtW5iDklvebwOFC6_9ibYIAwCobwineG4JnJTFOWeKMoLQ9BRL6Ir7KHk9PqpUJqowzUhiM85otiff_fKQMYXxRhJ6ayY8Hh27FRIF-FAlJP-sShgBdHUtDQr90Ud16_FZVN89_Kpz_2R7tIVLp2CyENkSyTU_m8OGevBYhXUo7qzpw0qd09n4SBSE0Q4qzeXMg.WAoyB76mCDPuCa0o.Tq8K7gbGjGtQMnas5oF2MhyMtQN8r8rQkT61dNZz92yswwIdCklWZYyTUyk3yjfLqje-0fd9lCe4VE8c7jnjQmaVq_8XPd7BmJ4MfCjfnuqUfkn-Q-7_FdzkoyZW5cDqXeTfxFGm7qKCcCj43SfG5xiCJn8mVZqpBmr7u45k0YOXcnObL47hMQoavAGW_t6KSoTcKyAkfm2pFbI.tsH7jajI9op-DPUunODeP'
+          transactions:
+          - id: 'ABCDE-76456'
+            number: '94821'
+            registration_date: '2021-02-24T10:00:55.000Z'
+            payment_date:: '2021-02-24T10:00:55.000Z'
+            cut_off_date: '2021-02-24'
+            type: 'TXN-COM'
+            role: 'CREDIT'
+            category: 'INTERBANK'
+            charge:
+              amount: 45.00
+              partial_amount: 40.00
+              tip: 0.00
+              tax: 5.00
+              currency: 'USD'
+            fee:
+              amount: 5.00
+              currency: 'USD'
+            description: 'Pago de servicios XYZ'
+            bill_description: 'Por perdido ABCDE-76456'
+            status: COMPLETED
+            metadata:
+            - id: terminal_id
+              value: 2459443221
+            debitor:
+              alias: '+50760106070'
+              complete_name: 'Maria Perez'
+              alias_type: 'P'
+              bank_name: 'Banco General'
+            creditor:
+              alias: 'lactology'
+              complete_name: 'Lactology SA'
+              alias_type: 'E'
+              bank_name: 'Banco General'
+        status:
+          code: 'YP-0000'
+          description: 'Se ha realizado la ejecución del servicio correctamente'
+    MovementHistoryResponseExample:      
+      value:        
+        body:
+          pagination:
+            start_date: '2024-02-24'
+            end_date: '2024-03-24'
+            has_next_page: true
+            limit: 10
+            token: 'eyJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAtMjU2In0.rfDUhierBJaJ1k-fGd5JbyU-ChUECbJjkwd2LcA13kghAg56grh16Rmvj_j-n9Xhxnc5dJclfuXX5P-f6tohpfxNeFALKh05muLr8sTFp7__Goxupc4tmvTlcr9SKVdbRTezYcSZ0FndvSFrp-ZWtW5iDklvebwOFC6_9ibYIAwCobwineG4JnJTFOWeKMoLQ9BRL6Ir7KHk9PqpUJqowzUhiM85otiff_fKQMYXxRhJ6ayY8Hh27FRIF-FAlJP-sShgBdHUtDQr90Ud16_FZVN89_Kpz_2R7tIVLp2CyENkSyTU_m8OGevBYhXUo7qzpw0qd09n4SBSE0Q4qzeXMg.WAoyB76mCDPuCa0o.Tq8K7gbGjGtQMnas5oF2MhyMtQN8r8rQkT61dNZz92yswwIdCklWZYyTUyk3yjfLqje-0fd9lCe4VE8c7jnjQmaVq_8XPd7BmJ4MfCjfnuqUfkn-Q-7_FdzkoyZW5cDqXeTfxFGm7qKCcCj43SfG5xiCJn8mVZqpBmr7u45k0YOXcnObL47hMQoavAGW_t6KSoTcKyAkfm2pFbI.tsH7jajI9op-DPUunODeP'
+          transactions:
+          - id: 'ABCDE-76456'
+            number: '94821'
+            registration_date: '2021-02-24T10:00:55.000Z'
+            payment_date: '2021-02-24T10:00:55.000Z'
+            cut_off_date: '2021-02-24'
+            type: 'TXN-CHECKOUT'
+            role: 'CREDIT'
+            category: 'INTERBANK'
+            charge:
+              amount: 45.00
+              partial_amount: 40.00
+              tip: 0.00
+              tax: 5.00
+              currency: 'USD'
+            fee:
+              amount: 5.00
+              currency: 'USD'
+            description: 'Pago de servicios XYZ'
+            bill_description: 'Por perdido ABCDE-76456'
+            status: COMPLETED
+            metadata:
+            - id: group_id
+              value: 'Grupo 01'
+            - id: device_id
+              value: 'Caja 01'
+            debitor:
+              alias: '+50760106070'
+              complete_name: 'Maria Perez'
+              alias_type: 'P'
+              bank_name: 'Banco General'
+            creditor:
+              alias: 'lactology'
+              complete_name: 'Lactology SA'
+              alias_type: 'E'
+              bank_name: 'Banco General'
+        status:
+          code: 'YP-0000'
+          description: 'Se ha realizado la ejecución del servicio correctamente'
+    MovementHistoryDebitResponseExample:      
+      value:        
+        body:
+          pagination:
+            start_date: '2024-02-24'
+            end_date: '2024-03-24'
+            has_next_page: true
+            limit: 10
+            token: 'eyJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAtMjU2In0.rfDUhierBJaJ1k-fGd5JbyU-ChUECbJjkwd2LcA13kghAg56grh16Rmvj_j-n9Xhxnc5dJclfuXX5P-f6tohpfxNeFALKh05muLr8sTFp7__Goxupc4tmvTlcr9SKVdbRTezYcSZ0FndvSFrp-ZWtW5iDklvebwOFC6_9ibYIAwCobwineG4JnJTFOWeKMoLQ9BRL6Ir7KHk9PqpUJqowzUhiM85otiff_fKQMYXxRhJ6ayY8Hh27FRIF-FAlJP-sShgBdHUtDQr90Ud16_FZVN89_Kpz_2R7tIVLp2CyENkSyTU_m8OGevBYhXUo7qzpw0qd09n4SBSE0Q4qzeXMg.WAoyB76mCDPuCa0o.Tq8K7gbGjGtQMnas5oF2MhyMtQN8r8rQkT61dNZz92yswwIdCklWZYyTUyk3yjfLqje-0fd9lCe4VE8c7jnjQmaVq_8XPd7BmJ4MfCjfnuqUfkn-Q-7_FdzkoyZW5cDqXeTfxFGm7qKCcCj43SfG5xiCJn8mVZqpBmr7u45k0YOXcnObL47hMQoavAGW_t6KSoTcKyAkfm2pFbI.tsH7jajI9op-DPUunODeP'
+          transactions:
+          - id: 'ABCDE-76456'
+            number: '94821'
+            registration_date: '2021-02-24T10:00:55.000Z'
+            payment_date: '2021-02-24T10:00:55.000Z'
+            cut_off_date: '2021-02-24'
+            type: 'TXN-CHECKOUT'
+            role: 'DEBIT'
+            category: 'INTERBANK'
+            charge:
+              amount: 45.00
+              partial_amount: 40.00
+              tip: 0.00
+              tax: 5.00
+              currency: 'USD'
+            fee:
+              amount: 5.00
+              currency: 'USD'
+            description: 'Pago de servicios XYZ'
+            bill_description: 'Por perdido ABCDE-76456'
+            status: COMPLETED
+            metadata:
+            - id: group_id
+              value: 'Grupo 01'
+            - id: device_id
+              value: 'Caja 01'
+            debitor:
+              alias: '+50760106070'
+              complete_name: 'Maria Perez'
+              alias_type: 'P'
+              bank_name: 'Banco General'
+            creditor:
+              alias: 'lactology'
+              complete_name: 'Lactology SA'
+              alias_type: 'E'
+              bank_name: 'Banco General'
+        status:
+          code: 'YP-0000'
+          description: 'Se ha realizado la ejecución del servicio correctamente'
+    MovementHistoryDetailResponseExample:      
+      value:        
+        body:
+          id: 'ABCDE-76456'
+          number: '94821'
+          registration_date: '2021-02-24T10:00:55.000Z'
+          payment_date: '2021-02-24T10:00:55.000Z'
+          cut_off_date: '2021-02-24'
+          type: 'TXN-CHECKOUT'
+          role: 'CREDIT'
+          category: 'INTERBANK'
+          charge:
+            amount: 45.00
+            partial_amount: 40.00
+            tip: 0.00
+            tax: 5.00
+            currency: 'USD'
+          fee:
+            amount: 5.00
+            currency: 'USD'
+          description: 'Pago de servicios XYZ'
+          bill_description: 'Por perdido ABCDE-76456'
+          status: COMPLETED
+          metadata:
+          - id: group_id
+            value: 'Grupo 01'
+          - id: device_id
+            value: 'Caja 01'
+          debitor:
+            alias: '+50760106070'
+            complete_name: 'Maria Perez'
+            alias_type: 'P'
+            bank_name: 'Banco General'
+          creditor:
+            alias: 'lactology'
+            complete_name: 'Lactology SA'
+            alias_type: 'E'
+            bank_name: 'Banco General'
+        status:
+          code: 'YP-0000'
+          description: 'Se ha realizado la ejecución del servicio correctamente'  
+    MovementHistoryDetailDebitResponseExample:      
+      value:        
+        body:
+          id: 'ABCDE-76456'
+          number: '94821'
+          registration_date: '2021-02-24T10:00:55.000Z'
+          payment_date: '2021-02-24T10:00:55.000Z'
+          cut_off_date: '2021-02-24'
+          type: 'TXN-CHECKOUT'
+          role: 'DEBIT'
+          category: 'INTERBANK'
+          charge:
+            amount: 45.00
+            partial_amount: 40.00
+            tip: 0.00
+            tax: 5.00
+            currency: 'USD'
+          fee:
+            amount: 5.00
+            currency: 'USD'
+          description: 'Pago de servicios XYZ'
+          bill_description: 'Por perdido ABCDE-76456'
+          status: COMPLETED
+          metadata:
+          - id: group_id
+            value: 'Grupo 01'
+          - id: device_id
+            value: 'Caja 01'
+          debitor:
+            alias: '+50760106070'
+            complete_name: 'Maria Perez'
+            alias_type: 'P'
+            bank_name: 'Banco General'
+          creditor:
+            alias: 'lactology'
+            complete_name: 'Lactology SA'
+            alias_type: 'E'
+            bank_name: 'Banco General'
+        status:
+          code: 'YP-0000'
+          description: 'Se ha realizado la ejecución del servicio correctamente'
+    MovementHistoryPOSDetailResponseExample:      
+      value:        
+        body:
+          id: 'ABCDE-76456'
+          number: '94821'
+          registration_date: '2021-02-24T10:00:55.000Z'
+          payment_date: '2021-02-24T10:00:55.000Z'
+          cut_off_date: '2021-02-24'
+          type: 'TXN-COM'
+          role: 'CREDIT'
+          category: 'INTERBANK'
+          charge:
+            amount: 45.00
+            partial_amount: 40.00
+            tip: 0.00
+            tax: 5.00
+            currency: 'USD'
+          fee:
+            amount: 5.00
+            currency: 'USD'
+          description: 'Pago de servicios XYZ'
+          bill_description: 'Por perdido ABCDE-76456'
+          status: COMPLETED
+          metadata:
+          - id: terminal_id
+            value: 2459443221
+          debitor:
+            alias: '+50760106070'
+            complete_name: 'Maria Perez'
+            alias_type: 'P'
+            bank_name: 'Banco General'
+          creditor:
+            alias: 'lactology'
+            complete_name: 'Lactology SA'
+            alias_type: 'E'
+            bank_name: 'Banco General'
+        status:
+          code: 'YP-0000'
+          description: 'Se ha realizado la ejecución del servicio correctamente'
+    CollectionMethodResponseExample:
+      value:
+        body:
+          collections:
+          - alias: 'test01'
+            type: 'DIRECTORIO'
+          - alias: 'boton01'
+            type: 'BOTON_DE_PAGO'
+            details:
+            - id: url
+              value: 'http://example.com'
+          - alias: 'integration01'
+            type: 'INTEGRACION_YAPPY'
+            details:
+            - id: groupId
+              value: 'group01'
+            - id: deviceId
+              value: 'caja01'
+          - alias: 'pos01'
+            type: 'PUNTO_DE_VENTA'
+            details:
+            - id: terminalId
+              value: '123456'
+        status:
+          code: 'YP-0000'
+          description: 'Se ha realizado la ejecución del servicio correctamente'
+    BadRequestExample:      
+      value:        
+        status:
+          code: 'YP-0002'
+          description: 'Error, ha ocurrido un error en procesar los datos. Contacte al administrador'   
+    MaintenanceErrorExample:      
+      value:        
+        status:
+          code: 'YP-9000'
+          description: 'Lo sentimos, actualmente estamos realizando labores de mantenimiento en nuestros servicios.'   
+    SlowDownErrorExample:      
+      value:        
+        status:
+          code: 'YP-9001'
+          description: 'Lo sentimos, Actualmente estamos experimentando un degradamiento en nuestros servicios' 
+    InternalErrorExample:      
+      value:        
+        status:
+          code: 'YP-9999'
+          description: 'Error, el servicio ha tardado en responder' 
+  securitySchemes:    
+    Authorization:      
+      type: http      
+      scheme: bearer      
+      bearerFormat: JWE      
+      description: API access token    
+    Api-Key:      
+      description: API access key    
+      name: API Key  
+      type: apiKey    
+      in: header    
+    Secret-Key:      
+      description: API access secret key    
+      name: API secret Key   
+      type: apiKey  
+      in: header
+security:  
+  - Authorization: []  
+  - Api-Key: []  
+  - Secret-Key: []

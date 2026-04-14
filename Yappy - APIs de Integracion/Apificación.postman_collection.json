@@ -1,0 +1,290 @@
+{
+	"info": {
+		"_postman_id": "451452e8-cb96-423d-86cc-a52c89df27db",
+		"name": "Apificación",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "39724060"
+	},
+	"item": [
+		{
+			"name": "Session",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var data = JSON.parse(responseBody);",
+									"postman.setGlobalVariable(\"api-token\", data.body.token)",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "api-key",
+								"value": "{{api-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "secret-key",
+								"value": "{{secret-key-api}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"body\": {\n    \"code\": \"a830d54297897c383712ea56512d8ae1bc249053d3ed9bff8c59c7319b7fd7b7\" // API Key + YYYY-MM-DD\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{endpoint-api}}/session/login",
+							"host": [
+								"{{endpoint-api}}"
+							],
+							"path": [
+								"session",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "api-key",
+								"value": "{{api-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "secret-key",
+								"value": "{{secret-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "authorization",
+								"value": "{{api-token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{endpoint-api}}/session/logout",
+							"host": [
+								"{{endpoint-api}}"
+							],
+							"path": [
+								"session",
+								"logout"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Movement",
+			"item": [
+				{
+					"name": "Historial",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var data = JSON.parse(responseBody);",
+									"postman.setGlobalVariable(\"transaction-token\", data.body.pagination.token)"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "api-key",
+								"value": "{{api-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "secret-key",
+								"value": "{{secret-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "authorization",
+								"value": "{{api-token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"body\": {\n    \"pagination\": {\n      \"start_date\": \"2025-03-25\",\n      \"end_date\": \"2025-05-15\",\n      \"limit\": 10,\n      \"token\": \"{{transaction-token}}\"\n    }\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{endpoint-api}}/movement/history",
+							"host": [
+								"{{endpoint-api}}"
+							],
+							"path": [
+								"movement",
+								"history"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Consulta transacción",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "api-key",
+								"value": "{{api-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "secret-key",
+								"value": "{{secret-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "authorization",
+								"value": "{{api-token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{endpoint-api}}/movement/:id",
+							"host": [
+								"{{endpoint-api}}"
+							],
+							"path": [
+								"movement",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "ZLTXD-09223576"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reversa transacción",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "api-key",
+								"value": "{{api-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "secret-key",
+								"value": "{{secret-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "authorization",
+								"value": "{{api-token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{endpoint-api}}/transaction/:id",
+							"host": [
+								"{{endpoint-api}}"
+							],
+							"path": [
+								"transaction",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "AGMKQ-54379273"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Collection-Method",
+			"item": [
+				{
+					"name": "Métodos de Cobro",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "api-key",
+								"value": "{{api-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "secret-key",
+								"value": "{{secret-key-api}}",
+								"type": "text"
+							},
+							{
+								"key": "authorization",
+								"value": "{{api-token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{endpoint-api}}/collection-method",
+							"host": [
+								"{{endpoint-api}}"
+							],
+							"path": [
+								"collection-method"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

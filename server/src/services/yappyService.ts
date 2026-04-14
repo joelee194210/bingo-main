@@ -15,17 +15,51 @@ interface YappyTransaction {
   number?: string;
   registration_date?: string;
   payment_date?: string;
+  cut_off_date?: string;
   type?: string;
-  category?: string;
+  role?: 'CREDIT' | 'DEBIT';
+  category?: 'INTERBANK' | 'INTRABANK';
   charge?: {
     amount: number;
+    partial_amount?: number;
+    tip?: number;
+    tax?: number;
     currency: string;
   };
+  fee?: { amount: number; currency: string };
   description?: string;
   bill_description?: string;
-  status?: string;
-  debitor?: { alias?: string; complete_name?: string };
-  creditor?: { alias?: string; complete_name?: string };
+  status?: 'COMPLETED' | 'EXECUTED' | 'REVERSED' | 'FAILED' | string;
+  metadata?: Array<{ id: string; value: string }>;
+  debitor?: { alias?: string; complete_name?: string; alias_type?: string; bank_name?: string };
+  creditor?: { alias?: string; complete_name?: string; alias_type?: string; bank_name?: string };
+}
+
+export type PaymentClassification = 'paid' | 'pending' | 'failed' | 'reversed' | 'unknown';
+
+/**
+ * Clasifica el estado de una transacción Yappy en categorías de negocio.
+ *
+ * Estados crudos de Yappy (según Manual v1.1.2):
+ *   - COMPLETED → transacción liquidada en la cuenta bancaria del comercio
+ *   - EXECUTED  → recibida por Yappy pero aún NO liquidada en el banco
+ *   - REVERSED  → anulada por el comercio, fondos devueltos al cliente
+ *   - FAILED    → fallo del lado del banco
+ *
+ * TRADE-OFF (¡decisión tuya!):
+ *   - Solo COMPLETED  = más seguro, pero entrega de cartones puede tardar horas
+ *     hasta que el banco liquide.
+ *   - COMPLETED + EXECUTED = UX instantánea para el cliente, pero asumes el
+ *     riesgo de liquidación pendiente (raro en persona→comercio, pero posible).
+ *
+ * NOTE: esta función es llamada tanto por el endpoint de verificación manual
+ * como, potencialmente, por el matcher automático de órdenes online.
+ */
+export function classifyTransactionStatus(status: string | undefined): PaymentClassification {
+  // TODO: implementación del usuario (5-10 líneas)
+  // Mapear los 4 estados de Yappy a PaymentClassification.
+  // Decisión clave: ¿EXECUTED cuenta como 'paid' o como 'pending'?
+  throw new Error('classifyTransactionStatus no implementada');
 }
 
 export class YappyClient {
@@ -109,6 +143,37 @@ export class YappyClient {
 
     console.log('✅ Yappy session abierta');
     return this.token;
+  }
+
+  /**
+   * Consulta el detalle de una transacción específica por su ID Yappy.
+   * Mapea a GET /v1/movement/{transaction-id} del manual v1.1.2.
+   *
+   * Renueva el token de sesión si está vencido antes de llamar.
+   * Devuelve `null` si Yappy responde YP-0001 (no data).
+   */
+  async getTransactionDetail(transactionId: string): Promise<YappyTransaction | null> {
+    if (!transactionId || typeof transactionId !== 'string') {
+      throw new Error('transactionId inválido');
+    }
+
+    // Renovar token si expiró
+    if (!this.token || (this.tokenExpiry && new Date() > this.tokenExpiry)) {
+      await this.login();
+    }
+
+    const encodedId = encodeURIComponent(transactionId);
+    const data = await this.request('GET', `/v1/movement/${encodedId}`) as {
+      body?: YappyTransaction;
+      status?: { code?: string; description?: string };
+    };
+
+    if (data.status?.code === 'YP-0001') return null; // no data
+    if (data.status?.code !== 'YP-0000') {
+      throw new Error(`Yappy detail error: ${data.status?.code} ${data.status?.description}`);
+    }
+
+    return data.body ?? null;
   }
 
   async getTransactionHistory(startDate: string, endDate: string): Promise<YappyTransaction[]> {
