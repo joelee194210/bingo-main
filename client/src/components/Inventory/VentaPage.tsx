@@ -28,7 +28,7 @@ import {
 import type { TipoEntidad } from '@/types';
 import SignaturePad from './SignaturePad';
 import { getStatusColor } from '@/lib/badge-variants';
-import { normalizeSerial } from '@/lib/utils';
+import { normalizeSerial, extractScanCode } from '@/lib/utils';
 import QRCameraScanner from './QRCameraScanner';
 import BilleteroSearch from './BilleteroSearch';
 
@@ -148,7 +148,7 @@ export default function VentaPage() {
   };
 
   const handleQRScan = (rawCode: string) => {
-    const code = rawCode.trim().toUpperCase();
+    const code = extractScanCode(rawCode).toUpperCase();
     if (!code) return;
     const tipo = detectTipo(code);
     validateAndAdd(code, tipo);
