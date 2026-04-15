@@ -197,7 +197,10 @@ export default function VentaGeneralPage() {
   };
 
   const addItem = () => {
-    const ref = inputRef.trim().toUpperCase();
+    // Reusa el extractor de handleQRScan: si una pistola QR-scanner pegó la
+    // URL completa del cartón, saca el código del path/query. Tecleo manual
+    // de card_code o serial pasa intacto.
+    const ref = extractScanCode(inputRef).toUpperCase();
     if (!ref) return;
     validateAndAdd(ref, tipoEntidad).then(() => setInputRef(''));
   };
